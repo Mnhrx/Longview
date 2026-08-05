@@ -360,6 +360,22 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 .autocomplete-item .name{color:var(--text);}
 .autocomplete-item .cal{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12.5px;white-space:nowrap;}
 .autocomplete-empty{color:var(--text-dim);font-size:13px;padding:6px 2px 12px;}
+.online-results{display:flex;flex-direction:column;gap:4px;margin:8px 0 12px;}
+.online-results:empty{margin:0;}
+.online-item{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  background:var(--panel-2);border:1px solid var(--accent2);border-radius:9px;
+  padding:10px 12px;cursor:pointer;font-size:13.5px;min-height:44px;
+}
+.online-item:hover{border-color:var(--accent);}
+.online-item .name{color:var(--text);}
+.online-item .brand{color:var(--text-dim);font-size:11.5px;display:block;}
+.online-item .cal{color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:12.5px;white-space:nowrap;text-align:right;}
+.online-tag{
+  font-size:9.5px;color:var(--accent2);background:transparent;border:1px solid var(--accent2);
+  border-radius:4px;padding:1px 4px;margin-right:6px;text-transform:uppercase;letter-spacing:0.04em;
+}
+.online-status{color:var(--text-dim);font-size:13px;padding:8px 2px;}
 
 /* category browser */
 .link-btn{
@@ -390,7 +406,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.2.0</div>
+  <div class="splash-version">v1.3.0</div>
 </div>
 <div class="wrap">
 
@@ -428,13 +444,15 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 
     <div class="card">
       <h2>Log something</h2>
-      <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find your exact packet of biscuits or specific brand? Check the calorie count printed on the pack, then save it under "My foods" below — it's searchable forever after that.</div>
+      <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find something specific, like a packet of biscuits? Search online below (Open Food Facts) — picking a result saves it to "My foods" automatically, so you only ever look it up once.</div>
 
       <div class="quick-add-label">Search a saved item:</div>
       <div class="field-row search-wrap">
         <input type="text" id="quick-search" placeholder="Type to search, e.g. 'kopi' or 'rice'" autocomplete="off">
       </div>
       <div class="autocomplete-list" id="autocomplete-list"></div>
+      <button type="button" class="link-btn" id="online-search-btn" style="display:none;">🔎 Search Open Food Facts online</button>
+      <div class="online-results" id="online-results"></div>
 
       <button type="button" class="link-btn" id="browse-categories-btn">Or browse by category ▾</button>
       <div class="category-panel" id="category-panel" style="display:none;">
@@ -650,7 +668,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.2.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.3.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -996,12 +1014,15 @@ function fillFromFood(f) {
 $('quick-search').addEventListener('input', (e) => {
   const q = e.target.value.trim().toLowerCase();
   const listEl = $('autocomplete-list');
+  const onlineBtn = $('online-search-btn');
+  $('online-results').innerHTML = '';
   listEl.innerHTML = '';
-  if (!q) return;
+
+  if (!q) { onlineBtn.style.display = 'none'; return; }
+
   const matches = foodIndex.filter(f => f.name.toLowerCase().includes(q)).slice(0, 8);
   if (matches.length === 0) {
-    listEl.innerHTML = '<div class="autocomplete-empty">No matches — just type it into the fields below.</div>';
-    return;
+    listEl.innerHTML = '<div class="autocomplete-empty">No local matches — try searching online below, or just type it into the fields.</div>';
   }
   matches.forEach(f => {
     const row = document.createElement('div');
@@ -1011,9 +1032,89 @@ $('quick-search').addEventListener('input', (e) => {
       fillFromFood(f);
       $('quick-search').value = '';
       listEl.innerHTML = '';
+      onlineBtn.style.display = 'none';
+      $('online-results').innerHTML = '';
     });
     listEl.appendChild(row);
   });
+
+  // offer online search once the query is specific enough to be worth a request
+  if (q.length >= 2) {
+    onlineBtn.textContent = `🔎 Search Open Food Facts for "${e.target.value.trim()}"`;
+    onlineBtn.style.display = 'block';
+  } else {
+    onlineBtn.style.display = 'none';
+  }
+});
+
+// ---- online search (Open Food Facts) ----
+$('online-search-btn').addEventListener('click', async () => {
+  const query = $('quick-search').value.trim();
+  if (!query) return;
+  const resultsEl = $('online-results');
+  resultsEl.innerHTML = '<div class="online-status">Searching online…</div>';
+  try {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=8&search_simple=1&action=process`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    const products = (data.products || []).filter(p => p.product_name);
+
+    resultsEl.innerHTML = '';
+    if (products.length === 0) {
+      resultsEl.innerHTML = '<div class="online-status">No online matches — try a different spelling, or just type it in manually.</div>';
+      return;
+    }
+
+    products.slice(0, 8).forEach(p => {
+      const nutriments = p.nutriments || {};
+      let cal = null;
+      let calLabel = '';
+      if (nutriments['energy-kcal_serving']) {
+        cal = Math.round(nutriments['energy-kcal_serving']);
+        calLabel = p.serving_size ? `${cal} kcal / ${p.serving_size}` : `${cal} kcal / serving`;
+      } else if (nutriments['energy-kcal_100g']) {
+        cal = Math.round(nutriments['energy-kcal_100g']);
+        calLabel = `${cal} kcal / 100g`;
+      }
+      if (!cal) return;
+
+      const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
+      const row = document.createElement('div');
+      row.className = 'online-item';
+      row.innerHTML = `
+        <span>
+          <span class="online-tag">web</span><span class="name">${escapeHtml(displayName)}</span>
+          <span class="brand">${escapeHtml(calLabel)}</span>
+        </span>
+        <span class="cal">${cal} kcal</span>
+      `;
+      row.addEventListener('click', async () => {
+        $('in-name').value = displayName;
+        $('in-cal').value = cal;
+        $('in-sugar').focus();
+        // auto-save so it's local and instant next time
+        const customFoods = await getCustomFoods();
+        if (!customFoods.some(f => f.name === displayName)) {
+          customFoods.push({ id: Date.now(), name: displayName, cal });
+          await setCustomFoods(customFoods);
+          await refreshFoodIndex();
+          await renderCustomFoods();
+        }
+        $('quick-search').value = '';
+        $('autocomplete-list').innerHTML = '';
+        $('online-results').innerHTML = '';
+        $('online-search-btn').style.display = 'none';
+      });
+      resultsEl.appendChild(row);
+    });
+
+    if (!resultsEl.children.length) {
+      resultsEl.innerHTML = '<div class="online-status">Found matches, but none had usable calorie data.</div>';
+    }
+  } catch (err) {
+    resultsEl.innerHTML = '<div class="online-status">Couldn\'t reach Open Food Facts — check your connection and try again.</div>';
+  }
 });
 
 // category browser: chips -> items -> back
