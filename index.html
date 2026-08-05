@@ -312,6 +312,21 @@ nav button:hover:not(.active){color:var(--text);}
 .nutri-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:11.5px;color:var(--text-dim);}
 .nutri-legend span{display:flex;align-items:center;gap:5px;}
 .nutri-legend .grade-badge{width:16px;height:16px;font-size:10px;}
+.size-toggle{display:flex;gap:6px;margin-bottom:10px;}
+.size-btn{
+  flex:1;padding:10px 8px;border:1px solid var(--border);background:var(--panel-2);
+  color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:13.5px;min-height:44px;
+}
+.size-btn.active{background:var(--accent);color:#1a1206;border-color:var(--accent);font-weight:600;}
+.est-tag{
+  font-size:10px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--border);
+  border-radius:4px;padding:1px 5px;margin-left:4px;
+}
+.drink-category-title{
+  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 4px;
+}
+.drink-category-title:first-child{margin-top:0;}
 
 footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;}
 
@@ -375,7 +390,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.1.0</div>
+  <div class="splash-version">v1.2.0</div>
 </div>
 <div class="wrap">
 
@@ -413,7 +428,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 
     <div class="card">
       <h2>Log something</h2>
-      <div class="hint">Rough numbers are fine — the pattern matters more than precision.</div>
+      <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find your exact packet of biscuits or specific brand? Check the calorie count printed on the pack, then save it under "My foods" below — it's searchable forever after that.</div>
 
       <div class="quick-add-label">Search a saved item:</div>
       <div class="field-row search-wrap">
@@ -571,7 +586,16 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   <div class="view" id="view-drinks">
     <div class="card">
       <h2>What's in your usual order</h2>
-      <div class="hint">Calories and Singapore Nutri-Grade ratings for popular drinks — useful to know, not a reason to skip them. Figures are for a Medium cup and can vary by sugar/topping level, so treat as estimates.</div>
+      <div class="hint">Calories and Singapore Nutri-Grade ratings, sourced from BBTea.sg's menu database (which cites the brands' mandatory Nutri-Grade disclosures) and cross-checked against Luckin's own Nutri-Grade announcement. Figures are per standard/full sugar recipe unless noted — treat as estimates, not exact.</div>
+
+      <div class="size-toggle" id="size-toggle">
+        <button type="button" class="size-btn active" data-size="M">Medium</button>
+        <button type="button" class="size-btn" data-size="L">Large</button>
+      </div>
+      <div class="hint" style="margin-top:-4px;">Large-cup figures marked <span class="est-tag">est.</span> are calculated from the Medium figure (Large runs ~46% more across both brands' actual data) since not every drink has a published Large number.</div>
+
+      <div class="hint" style="margin-top:2px;">These are for standard/full sugar. Choosing less sugar (e.g. 50% or 30%) lowers the number, but brands don't publish exact per-level figures — treat "less sugar" as directionally lower, not a precise amount.</div>
+
       <div class="nutri-legend">
         <span><span class="grade-badge grade-A">A</span>lowest sugar &amp; sat. fat</span>
         <span><span class="grade-badge grade-B">B</span>low</span>
@@ -581,26 +605,14 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 
       <div class="brand-block">
         <div class="brand-title">Luckin Coffee</div>
-        <div class="brand-sub">Medium cup, standard recipe</div>
-        <div id="luckin-list"></div>
-      </div>
-
-      <div class="brand-block">
-        <div class="brand-title">Luckin Coffee — seasonal &amp; limited-time</div>
-        <div class="brand-sub">Rotates regularly — figures may lag the newest launch</div>
-        <div id="luckin-seasonal-list"></div>
+        <div class="brand-sub">57 drinks across 8 categories</div>
+        <div id="luckin-menu"></div>
       </div>
 
       <div class="brand-block">
         <div class="brand-title">CHAGEE</div>
-        <div class="brand-sub">Medium cup, standard sugar level</div>
-        <div id="chagee-list"></div>
-      </div>
-
-      <div class="brand-block">
-        <div class="brand-title">CHAGEE — seasonal fruit teas</div>
-        <div class="brand-sub">Rotates regularly — figures may lag the newest launch</div>
-        <div id="chagee-seasonal-list"></div>
+        <div class="brand-sub">26 drinks across 5 categories</div>
+        <div id="chagee-menu"></div>
       </div>
     </div>
 
@@ -638,7 +650,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.1.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.2.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -915,6 +927,30 @@ const commonFoods = [
     { name: 'Chicken cutlet / katsu (1 pc)', cal: 280 },
     { name: 'Popcorn chicken (small pack)', cal: 280 },
     { name: 'Fish fingers (4 pcs)', cal: 240 }
+  ]},
+  { group: 'Snacks & biscuits', items: [
+    { name: 'Plain tea biscuits (4 pcs, e.g. Marie)', cal: 120 },
+    { name: 'Digestive biscuits (2 pcs)', cal: 140 },
+    { name: 'Chocolate-coated biscuits (2 pcs)', cal: 150 },
+    { name: 'Cream-filled sandwich biscuits (3 pcs)', cal: 160 },
+    { name: 'Potato chips (small pack, ~30g)', cal: 160 },
+    { name: 'Prawn crackers / keropok (small pack)', cal: 150 },
+    { name: 'Chocolate bar, standard (1 bar, ~45g)', cal: 230 },
+    { name: 'Cup noodles (1 cup)', cal: 300 },
+    { name: 'Ice cream (1 scoop)', cal: 140 },
+    { name: 'Popcorn, sweet or salted (1 cup)', cal: 150 },
+    { name: 'Granola / muesli bar (1 bar)', cal: 120 },
+    { name: 'Plain crackers (5 pcs)', cal: 80 }
+  ]},
+  { group: 'Fast food (generic)', items: [
+    { name: 'Burger, regular cheeseburger', cal: 300 },
+    { name: 'Burger, large/premium', cal: 550 },
+    { name: 'French fries, small', cal: 230 },
+    { name: 'French fries, medium', cal: 340 },
+    { name: 'Fried chicken (1 piece)', cal: 280 },
+    { name: 'Pizza (1 slice, regular)', cal: 285 },
+    { name: 'Sandwich / sub (6-inch)', cal: 350 },
+    { name: 'Donut (1 glazed)', cal: 260 }
   ]},
   { group: 'Kopitiam drinks', items: [
     { name: 'Kopi (coffee, condensed milk)', cal: 130 },
@@ -1254,57 +1290,153 @@ $('calc-btn').addEventListener('click', () => {
 });
 
 // ---- drinks ----
-const luckinDrinks = [
-  { name: 'Extra Strong Americano (M)', cal: 24, grade: 'A' },
-  { name: 'Orange Americano (M)', cal: 197, grade: 'C' },
-  { name: 'Jasmine Kiss Tea (M)', cal: 206, grade: 'B' },
-  { name: 'Velvety Matcha Latte (M)', cal: 221, grade: 'B' },
-  { name: 'Snowy Matcha Latte (M)', cal: 331, grade: 'C' },
-  { name: 'Chocolate Frappe (M)', cal: 370, grade: 'C' }
+// Sourced from BBTea.sg's Singapore menu database (calM/calL as published; calL: null where
+// BBTea.sg doesn't list a Large size). Cross-checked against Luckin's Jan 2026 Nutri-Grade
+// reformulation announcement (no Nutri-Grade D drinks remain — matches this dataset).
+const luckinMenu = [
+  { category: 'Americano', items: [
+    { name: 'Americano', calM: 26, calL: null, grade: 'A' },
+    { name: 'Dark Roast Americano', calM: 24, calL: null, grade: 'A' },
+    { name: 'Extra Strong Americano', calM: 24, calL: null, grade: 'A' },
+    { name: 'Grape Fizzy Americano', calM: 163, calL: 238, grade: 'C' },
+    { name: 'Hot Orange Americano', calM: 197, calL: null, grade: 'C' },
+    { name: 'Iced Americano', calM: 26, calL: null, grade: 'A' },
+    { name: 'Iced Extra Strong Americano', calM: 31, calL: null, grade: 'A' },
+    { name: 'Little Butter Americano', calM: 197, calL: null, grade: 'C' },
+    { name: 'Orange Americano', calM: 197, calL: 287, grade: 'C' },
+    { name: 'Pomelo Americano', calM: 158, calL: 231, grade: 'C' }
+  ]},
+  { category: 'Barista Coffee', items: [
+    { name: 'Caffe Mocha', calM: 329, calL: null, grade: 'C' },
+    { name: 'Cappuccino', calM: 317, calL: null, grade: 'C' },
+    { name: 'Caramel Macchiato', calM: 333, calL: null, grade: 'C' },
+    { name: 'Flat White', calM: 307, calL: null, grade: 'C' },
+    { name: 'Latte', calM: 158, calL: null, grade: 'A' },
+    { name: 'Oat Milk Latte', calM: 278, calL: null, grade: 'B' },
+    { name: 'Oat Shakerato', calM: 182, calL: null, grade: 'B' }
+  ]},
+  { category: 'Flavored Lattes', items: [
+    { name: 'Brown Sugar Boba Latte', calM: 307, calL: null, grade: 'C' },
+    { name: 'Coconut Latte', calM: 254, calL: null, grade: 'C' },
+    { name: 'Coconut Velvet Latte', calM: 432, calL: null, grade: 'C' },
+    { name: 'Creamy Dreamy Latte', calM: 605, calL: null, grade: 'C' },
+    { name: 'Dark Roast Latte', calM: 202, calL: null, grade: 'B' },
+    { name: 'Dark Roast Oat Latte', calM: 206, calL: null, grade: 'B' },
+    { name: 'Iced Minty Coconut Latte', calM: 250, calL: null, grade: 'C' },
+    { name: 'Little Butter Latte', calM: 350, calL: null, grade: 'C' },
+    { name: 'Mascarpone Latte', calM: 312, calL: null, grade: 'C' },
+    { name: 'Matcha Latte', calM: 446, calL: null, grade: 'C' },
+    { name: 'Matcha Oat Latte', calM: 331, calL: null, grade: 'C' },
+    { name: 'Pink Blossom Latte', calM: 240, calL: null, grade: 'B' },
+    { name: 'Pistachio Oat Latte', calM: 350, calL: null, grade: 'B' },
+    { name: 'Sea Salt Caramel Latte', calM: 288, calL: null, grade: 'C' },
+    { name: 'Snowy Matcha Latte', calM: 331, calL: null, grade: 'C' },
+    { name: 'Vanilla Flavoured Creamy Latte', calM: 360, calL: null, grade: 'C' },
+    { name: 'Velvet Latte', calM: 408, calL: null, grade: 'C' },
+    { name: 'Velvety Matcha Latte', calM: 221, calL: null, grade: 'B' }
+  ]},
+  { category: 'Frappe', items: [
+    { name: 'Blue-ming Coconut Frappe', calM: 331, calL: null, grade: 'C' },
+    { name: 'Chocolate Frappe', calM: 370, calL: null, grade: 'C' },
+    { name: 'Matcha Frappe', calM: 442, calL: null, grade: 'C' },
+    { name: 'Matcha Jasmine Frappe', calM: 370, calL: null, grade: 'C' },
+    { name: 'Pistachio Chocolate Frappe', calM: 422, calL: null, grade: 'C' },
+    { name: 'Vanilla Flavored Frappe', calM: 360, calL: null, grade: 'C' }
+  ]},
+  { category: 'Juice & Caffeine Free', items: [
+    { name: 'Active Apple Kale Tea', calM: 144, calL: null, grade: 'C' },
+    { name: 'Zesty Pomelo', calM: 139, calL: 203, grade: 'C' }
+  ]},
+  { category: 'Luckin Black Cup', items: [
+    { name: 'Gesha Americano', calM: 24, calL: null, grade: 'A' },
+    { name: 'Gesha Flat White', calM: 269, calL: null, grade: 'C' },
+    { name: 'Gesha Latte', calM: 274, calL: null, grade: 'C' },
+    { name: 'Yirgacheffe Americano', calM: 27, calL: null, grade: 'A' },
+    { name: 'Yirgacheffe Flat White', calM: 307, calL: null, grade: 'C' },
+    { name: 'Yirgacheffe Latte', calM: 187, calL: null, grade: 'B' }
+  ]},
+  { category: 'Other Drinks', items: [
+    { name: 'Chocolate Flavoured Milk', calM: 499, calL: null, grade: 'C' },
+    { name: 'Coconut Matcha Latte', calM: 374, calL: null, grade: 'C' },
+    { name: 'First Crush Tea', calM: 206, calL: null, grade: 'B' },
+    { name: 'Jasmine Kiss Tea', calM: 206, calL: null, grade: 'B' },
+    { name: 'Milk', calM: 360, calL: null, grade: 'C' },
+    { name: 'Tropical Coco-Mango Refresher', calM: 269, calL: null, grade: 'C' }
+  ]},
+  { category: 'Yuan-Yang', items: [
+    { name: 'Ceylon Yuan-Yang', calM: 211, calL: null, grade: 'C' },
+    { name: 'Jasmine Blossom Yuan-Yang', calM: 221, calL: null, grade: 'C' }
+  ]}
 ];
-const luckinSeasonal = [
-  { name: 'Pink Blossom Latte (M)', cal: 240, grade: 'B' },
-  { name: 'Sea Salt Caramel Latte (M)', cal: 288, grade: 'C' },
-  { name: 'Coconut Velvet Latte (M)', cal: 432, grade: 'C' },
-  { name: 'Blue-ming Coconut Frappe (M)', cal: 331, grade: 'C' },
-  { name: 'Active Apple Kale Tea (M)', cal: 144, grade: 'C' },
-  { name: 'Tropical Coco-Mango Refresher (M)', cal: 269, grade: 'C' },
-  { name: 'Grape Fizzy Americano (M)', cal: 163, grade: 'C' },
-  { name: 'Brown Sugar Boba Latte (M)', cal: 307, grade: 'C' },
-  { name: 'Mascarpone Latte (M)', cal: 312, grade: 'C' },
-  { name: 'Jasmine Blossom Yuan-Yang (M)', cal: 221, grade: 'C' }
-];
-const chageeDrinks = [
-  { name: 'Da Hong Pao Teaspresso Pure (M)', cal: 67, grade: 'A' },
-  { name: 'Da Hong Pao Pure Tea (M)', cal: 96, grade: 'B' },
-  { name: 'Da Hong Pao Milk Tea (M)', cal: 178, grade: 'B' },
-  { name: 'BO.YA Jasmine Green Milk Tea (M)', cal: 206, grade: 'B' },
-  { name: 'Da Hong Pao Tea Latte (M)', cal: 298, grade: 'C' },
-  { name: 'Da Hong Pao Snow Cap Milk Tea (M)', cal: 326, grade: 'C' },
-  { name: 'Oreo Lapsang Souchong Tea Frappe (M)', cal: 446, grade: 'C' },
-  { name: 'Caramel Da Hong Pao Tea Frappe (M)', cal: 514, grade: 'D' }
-];
-const chageeSeasonal = [
-  { name: 'Da Hong Pao Lemon Tea (M)', cal: 254, grade: 'C' },
-  { name: 'Glutinous Lemon Tea (M)', cal: 254, grade: 'C' },
-  { name: 'Jasmine Lemon Tea (M)', cal: 254, grade: 'C' }
+const chageeMenu = [
+  { category: 'Brewed Tea', items: [
+    { name: 'BO.YA Jasmine Tie Guan Yin Brewed Tea', calM: 120, calL: 175, grade: 'B' },
+    { name: 'Da Hong Pao Pure Tea', calM: 96, calL: 140, grade: 'B' },
+    { name: 'Glutinous Pure Green Tea', calM: 96, calL: 140, grade: 'B' },
+    { name: 'Osmanthus Oolong Tea', calM: 106, calL: 154, grade: 'B' },
+    { name: 'Peach Oolong Tea', calM: 106, calL: 154, grade: 'B' },
+    { name: 'Tie Guan Yin Pure Tea', calM: 106, calL: 154, grade: 'B' }
+  ]},
+  { category: 'Fresh Fruit Tea', items: [
+    { name: 'Da Hong Pao Lemon Tea', calM: 254, calL: 371, grade: 'C' },
+    { name: 'Glutinous Lemon Tea', calM: 254, calL: 371, grade: 'C' },
+    { name: 'Jasmine Lemon Tea', calM: 254, calL: 371, grade: 'C' }
+  ]},
+  { category: 'Fresh Milk Tea', items: [
+    { name: 'BO.YA Jasmine Green Milk Tea', calM: 206, calL: 301, grade: 'B' },
+    { name: 'BO.YA Jasmine Tie Guan Yin Milk Tea', calM: 206, calL: 301, grade: 'B' },
+    { name: 'Da Hong Pao Milk Tea', calM: 178, calL: 259, grade: 'B' },
+    { name: 'Glutinous Green Milk Tea', calM: 206, calL: 301, grade: 'B' },
+    { name: 'Hojicha Genmai Milk Tea', calM: 230, calL: 336, grade: 'B' },
+    { name: 'Lapsang Souchong Black Milk Tea', calM: 202, calL: 294, grade: 'B' },
+    { name: 'Osmanthus Oolong Milk Tea', calM: 202, calL: 294, grade: 'B' },
+    { name: 'Peach Oolong Milk Tea', calM: 216, calL: 315, grade: 'B' },
+    { name: 'Tie Guan Yin Milk Tea', calM: 206, calL: 301, grade: 'B' }
+  ]},
+  { category: 'Snow Cap Milk Tea', items: [
+    { name: 'Da Hong Pao Snow Cap Milk Tea', calM: 326, calL: null, grade: 'C' },
+    { name: 'Osmanthus Oolong Snow Cap Milk Tea', calM: 326, calL: null, grade: 'C' }
+  ]},
+  { category: 'Teaspresso', items: [
+    { name: 'Caramel Da Hong Pao Tea Frappe', calM: 514, calL: null, grade: 'D' },
+    { name: 'Da Hong Pao Tea Latte', calM: 298, calL: null, grade: 'C' },
+    { name: 'Da Hong Pao Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
+    { name: 'Lapsang Souchong Tea Latte', calM: 298, calL: null, grade: 'C' },
+    { name: 'Lapsang Souchong Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
+    { name: 'Oreo Lapsang Souchong Tea Frappe', calM: 446, calL: null, grade: 'C' }
+  ]}
 ];
 
-function renderDrinkList(containerId, drinks) {
+let drinkSize = 'M';
+function getDisplayCal(item) {
+  if (drinkSize === 'M') return { value: item.calM, estimated: false };
+  if (item.calL != null) return { value: item.calL, estimated: false };
+  return { value: Math.round(item.calM * 1.46), estimated: true };
+}
+
+function renderDrinkMenu(containerId, menu) {
   const container = $(containerId);
   container.innerHTML = '';
-  drinks.forEach((d, i) => {
-    const row = document.createElement('div');
-    row.className = 'drink-item';
-    row.innerHTML = `
-      <span class="drink-name">${d.name}</span>
-      <span class="drink-meta">
-        <span class="drink-cal">${d.cal} kcal</span>
-        <span class="grade-badge grade-${d.grade}">${d.grade}</span>
-        <button class="log-btn" data-name="${escapeHtml(d.name)}" data-cal="${d.cal}">+ Log</button>
-      </span>
-    `;
-    container.appendChild(row);
+  menu.forEach(cat => {
+    const catTitle = document.createElement('div');
+    catTitle.className = 'drink-category-title';
+    catTitle.textContent = cat.category;
+    container.appendChild(catTitle);
+
+    cat.items.forEach(item => {
+      const { value, estimated } = getDisplayCal(item);
+      const row = document.createElement('div');
+      row.className = 'drink-item';
+      row.innerHTML = `
+        <span class="drink-name">${escapeHtml(item.name)}</span>
+        <span class="drink-meta">
+          <span class="drink-cal">${value} kcal${estimated ? '<span class="est-tag">est.</span>' : ''}</span>
+          <span class="grade-badge grade-${item.grade}">${item.grade}</span>
+          <button class="log-btn" data-name="${escapeHtml(item.name)} (${drinkSize})" data-cal="${value}">+ Log</button>
+        </span>
+      `;
+      container.appendChild(row);
+    });
   });
   container.querySelectorAll('.log-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1319,6 +1451,18 @@ function renderDrinkList(containerId, drinks) {
     });
   });
 }
+function renderAllDrinkMenus() {
+  renderDrinkMenu('luckin-menu', luckinMenu);
+  renderDrinkMenu('chagee-menu', chageeMenu);
+}
+document.querySelectorAll('.size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    drinkSize = btn.dataset.size;
+    renderAllDrinkMenus();
+  });
+});
 
 // ---- init ----
 (async function init() {
@@ -1328,10 +1472,7 @@ function renderDrinkList(containerId, drinks) {
   await renderSettings();
   await renderToday();
   await renderWeek();
-  renderDrinkList('luckin-list', luckinDrinks);
-  renderDrinkList('luckin-seasonal-list', luckinSeasonal);
-  renderDrinkList('chagee-list', chageeDrinks);
-  renderDrinkList('chagee-seasonal-list', chageeSeasonal);
+  renderAllDrinkMenus();
 
   // keep the splash visible briefly so it doesn't just flash
   setTimeout(() => {
