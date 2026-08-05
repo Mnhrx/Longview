@@ -375,7 +375,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.0.0</div>
+  <div class="splash-version">v1.1.0</div>
 </div>
 <div class="wrap">
 
@@ -473,9 +473,18 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <div class="save-note" id="save-note"></div>
     </div>
 
+    <div class="card">
+      <h2>Backup &amp; restore</h2>
+      <div class="hint">Your data lives only in this home screen icon's storage — deleting the icon deletes it too. Export a backup before removing or reinstalling the icon, and import it back after.</div>
+      <button class="add-btn secondary" id="export-btn">Export backup (.json)</button>
+      <button class="add-btn secondary" id="import-btn" style="margin-top:8px;">Import backup</button>
+      <input type="file" id="import-input" accept="application/json" style="display:none;">
+      <div class="save-note" id="import-note"></div>
+    </div>
+
     <div class="card reset-card">
       <h2>Start over</h2>
-      <div class="hint">Clears every logged entry, your saved target, and your saved custom foods. Can't be undone.</div>
+      <div class="hint">Clears every logged entry, your saved target, and your saved custom foods. Export a backup first if you want a way back. Can't be undone.</div>
       <button class="add-btn danger" id="reset-btn">Reset all data</button>
       <div class="save-note" id="reset-note"></div>
     </div>
@@ -629,7 +638,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.0.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.1.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1049,6 +1058,56 @@ $('save-settings').addEventListener('click', async () => {
   $('save-note').textContent = 'Saved.';
   setTimeout(() => $('save-note').textContent = '', 1500);
   renderWeek();
+});
+
+// ---- backup & restore ----
+$('export-btn').addEventListener('click', async () => {
+  const settings = await getSettings();
+  const customFoods = await getCustomFoods();
+  const entries = {};
+  Object.keys(localStorage)
+    .filter(k => k.startsWith(STORAGE_PREFIX + 'entries:'))
+    .forEach(k => {
+      const dateKey = k.replace(STORAGE_PREFIX + 'entries:', '');
+      try { entries[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+    });
+  const backup = { app: 'longview', version: '1.0.0', exportedAt: new Date().toISOString(), settings, customFoods, entries };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `longview-backup-${todayKey(0)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+$('import-btn').addEventListener('click', () => $('import-input').click());
+$('import-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    if (backup.settings) await setSettings(backup.settings);
+    if (backup.customFoods) await setCustomFoods(backup.customFoods);
+    if (backup.entries) {
+      for (const dateKey of Object.keys(backup.entries)) {
+        await setEntries(dateKey, backup.entries[dateKey]);
+      }
+    }
+    await refreshFoodIndex();
+    await renderCustomFoods();
+    await renderSettings();
+    await renderToday();
+    await renderWeek();
+    $('import-note').textContent = 'Restored successfully.';
+  } catch (err) {
+    $('import-note').textContent = "Couldn't read that file — make sure it's a Longview backup.";
+  }
+  e.target.value = '';
+  setTimeout(() => $('import-note').textContent = '', 2500);
 });
 
 // ---- reset ----
