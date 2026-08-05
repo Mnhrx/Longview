@@ -311,9 +311,67 @@ nav button:hover:not(.active){color:var(--text);}
 .nutri-legend .grade-badge{width:16px;height:16px;font-size:10px;}
 
 footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;}
+
+/* splash screen */
+#splash-screen{
+  position:fixed;inset:0;background:var(--bg);z-index:9999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  transition:opacity .4s ease;
+}
+#splash-screen.hide{opacity:0;pointer-events:none;}
+.splash-mark{
+  font-family:'Fraunces',serif;font-weight:600;font-size:28px;color:var(--accent);
+  letter-spacing:-0.01em;animation:pulse 1.4s ease-in-out infinite;
+}
+.splash-tagline{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.04em;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
+
+/* search / autocomplete */
+.search-wrap input{font-size:16px;}
+.autocomplete-list{
+  display:flex;flex-direction:column;gap:4px;margin:-4px 0 12px;
+}
+.autocomplete-list:empty{margin:0;}
+.autocomplete-item{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:9px;
+  padding:10px 12px;cursor:pointer;font-size:13.5px;min-height:44px;
+}
+.autocomplete-item:hover, .autocomplete-item:active{border-color:var(--accent);}
+.autocomplete-item .name{color:var(--text);}
+.autocomplete-item .cal{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12.5px;white-space:nowrap;}
+.autocomplete-empty{color:var(--text-dim);font-size:13px;padding:6px 2px 12px;}
+
+/* category browser */
+.link-btn{
+  background:none;border:none;color:var(--accent2);font-size:13px;font-weight:500;
+  cursor:pointer;padding:6px 0;margin-bottom:10px;text-decoration:underline;text-underline-offset:2px;
+}
+.category-panel{margin-bottom:14px;}
+.category-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.category-chip{
+  background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+  border-radius:20px;padding:9px 14px;font-size:13px;cursor:pointer;min-height:40px;
+}
+.category-chip:hover{border-color:var(--accent);}
+.category-back{
+  background:none;border:none;color:var(--accent2);font-size:13px;cursor:pointer;
+  padding:6px 0;margin-bottom:8px;display:block;
+}
+.category-item-row{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  background:var(--panel-2);border-radius:9px;padding:10px 12px;font-size:13.5px;
+  margin-bottom:6px;cursor:pointer;min-height:44px;
+}
+.category-item-row:hover{outline:1px solid var(--accent);}
+.category-item-row .cal{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12.5px;white-space:nowrap;}
 </style>
 </head>
 <body>
+<div id="splash-screen">
+  <div class="splash-mark">longview</div>
+  <div class="splash-tagline">a simple way to eat a little healthier</div>
+</div>
 <div class="wrap">
 
   <header>
@@ -351,12 +409,19 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     <div class="card">
       <h2>Log something</h2>
       <div class="hint">Rough numbers are fine — the pattern matters more than precision.</div>
-      <div class="quick-add-label">Or pick a saved item to fill it in:</div>
-      <div class="field-row">
-        <select id="quick-add-select">
-          <option value="">— common foods, drinks &amp; your own —</option>
-        </select>
+
+      <div class="quick-add-label">Search a saved item:</div>
+      <div class="field-row search-wrap">
+        <input type="text" id="quick-search" placeholder="Type to search, e.g. 'kopi' or 'rice'" autocomplete="off">
       </div>
+      <div class="autocomplete-list" id="autocomplete-list"></div>
+
+      <button type="button" class="link-btn" id="browse-categories-btn">Or browse by category ▾</button>
+      <div class="category-panel" id="category-panel" style="display:none;">
+        <div class="category-chips" id="category-chips"></div>
+        <div id="category-items"></div>
+      </div>
+
       <div class="field-row">
         <input type="text" class="name" id="in-name" placeholder="e.g. chicken rice">
       </div>
@@ -420,8 +485,10 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
           <div class="week-net-label">net calories this week vs. target</div>
         </div>
         <div class="week-target-box">
-          <div class="num" id="week-target-num">—</div>
-          <div class="lbl">weekly target</div>
+          <div class="num" id="week-daily-target-num">—</div>
+          <div class="lbl">daily target</div>
+          <div class="num" id="week-target-num" style="margin-top:10px;">—</div>
+          <div class="lbl">weekly target (daily × 7)</div>
         </div>
       </div>
       <div class="strip-wrap">
@@ -794,7 +861,7 @@ async function renderCustomFoods() {
       const updated = foods.filter(f => String(f.id) !== el.dataset.id);
       await setCustomFoods(updated);
       renderCustomFoods();
-      populateQuickAdd();
+      refreshFoodIndex();
     });
   });
 }
@@ -807,7 +874,7 @@ $('custom-add-btn').addEventListener('click', async () => {
   await setCustomFoods(foods);
   $('custom-name').value = ''; $('custom-cal').value = '';
   renderCustomFoods();
-  populateQuickAdd();
+  refreshFoodIndex();
 });
 const commonFoods = [
   { group: 'Meals', items: [
@@ -858,43 +925,94 @@ const commonFoods = [
   ]}
 ];
 
-async function populateQuickAdd() {
-  const select = $('quick-add-select');
-  // clear everything except the first placeholder option
-  select.innerHTML = '<option value="">— common foods, drinks &amp; your own —</option>';
-
+let foodIndex = [];
+async function refreshFoodIndex() {
   const customFoods = await getCustomFoods();
-  if (customFoods.length > 0) {
-    const optgroup = document.createElement('optgroup');
-    optgroup.label = 'My foods';
-    customFoods.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = JSON.stringify({ name: item.name, cal: item.cal });
-      opt.textContent = `${item.name} — ~${item.cal} kcal`;
-      optgroup.appendChild(opt);
-    });
-    select.appendChild(optgroup);
-  }
+  const index = [];
+  customFoods.forEach(f => index.push({ name: f.name, cal: f.cal, group: 'My foods' }));
+  commonFoods.forEach(g => {
+    g.items.forEach(item => index.push({ name: item.name, cal: item.cal, group: g.group }));
+  });
+  foodIndex = index;
+}
 
-  commonFoods.forEach(group => {
-    const optgroup = document.createElement('optgroup');
-    optgroup.label = group.group;
-    group.items.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = JSON.stringify(item);
-      opt.textContent = `${item.name} — ~${item.cal} kcal`;
-      optgroup.appendChild(opt);
+function fillFromFood(f) {
+  $('in-name').value = f.name;
+  $('in-cal').value = f.cal;
+  $('in-sugar').focus();
+}
+
+// live search-as-you-type
+$('quick-search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const listEl = $('autocomplete-list');
+  listEl.innerHTML = '';
+  if (!q) return;
+  const matches = foodIndex.filter(f => f.name.toLowerCase().includes(q)).slice(0, 8);
+  if (matches.length === 0) {
+    listEl.innerHTML = '<div class="autocomplete-empty">No matches — just type it into the fields below.</div>';
+    return;
+  }
+  matches.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'autocomplete-item';
+    row.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="cal">${f.cal} kcal</span>`;
+    row.addEventListener('click', () => {
+      fillFromFood(f);
+      $('quick-search').value = '';
+      listEl.innerHTML = '';
     });
-    select.appendChild(optgroup);
+    listEl.appendChild(row);
+  });
+});
+
+// category browser: chips -> items -> back
+function renderCategoryChips() {
+  const chipsEl = $('category-chips');
+  $('category-items').innerHTML = '';
+  chipsEl.style.display = 'flex';
+  chipsEl.innerHTML = '';
+  const orderedGroups = [];
+  if (foodIndex.some(f => f.group === 'My foods')) orderedGroups.push('My foods');
+  commonFoods.forEach(g => orderedGroups.push(g.group));
+  orderedGroups.forEach(groupName => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'category-chip';
+    chip.textContent = groupName;
+    chip.addEventListener('click', () => renderCategoryItems(groupName));
+    chipsEl.appendChild(chip);
   });
 }
-$('quick-add-select').addEventListener('change', (e) => {
-  if (!e.target.value) return;
-  const item = JSON.parse(e.target.value);
-  $('in-name').value = item.name;
-  $('in-cal').value = item.cal;
-  e.target.value = '';
-  $('in-sugar').focus();
+function renderCategoryItems(groupName) {
+  $('category-chips').style.display = 'none';
+  const itemsEl = $('category-items');
+  itemsEl.innerHTML = '';
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'category-back';
+  backBtn.textContent = '‹ Back to categories';
+  backBtn.addEventListener('click', renderCategoryChips);
+  itemsEl.appendChild(backBtn);
+
+  foodIndex.filter(f => f.group === groupName).forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'category-item-row';
+    row.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="cal">${f.cal} kcal</span>`;
+    row.addEventListener('click', () => {
+      fillFromFood(f);
+      $('category-panel').style.display = 'none';
+      $('browse-categories-btn').textContent = 'Or browse by category ▾';
+    });
+    itemsEl.appendChild(row);
+  });
+}
+$('browse-categories-btn').addEventListener('click', () => {
+  const panel = $('category-panel');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  $('browse-categories-btn').textContent = isOpen ? 'Or browse by category ▾' : 'Hide categories ▴';
+  if (!isOpen) renderCategoryChips();
 });
 
 $('add-btn').addEventListener('click', async () => {
@@ -937,6 +1055,8 @@ $('reset-btn').addEventListener('click', async () => {
     .forEach(k => localStorage.removeItem(k));
   $('reset-note').textContent = 'All data cleared.';
   setTimeout(() => $('reset-note').textContent = '', 2000);
+  await refreshFoodIndex();
+  await renderCustomFoods();
   await renderSettings();
   await renderToday();
   await renderWeek();
@@ -987,6 +1107,7 @@ async function renderWeek() {
     netEl.textContent = sign + Math.abs(Math.round(weekNet)).toLocaleString() + ' kcal';
     netEl.className = 'week-net ' + (weekNet <= 0 ? 'good' : 'bad');
   }
+  $('week-daily-target-num').textContent = settings.calorieTarget.toLocaleString() + ' kcal';
   $('week-target-num').textContent = (settings.calorieTarget * 7).toLocaleString() + ' kcal';
 }
 
@@ -1138,7 +1259,7 @@ function renderDrinkList(containerId, drinks) {
 // ---- init ----
 (async function init() {
   populatePortionSelects();
-  await populateQuickAdd();
+  await refreshFoodIndex();
   await renderCustomFoods();
   await renderSettings();
   await renderToday();
@@ -1147,6 +1268,11 @@ function renderDrinkList(containerId, drinks) {
   renderDrinkList('luckin-seasonal-list', luckinSeasonal);
   renderDrinkList('chagee-list', chageeDrinks);
   renderDrinkList('chagee-seasonal-list', chageeSeasonal);
+
+  // keep the splash visible briefly so it doesn't just flash
+  setTimeout(() => {
+    $('splash-screen').classList.add('hide');
+  }, 500);
 })();
 </script>
 </body>
