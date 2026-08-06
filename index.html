@@ -442,7 +442,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.7.3</div>
+  <div class="splash-version">v1.7.2</div>
 </div>
 <div class="wrap">
 
@@ -776,7 +776,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.7.3<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.7.2<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1171,7 +1171,8 @@ const exerciseData = [
   { name: 'Football / soccer', calPerMin: 9 },
   { name: 'Tennis', calPerMin: 7 },
   { name: 'Badminton', calPerMin: 6 },
-  { name: 'Boxing / bag training', calPerMin: 10 }
+  { name: 'Boxing / bag training', calPerMin: 10 },
+  { name: 'Intimate Activities', calPerMin: 4}
 ];
 function populateExerciseSelect() {
   const sel = $('exercise-activity');
@@ -1552,7 +1553,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.7.3', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.7.2', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1829,6 +1830,11 @@ const luckinMenu = [
   ]}
 ];
 const chageeMenu = [
+  { category: 'Seasonal Drinks', items: [
+    { name: 'Apple English Breakfast Milk Tea', calM: 184, calL: 217, grade:'B'},
+    { name: 'Apple English Breakfast Lemon Tea', calM: 184, calL: 230, grade:'C'},
+    { name: 'Apple English Breakfast Brewed Tea', calM:108, calL:130, grade:'A'}
+  ]},
   { category: 'Brewed Tea', items: [
     { name: 'BO.YA Jasmine Tie Guan Yin Brewed Tea', calM: 120, calL: 175, grade: 'B' },
     { name: 'Da Hong Pao Pure Tea', calM: 96, calL: 140, grade: 'B' },
@@ -1864,7 +1870,7 @@ const chageeMenu = [
     { name: 'Lapsang Souchong Tea Latte', calM: 298, calL: null, grade: 'C' },
     { name: 'Lapsang Souchong Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
     { name: 'Oreo Lapsang Souchong Tea Frappe', calM: 446, calL: null, grade: 'C' }
-  ]}
+  ]}  
 ];
 
 let drinkSize = 'M';
@@ -1939,7 +1945,7 @@ document.querySelectorAll('.size-btn').forEach(btn => {
   // keep the splash visible briefly so it doesn't just flash
   setTimeout(() => {
     $('splash-screen').classList.add('hide');
-  }, 1200);
+  }, 800);
 })();
 </script>
 </body>
