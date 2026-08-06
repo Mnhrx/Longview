@@ -103,6 +103,13 @@ nav button:hover:not(.active){color:var(--text);}
   margin:0 0 4px;
 }
 .card .hint{color:var(--text-dim);font-size:13px;margin-bottom:14px;}
+.day-header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
+.day-header h2{margin:0;}
+.day-header input[type="date"]{
+  background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);padding:8px 10px;font-family:'Inter',sans-serif;font-size:13.5px;min-height:38px;
+  color-scheme:dark;
+}
 
 /* week strip */
 .week-headline{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:14px;}
@@ -406,7 +413,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.3.0</div>
+  <div class="splash-version">v1.4.0</div>
 </div>
 <div class="wrap">
 
@@ -482,11 +489,15 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
 
     <div class="card">
-      <h2 id="today-heading">Today</h2>
+      <div class="day-header">
+        <h2 id="today-heading">Today</h2>
+        <input type="date" id="date-picker">
+      </div>
+      <button type="button" class="link-btn" id="jump-today-btn" style="display:none;">‹ Back to today</button>
       <div class="totals">
         <div class="total-box cal">
           <div class="num" id="today-cal">0</div>
-          <div class="lbl">kcal logged today</div>
+          <div class="lbl" id="today-cal-label">kcal logged today</div>
         </div>
       </div>
       <div class="entry-list" id="entry-list">
@@ -668,7 +679,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.3.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.4.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -677,12 +688,28 @@ const $ = (id) => document.getElementById(id);
 function todayKey(offsetDays = 0) {
   const d = new Date();
   d.setDate(d.getDate() - offsetDays);
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 function dayLabel(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() - offsetDays);
   return d.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2);
+}
+let selectedDate = todayKey(0);
+function formatDateNice(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function updateDayHeading() {
+  const isToday = selectedDate === todayKey(0);
+  $('today-heading').textContent = isToday ? 'Today' : formatDateNice(selectedDate);
+  $('today-cal-label').textContent = isToday ? 'kcal logged today' : 'kcal logged this day';
+  $('jump-today-btn').style.display = isToday ? 'none' : 'block';
+  $('date-picker').value = selectedDate;
 }
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -738,12 +765,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ---- today view ----
 async function renderToday() {
-  const key = todayKey(0);
+  updateDayHeading();
+  const key = selectedDate;
   const entries = await getEntries(key);
   const list = $('entry-list');
   list.innerHTML = '';
   if (entries.length === 0) {
-    list.innerHTML = '<div class="empty-state">Nothing logged yet today.</div>';
+    list.innerHTML = '<div class="empty-state">Nothing logged for this day yet.</div>';
   } else {
     entries.forEach(e => {
       const row = document.createElement('div');
@@ -1171,12 +1199,22 @@ $('add-btn').addEventListener('click', async () => {
   const cal = parseFloat($('in-cal').value) || 0;
   const sugar = parseFloat($('in-sugar').value) || 0;
   if (!name) return;
-  const key = todayKey(0);
+  const key = selectedDate;
   const entries = await getEntries(key);
   entries.push({ id: Date.now(), name, calories: cal, sugar });
   await setEntries(key, entries);
   $('in-name').value = ''; $('in-cal').value = ''; $('in-sugar').value = '';
   renderToday();
+});
+
+$('date-picker').addEventListener('change', async (e) => {
+  if (!e.target.value) return;
+  selectedDate = e.target.value;
+  await renderToday();
+});
+$('jump-today-btn').addEventListener('click', async () => {
+  selectedDate = todayKey(0);
+  await renderToday();
 });
 
 // ---- settings ----
@@ -1282,6 +1320,15 @@ async function renderWeek() {
 
     const dayEl = document.createElement('div');
     dayEl.className = 'daybar';
+    dayEl.style.cursor = 'pointer';
+    dayEl.addEventListener('click', () => {
+      selectedDate = key;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelector('.tab-btn[data-view="today"]').classList.add('active');
+      $('view-today').classList.add('active');
+      renderToday();
+    });
     const bar = document.createElement('div');
     if (!hasData) {
       bar.className = 'bar empty';
@@ -1541,7 +1588,7 @@ function renderDrinkMenu(containerId, menu) {
   });
   container.querySelectorAll('.log-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const key = todayKey(0);
+      const key = selectedDate;
       const entries = await getEntries(key);
       entries.push({ id: Date.now(), name: btn.dataset.name, calories: parseFloat(btn.dataset.cal), sugar: 0 });
       await setEntries(key, entries);
