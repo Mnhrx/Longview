@@ -185,6 +185,8 @@ nav button:hover:not(.active){color:var(--text);}
 .total-box .num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;}
 .total-box .lbl{color:var(--text-dim);font-size:11.5px;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;}
 .total-box.cal .num{color:var(--accent);}
+.total-box.remaining .num{color:var(--good);}
+.total-box.remaining.over .num{color:var(--over);}
 
 .entry-list{display:flex;flex-direction:column;gap:6px;}
 .entry{
@@ -413,7 +415,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.4.0</div>
+  <div class="splash-version">v1.5.0</div>
 </div>
 <div class="wrap">
 
@@ -499,10 +501,36 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
           <div class="num" id="today-cal">0</div>
           <div class="lbl" id="today-cal-label">kcal logged today</div>
         </div>
+        <div class="total-box remaining" id="today-remaining-box">
+          <div class="num" id="today-remaining">0</div>
+          <div class="lbl">kcal left today</div>
+        </div>
       </div>
       <div class="entry-list" id="entry-list">
         <div class="empty-state">Nothing logged yet today.</div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Log exercise</h2>
+      <div class="hint">Optional — adds back to today's remaining budget. Estimates run high on most apps/watches, so if you're aiming for a deficit, consider counting only 50–75% of the estimate rather than the full number.</div>
+      <div class="field-row">
+        <select id="exercise-activity"></select>
+        <input type="number" class="num" id="exercise-duration" placeholder="minutes" min="1" style="max-width:110px;">
+      </div>
+      <div class="field-row">
+        <div class="portion-result" id="exercise-result">≈ — kcal</div>
+      </div>
+      <button class="add-btn secondary" id="exercise-fill-btn">Use this estimate</button>
+      <div class="field-row" style="margin-top:14px;">
+        <input type="text" class="name" id="ex-name" placeholder="e.g. evening run">
+      </div>
+      <div class="field-row">
+        <input type="number" class="num" id="ex-cal" placeholder="calories burned" min="0">
+      </div>
+      <button class="add-btn" id="add-exercise-btn">Log exercise</button>
+      <div class="hint" id="exercise-burned-total" style="margin:12px 0 6px;">0 kcal burned today</div>
+      <div class="entry-list" id="exercise-list"></div>
     </div>
 
     <div class="card">
@@ -552,7 +580,8 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <div class="strip-wrap">
         <div class="strip" id="week-strip"></div>
       </div>
-      <div class="hint" style="margin-top:6px;">Green bars = under target that day, rust = over. One high day doesn't matter much — the week total is what to watch.</div>
+      <div class="hint" style="margin-top:6px;">Green bars = under target that day, rust = over. One high day doesn't matter much — the week total is what to watch. This is a rolling 7-day window (today back 6 days), not a fixed calendar week — and any logged exercise is already netted in.</div>
+      <div class="hint" style="margin-top:0;">Want to know what you can eat right now, today? Check the "kcal left today" number on the Today tab — this Week view is for the bigger trend, not today's number.</div>
     </div>
   </div>
 
@@ -679,7 +708,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.4.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.5.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -748,6 +777,16 @@ async function getCustomFoods() {
 async function setCustomFoods(list) {
   try { localStorage.setItem(STORAGE_PREFIX + 'customFoods', JSON.stringify(list)); }
   catch (e) { console.error('Failed to save custom foods', e); }
+}
+async function getExercise(dateKey) {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + 'exercise:' + dateKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+async function setExercise(dateKey, list) {
+  try { localStorage.setItem(STORAGE_PREFIX + 'exercise:' + dateKey, JSON.stringify(list)); }
+  catch (e) { console.error('Failed to save exercise', e); }
 }
 
 // ---- nav ----
@@ -825,6 +864,41 @@ async function renderToday() {
   }
   const totalCal = entries.reduce((s, e) => s + e.calories, 0);
   $('today-cal').textContent = totalCal;
+
+  // exercise
+  const exercise = await getExercise(key);
+  const exList = $('exercise-list');
+  exList.innerHTML = '';
+  exercise.forEach(ex => {
+    const row = document.createElement('div');
+    row.className = 'entry';
+    row.dataset.id = ex.id;
+    row.innerHTML = `
+      <span class="name">${escapeHtml(ex.name)}</span>
+      <span class="meta">
+        −${ex.cal} kcal
+        <span class="icon-btn del" title="Delete">✕</span>
+      </span>
+    `;
+    exList.appendChild(row);
+  });
+  exList.querySelectorAll('.del').forEach(el => {
+    el.addEventListener('click', async () => {
+      const id = el.closest('.entry').dataset.id;
+      const updated = exercise.filter(ex => String(ex.id) !== id);
+      await setExercise(key, updated);
+      renderToday();
+    });
+  });
+  const totalBurned = exercise.reduce((s, ex) => s + ex.cal, 0);
+  $('exercise-burned-total').textContent = `${totalBurned.toLocaleString()} kcal burned today`;
+
+  // remaining today = daily target + exercise burned - eaten
+  const settings = await getSettings();
+  const remaining = settings.calorieTarget + totalBurned - totalCal;
+  const remainingBox = $('today-remaining-box');
+  $('today-remaining').textContent = (remaining < 0 ? '−' : '') + Math.abs(Math.round(remaining)).toLocaleString();
+  remainingBox.classList.toggle('over', remaining < 0);
 }
 
 // ---- portion estimator ----
@@ -911,6 +985,60 @@ $('portion-fill-btn').addEventListener('click', () => {
   $('in-name').value = `${qtyLabel}${portionData[foodKey].label} (${portion.name})`;
   $('in-cal').value = total;
   $('in-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+// ---- exercise estimator ----
+// Generic average-adult estimates (~70kg), not personalized by body weight — treat as
+// a starting point, and remember most fitness trackers overestimate burn by 20-40%.
+const exerciseData = [
+  { name: 'Walking (moderate pace)', calPerMin: 4 },
+  { name: 'Brisk walking', calPerMin: 5 },
+  { name: 'Running (~8 km/h)', calPerMin: 10 },
+  { name: 'Running (~10 km/h)', calPerMin: 13 },
+  { name: 'Cycling (moderate)', calPerMin: 8 },
+  { name: 'Swimming (moderate)', calPerMin: 9 },
+  { name: 'HIIT / circuit training', calPerMin: 10 },
+  { name: 'Weight training', calPerMin: 5 },
+  { name: 'Yoga', calPerMin: 3 },
+  { name: 'Dancing', calPerMin: 6 },
+  { name: 'Hiking', calPerMin: 7 }
+];
+function populateExerciseSelect() {
+  const sel = $('exercise-activity');
+  exerciseData.forEach((a, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = a.name;
+    sel.appendChild(opt);
+  });
+  updateExerciseResult();
+}
+function updateExerciseResult() {
+  const idx = parseInt($('exercise-activity').value, 10) || 0;
+  const mins = parseFloat($('exercise-duration').value) || 0;
+  const total = Math.round(exerciseData[idx].calPerMin * mins);
+  $('exercise-result').textContent = `≈ ${total.toLocaleString()} kcal`;
+}
+$('exercise-activity').addEventListener('change', updateExerciseResult);
+$('exercise-duration').addEventListener('input', updateExerciseResult);
+$('exercise-fill-btn').addEventListener('click', () => {
+  const idx = parseInt($('exercise-activity').value, 10) || 0;
+  const mins = parseFloat($('exercise-duration').value) || 0;
+  const total = Math.round(exerciseData[idx].calPerMin * mins);
+  $('ex-name').value = `${exerciseData[idx].name} (${mins} min)`;
+  $('ex-cal').value = total;
+  $('ex-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+$('add-exercise-btn').addEventListener('click', async () => {
+  const name = $('ex-name').value.trim();
+  const cal = parseFloat($('ex-cal').value) || 0;
+  if (!name || !cal) return;
+  const key = selectedDate;
+  const exercise = await getExercise(key);
+  exercise.push({ id: Date.now(), name, cal });
+  await setExercise(key, exercise);
+  $('ex-name').value = ''; $('ex-cal').value = '';
+  renderToday();
 });
 
 // ---- custom foods ----
@@ -1240,13 +1368,20 @@ $('export-btn').addEventListener('click', async () => {
   const settings = await getSettings();
   const customFoods = await getCustomFoods();
   const entries = {};
+  const exerciseAll = {};
   Object.keys(localStorage)
     .filter(k => k.startsWith(STORAGE_PREFIX + 'entries:'))
     .forEach(k => {
       const dateKey = k.replace(STORAGE_PREFIX + 'entries:', '');
       try { entries[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.0.0', exportedAt: new Date().toISOString(), settings, customFoods, entries };
+  Object.keys(localStorage)
+    .filter(k => k.startsWith(STORAGE_PREFIX + 'exercise:'))
+    .forEach(k => {
+      const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
+      try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+    });
+  const backup = { app: 'longview', version: '1.5.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1270,6 +1405,11 @@ $('import-input').addEventListener('change', async (e) => {
     if (backup.entries) {
       for (const dateKey of Object.keys(backup.entries)) {
         await setEntries(dateKey, backup.entries[dateKey]);
+      }
+    }
+    if (backup.exercise) {
+      for (const dateKey of Object.keys(backup.exercise)) {
+        await setExercise(dateKey, backup.exercise[dateKey]);
       }
     }
     await refreshFoodIndex();
@@ -1312,10 +1452,12 @@ async function renderWeek() {
   for (let offset = 6; offset >= 0; offset--) {
     const key = todayKey(offset);
     const entries = await getEntries(key);
+    const exercise = await getExercise(key);
     const dayCal = entries.reduce((s, e) => s + e.calories, 0);
-    const hasData = entries.length > 0;
+    const dayBurned = exercise.reduce((s, ex) => s + ex.cal, 0);
+    const hasData = entries.length > 0 || exercise.length > 0;
     if (hasData) anyLogged = true;
-    const diff = dayCal - settings.calorieTarget;
+    const diff = (dayCal - dayBurned) - settings.calorieTarget;
     if (hasData) weekNet += diff;
 
     const dayEl = document.createElement('div');
@@ -1615,6 +1757,7 @@ document.querySelectorAll('.size-btn').forEach(btn => {
 // ---- init ----
 (async function init() {
   populatePortionSelects();
+  populateExerciseSelect();
   await refreshFoodIndex();
   await renderCustomFoods();
   await renderSettings();
