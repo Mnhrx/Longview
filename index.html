@@ -442,7 +442,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.7.0</div>
+  <div class="splash-version">v1.7.1</div>
 </div>
 <div class="wrap">
 
@@ -776,7 +776,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.7.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.7.1<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1553,7 +1553,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.5.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.7.1', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
