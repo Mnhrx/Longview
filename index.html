@@ -469,7 +469,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.11.2</div>
+  <div class="splash-version">v1.11.1</div>
 </div>
 <div class="wrap">
 
@@ -815,7 +815,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.11.2<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.11.1<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1542,16 +1542,9 @@ $('scan-barcode-btn').addEventListener('click', async () => {
       { facingMode: 'environment' },
       {
         fps: 15,
-        disableFlip: false,
-        // Configures high resolution and camera controls directly inside video constraints
-        videoConstraints: {
-          facingMode: "environment",
-          width: { min: 640, ideal: 1920, max: 1920 },
-          height: { min: 480, ideal: 1080, max: 1080 },
-          advanced: [
-            { focusMode: "continuous" }
-          ]
-        }
+        // No qrbox — scan the entire camera frame. More reliable on iOS Safari
+        // where the cropped scan region often doesn't align with what's displayed.
+        disableFlip: false
       },
       async (decodedText) => {
         $('scan-status').textContent = `Found: ${decodedText} — looking it up…`;
@@ -1589,7 +1582,7 @@ async function lookupBarcode(code) {
   const resultsEl = $('online-results');
   resultsEl.innerHTML = '<div class="online-status">Looking up barcode…</div>';
   try {
-    const res = await fetch(`https://openfoodfacts.org{encodeURIComponent(code)}.json`);
+    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
     if (!res.ok) throw new Error('bad response');
     const data = await res.json();
     if (data.status !== 1 || !data.product || !data.product.product_name) {
@@ -1731,7 +1724,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.11.2', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.11.1', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
