@@ -1543,8 +1543,9 @@ $('scan-barcode-btn').addEventListener('click', async () => {
       {
         fps: 15,
         disableFlip: false,
-        // FORCE HIGH RESOLUTION & AUTOFOCUS FOR SMALL CODES
+        // Configures high resolution and camera controls directly inside video constraints
         videoConstraints: {
+          facingMode: "environment",
           width: { min: 640, ideal: 1920, max: 1920 },
           height: { min: 480, ideal: 1080, max: 1080 },
           advanced: [
@@ -1588,7 +1589,7 @@ async function lookupBarcode(code) {
   const resultsEl = $('online-results');
   resultsEl.innerHTML = '<div class="online-status">Looking up barcode…</div>';
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
+    const res = await fetch(`https://openfoodfacts.org{encodeURIComponent(code)}.json`);
     if (!res.ok) throw new Error('bad response');
     const data = await res.json();
     if (data.status !== 1 || !data.product || !data.product.product_name) {
