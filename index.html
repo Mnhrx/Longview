@@ -480,7 +480,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.12.0</div>
+  <div class="splash-version">v1.12.1</div>
 </div>
 <div class="wrap">
 
@@ -835,7 +835,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.12.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.12.1<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1672,18 +1672,39 @@ $('scan-zoom').addEventListener('input', async (e) => {
 async function lookupBarcode(code, targetEl) {
   const resultsEl = targetEl || $('online-results');
   resultsEl.innerHTML = '<div class="online-status">Looking up barcode…</div>';
+
+  // Try regional databases in order — sg/my products sometimes only appear regionally
+  const endpoints = [
+    `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://sg.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://my.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://au.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://uk.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`
+  ];
+
+  let found = null;
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.status === 1 && data.product && data.product.product_name) {
+        found = data.product;
+        break;
+      }
+    } catch (e) { continue; }
+  }
+
+  if (!found) {
+    resultsEl.innerHTML = '<div class="online-status">No product found across any region — try the text search instead, or log it manually.</div>';
+    return;
+  }
+
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
-    if (!res.ok) throw new Error('bad response');
-    const data = await res.json();
-    if (data.status !== 1 || !data.product || !data.product.product_name) {
-      resultsEl.innerHTML = '<div class="online-status">No product found for that barcode — try the text search instead, or enter it manually.</div>';
-      return;
-    }
-    const p = data.product;
+    const p = found;
     const { cal, calLabel } = extractCalFromProduct(p);
     if (!cal) {
-      resultsEl.innerHTML = '<div class="online-status">Found the product, but it has no usable calorie data.</div>';
+      resultsEl.innerHTML = '<div class="online-status">Found the product, but it has no usable calorie data in the database.</div>';
       return;
     }
     const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
@@ -1699,7 +1720,6 @@ async function lookupBarcode(code, targetEl) {
     `;
     row.addEventListener('click', () => useOffProduct(displayName, cal));
     resultsEl.appendChild(row);
-    // one scanned item is an unambiguous exact match, unlike text search — fill it in right away too
     await useOffProduct(displayName, cal);
   } catch (err) {
     resultsEl.innerHTML = '<div class="online-status">Couldn\'t look up that barcode — check your connection and try again.</div>';
@@ -1815,7 +1835,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.12.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.12.1', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
