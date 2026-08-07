@@ -437,6 +437,8 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   background:#000;min-height:220px;
 }
 #barcode-reader video{width:100%;border-radius:12px;}
+.scan-controls{display:flex;justify-content:space-between;align-items:center;}
+#scan-flash-btn.on{color:var(--accent);}
 
 /* category browser */
 .link-btn{
@@ -467,7 +469,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.10.2</div>
+  <div class="splash-version">v1.11.0</div>
 </div>
 <div class="wrap">
 
@@ -551,7 +553,10 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <button class="add-btn secondary" id="scan-barcode-btn">📷 Scan a barcode</button>
       <div id="barcode-scanner-wrap" style="display:none;">
         <div id="barcode-reader"></div>
-        <button type="button" class="link-btn" id="scan-cancel-btn">Cancel scan</button>
+        <div class="scan-controls">
+          <button type="button" class="link-btn" id="scan-cancel-btn">Cancel scan</button>
+          <button type="button" class="link-btn" id="scan-flash-btn" style="display:none;">🔦 Flash</button>
+        </div>
         <div class="online-status" id="scan-status"></div>
       </div>
 
@@ -810,7 +815,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.10.2<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.11.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1500,11 +1505,15 @@ $('online-search-btn').addEventListener('click', async () => {
 
 // ---- barcode scanning ----
 let barcodeScanner = null;
+let flashOn = false;
 async function stopBarcodeScanner() {
   if (barcodeScanner) {
     try { await barcodeScanner.stop(); barcodeScanner.clear(); } catch (e) {}
     barcodeScanner = null;
   }
+  flashOn = false;
+  $('scan-flash-btn').style.display = 'none';
+  $('scan-flash-btn').classList.remove('on');
   $('barcode-scanner-wrap').style.display = 'none';
 }
 $('scan-barcode-btn').addEventListener('click', async () => {
@@ -1515,18 +1524,25 @@ $('scan-barcode-btn').addEventListener('click', async () => {
   }
   $('barcode-scanner-wrap').style.display = 'block';
   $('scan-status').textContent = 'Starting camera…';
-  barcodeScanner = new Html5Qrcode('barcode-reader');
+  const formats = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.CODE_93,
+    Html5QrcodeSupportedFormats.CODABAR,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.QR_CODE
+  ] : undefined;
+  barcodeScanner = new Html5Qrcode('barcode-reader', formats ? { formatsToSupport: formats, verbose: false } : undefined);
   try {
     await barcodeScanner.start(
       { facingMode: 'environment' },
       {
         fps: 10,
-        // wide, adaptive box (not a fixed square) — suits rectangular barcodes and
-        // is far more forgiving of exact distance/position than a small fixed box
-        qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const w = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.9);
-          return { width: Math.min(viewfinderWidth * 0.9, w * 1.8), height: w * 0.5 };
-        }
+        qrbox: { width: 280, height: 140 }
       },
       async (decodedText) => {
         $('scan-status').textContent = `Found: ${decodedText} — looking it up…`;
@@ -1535,12 +1551,30 @@ $('scan-barcode-btn').addEventListener('click', async () => {
       },
       () => {} // ignore per-frame "no code found" noise
     );
-    $('scan-status').textContent = 'Hold the barcode flat, well-lit, filling most of the frame — a little further back tends to focus better than very close up.';
+    $('scan-status').textContent = 'Hold the barcode flat, well-lit, filling most of the box — a little further back tends to focus better than very close up.';
+    // torch/flash: only some browsers (mostly Android Chrome) expose this — fails silently elsewhere
+    try {
+      const capabilities = barcodeScanner.getRunningTrackCapabilities();
+      if (capabilities && capabilities.torch) {
+        $('scan-flash-btn').style.display = 'inline-block';
+      }
+    } catch (e) {}
   } catch (err) {
     $('scan-status').textContent = "Couldn't access the camera — check camera permissions for this site in Settings.";
   }
 });
 $('scan-cancel-btn').addEventListener('click', stopBarcodeScanner);
+$('scan-flash-btn').addEventListener('click', async () => {
+  if (!barcodeScanner) return;
+  try {
+    flashOn = !flashOn;
+    await barcodeScanner.applyVideoConstraints({ advanced: [{ torch: flashOn }] });
+    $('scan-flash-btn').classList.toggle('on', flashOn);
+  } catch (e) {
+    flashOn = false;
+    $('scan-status').textContent = "This device/browser doesn't support flash control from the web.";
+  }
+});
 
 async function lookupBarcode(code) {
   const resultsEl = $('online-results');
@@ -1688,7 +1722,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.10.2', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.11.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
