@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Longview">
 <title>Longview — a simple way to eat a little healthier</title>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
@@ -127,20 +126,6 @@ nav button:hover:not(.active){color:var(--text);}
 .week-target-box{text-align:right;}
 .week-target-box .num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--text-dim);}
 .week-target-box .lbl{color:var(--text-dim);font-size:11.5px;margin-top:2px;}
-.week-breakdown{margin-top:18px;display:flex;flex-direction:column;gap:6px;}
-.week-day-row{
-  display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;
-  background:var(--panel-2);border-radius:9px;padding:10px 12px;cursor:pointer;
-}
-.week-day-row:hover{outline:1px solid var(--accent);}
-.week-day-row .day-name{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
-.week-day-row .day-name.today{color:var(--accent);font-weight:700;}
-.week-day-row .day-stats{display:flex;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;}
-.week-day-row .day-stats b{color:var(--text);font-weight:600;}
-.week-day-row .day-net{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;}
-.week-day-row .day-net.good{color:var(--good);}
-.week-day-row .day-net.bad{color:var(--over);}
-.week-day-row .day-net.empty{color:var(--text-dim);font-weight:400;font-size:11.5px;}
 .strip{display:flex;gap:8px;align-items:flex-end;height:120px;padding:0 2px;position:relative;}
 .strip::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border);}
 .daybar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;position:relative;}
@@ -431,12 +416,6 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   border-radius:4px;padding:1px 4px;margin-right:6px;text-transform:uppercase;letter-spacing:0.04em;
 }
 .online-status{color:var(--text-dim);font-size:13px;padding:8px 2px;}
-#barcode-scanner-wrap{margin-top:10px;}
-#barcode-reader{
-  border-radius:12px;overflow:hidden;border:1px solid var(--border);
-  background:#000;min-height:220px;
-}
-#barcode-reader video{width:100%;border-radius:12px;}
 
 /* category browser */
 .link-btn{
@@ -467,7 +446,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.10.0</div>
+  <div class="splash-version">v1.7.5</div>
 </div>
 <div class="wrap">
 
@@ -548,14 +527,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <h2>Log something</h2>
       <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find something specific, like a packet of biscuits? Search online below (Open Food Facts) — picking a result saves it to "My foods" automatically, so you only ever look it up once.</div>
 
-      <button class="add-btn secondary" id="scan-barcode-btn">📷 Scan a barcode</button>
-      <div id="barcode-scanner-wrap" style="display:none;">
-        <div id="barcode-reader"></div>
-        <button type="button" class="link-btn" id="scan-cancel-btn">Cancel scan</button>
-        <div class="online-status" id="scan-status"></div>
-      </div>
-
-      <div class="quick-add-label" style="margin-top:14px;">Search a saved item:</div>
+      <div class="quick-add-label">Search a saved item:</div>
       <div class="field-row search-wrap">
         <input type="text" id="quick-search" placeholder="Type to search, e.g. 'kopi' or 'rice'" autocomplete="off">
       </div>
@@ -682,8 +654,6 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       </div>
       <div class="hint" style="margin-top:6px;">Green bars = under target that day, rust = over. One high day doesn't matter much — the week total is what to watch. This is a rolling 7-day window (today back 6 days), not a fixed calendar week — and any logged exercise is already netted in.</div>
       <div class="hint" style="margin-top:0;">Want to know what you can eat right now, today? Check the "kcal left today" number on the Today tab — this Week view is for the bigger trend, not today's number.</div>
-
-      <div class="week-breakdown" id="week-breakdown"></div>
     </div>
   </div>
 
@@ -810,7 +780,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.10.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.7.5<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -830,18 +800,6 @@ function dayLabel(offsetDays) {
   return d.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2);
 }
 let selectedDate = todayKey(0);
-let lastKnownToday = todayKey(0);
-function checkDateRollover() {
-  const nowToday = todayKey(0);
-  if (nowToday !== lastKnownToday) {
-    // Only auto-advance if the user was viewing "today" — never override someone
-    // deliberately browsing a past date.
-    if (selectedDate === lastKnownToday) selectedDate = nowToday;
-    lastKnownToday = nowToday;
-    return true;
-  }
-  return false;
-}
 function formatDateNice(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
@@ -905,7 +863,6 @@ async function setExercise(dateKey, list) {
 
 // ---- nav ----
 function switchTab(viewName) {
-  checkDateRollover();
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const activeBtn = document.querySelector(`.tab-btn[data-view="${viewName}"]`);
@@ -1221,7 +1178,7 @@ const exerciseData = [
   { name: 'Tennis', calPerMin: 7 },
   { name: 'Badminton', calPerMin: 6 },
   { name: 'Boxing / bag training', calPerMin: 10 },
-  { name: 'IA', calPerMin: 4}
+  { name: 'Intimate Activities', calPerMin: 4}
 ];
 function populateExerciseSelect() {
   const sel = $('exercise-activity');
@@ -1423,36 +1380,6 @@ $('quick-search').addEventListener('input', (e) => {
   }
 });
 
-// ---- shared: commit an Open Food Facts product to the log ----
-async function useOffProduct(displayName, cal) {
-  $('in-name').value = displayName;
-  $('in-cal').value = cal;
-  $('in-sugar').focus();
-  const customFoods = await getCustomFoods();
-  if (!customFoods.some(f => f.name === displayName)) {
-    customFoods.push({ id: Date.now(), name: displayName, cal });
-    await setCustomFoods(customFoods);
-    await refreshFoodIndex();
-    await renderCustomFoods();
-  }
-  $('quick-search').value = '';
-  $('autocomplete-list').innerHTML = '';
-  $('online-results').innerHTML = '';
-  $('online-search-btn').style.display = 'none';
-}
-function extractCalFromProduct(p) {
-  const nutriments = p.nutriments || {};
-  let cal = null, calLabel = '';
-  if (nutriments['energy-kcal_serving']) {
-    cal = Math.round(nutriments['energy-kcal_serving']);
-    calLabel = p.serving_size ? `${cal} kcal / ${p.serving_size}` : `${cal} kcal / serving`;
-  } else if (nutriments['energy-kcal_100g']) {
-    cal = Math.round(nutriments['energy-kcal_100g']);
-    calLabel = `${cal} kcal / 100g`;
-  }
-  return { cal, calLabel };
-}
-
 // ---- online search (Open Food Facts) ----
 $('online-search-btn').addEventListener('click', async () => {
   const query = $('quick-search').value.trim();
@@ -1473,7 +1400,16 @@ $('online-search-btn').addEventListener('click', async () => {
     }
 
     products.slice(0, 8).forEach(p => {
-      const { cal, calLabel } = extractCalFromProduct(p);
+      const nutriments = p.nutriments || {};
+      let cal = null;
+      let calLabel = '';
+      if (nutriments['energy-kcal_serving']) {
+        cal = Math.round(nutriments['energy-kcal_serving']);
+        calLabel = p.serving_size ? `${cal} kcal / ${p.serving_size}` : `${cal} kcal / serving`;
+      } else if (nutriments['energy-kcal_100g']) {
+        cal = Math.round(nutriments['energy-kcal_100g']);
+        calLabel = `${cal} kcal / 100g`;
+      }
       if (!cal) return;
 
       const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
@@ -1486,7 +1422,23 @@ $('online-search-btn').addEventListener('click', async () => {
         </span>
         <span class="cal">${cal} kcal</span>
       `;
-      row.addEventListener('click', () => useOffProduct(displayName, cal));
+      row.addEventListener('click', async () => {
+        $('in-name').value = displayName;
+        $('in-cal').value = cal;
+        $('in-sugar').focus();
+        // auto-save so it's local and instant next time
+        const customFoods = await getCustomFoods();
+        if (!customFoods.some(f => f.name === displayName)) {
+          customFoods.push({ id: Date.now(), name: displayName, cal });
+          await setCustomFoods(customFoods);
+          await refreshFoodIndex();
+          await renderCustomFoods();
+        }
+        $('quick-search').value = '';
+        $('autocomplete-list').innerHTML = '';
+        $('online-results').innerHTML = '';
+        $('online-search-btn').style.display = 'none';
+      });
       resultsEl.appendChild(row);
     });
 
@@ -1497,79 +1449,6 @@ $('online-search-btn').addEventListener('click', async () => {
     resultsEl.innerHTML = '<div class="online-status">Couldn\'t reach Open Food Facts — check your connection and try again.</div>';
   }
 });
-
-// ---- barcode scanning ----
-let barcodeScanner = null;
-async function stopBarcodeScanner() {
-  if (barcodeScanner) {
-    try { await barcodeScanner.stop(); barcodeScanner.clear(); } catch (e) {}
-    barcodeScanner = null;
-  }
-  $('barcode-scanner-wrap').style.display = 'none';
-}
-$('scan-barcode-btn').addEventListener('click', async () => {
-  if (typeof Html5Qrcode === 'undefined') {
-    $('scan-status').textContent = "Scanner failed to load — check your connection and try again.";
-    $('barcode-scanner-wrap').style.display = 'block';
-    return;
-  }
-  $('barcode-scanner-wrap').style.display = 'block';
-  $('scan-status').textContent = 'Starting camera…';
-  barcodeScanner = new Html5Qrcode('barcode-reader');
-  try {
-    await barcodeScanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      async (decodedText) => {
-        $('scan-status').textContent = `Found: ${decodedText} — looking it up…`;
-        await stopBarcodeScanner();
-        await lookupBarcode(decodedText);
-      },
-      () => {} // ignore per-frame "no code found" noise
-    );
-    $('scan-status').textContent = 'Point the camera at a barcode.';
-  } catch (err) {
-    $('scan-status').textContent = "Couldn't access the camera — check camera permissions for this site in Settings.";
-  }
-});
-$('scan-cancel-btn').addEventListener('click', stopBarcodeScanner);
-
-async function lookupBarcode(code) {
-  const resultsEl = $('online-results');
-  resultsEl.innerHTML = '<div class="online-status">Looking up barcode…</div>';
-  try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
-    if (!res.ok) throw new Error('bad response');
-    const data = await res.json();
-    if (data.status !== 1 || !data.product || !data.product.product_name) {
-      resultsEl.innerHTML = '<div class="online-status">No product found for that barcode — try the text search instead, or enter it manually.</div>';
-      return;
-    }
-    const p = data.product;
-    const { cal, calLabel } = extractCalFromProduct(p);
-    if (!cal) {
-      resultsEl.innerHTML = '<div class="online-status">Found the product, but it has no usable calorie data.</div>';
-      return;
-    }
-    const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
-    resultsEl.innerHTML = '';
-    const row = document.createElement('div');
-    row.className = 'online-item';
-    row.innerHTML = `
-      <span>
-        <span class="online-tag">scanned</span><span class="name">${escapeHtml(displayName)}</span>
-        <span class="brand">${escapeHtml(calLabel)}</span>
-      </span>
-      <span class="cal">${cal} kcal</span>
-    `;
-    row.addEventListener('click', () => useOffProduct(displayName, cal));
-    resultsEl.appendChild(row);
-    // one scanned item is an unambiguous exact match, unlike text search — fill it in right away too
-    await useOffProduct(displayName, cal);
-  } catch (err) {
-    resultsEl.innerHTML = '<div class="online-status">Couldn\'t look up that barcode — check your connection and try again.</div>';
-  }
-}
 
 // category browser: chips -> items -> back
 function renderCategoryChips() {
@@ -1680,7 +1559,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.10.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.7.5', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1749,7 +1628,6 @@ async function renderWeek() {
   strip.innerHTML = '';
   let weekNet = 0;
   let anyLogged = false;
-  const breakdownRows = [];
 
   for (let offset = 6; offset >= 0; offset--) {
     const key = todayKey(offset);
@@ -1784,29 +1662,7 @@ async function renderWeek() {
     label.textContent = dayLabel(offset);
     dayEl.appendChild(bar); dayEl.appendChild(label);
     strip.appendChild(dayEl);
-
-    // breakdown row (built oldest-to-newest here, reversed to newest-first below)
-    const row = document.createElement('div');
-    row.className = 'week-day-row';
-    row.addEventListener('click', () => { selectedDate = key; switchTab('today'); });
-    let netHtml;
-    if (!hasData) {
-      netHtml = '<span class="day-net empty">—</span>';
-    } else {
-      const sign = diff <= 0 ? '−' : '+';
-      netHtml = `<span class="day-net ${diff <= 0 ? 'good' : 'bad'}">${sign}${Math.abs(Math.round(diff)).toLocaleString()}</span>`;
-    }
-    row.innerHTML = `
-      <span class="day-name${offset === 0 ? ' today' : ''}">${dayLabel(offset)}</span>
-      <span class="day-stats"><b>${dayCal.toLocaleString()}</b> eaten · <b>${dayBurned.toLocaleString()}</b> burned</span>
-      ${netHtml}
-    `;
-    breakdownRows.push(row);
   }
-  breakdownRows.reverse();
-  const breakdownEl = $('week-breakdown');
-  breakdownEl.innerHTML = '';
-  breakdownRows.forEach(r => breakdownEl.appendChild(r));
 
   const netEl = $('week-net');
   if (!anyLogged) {
@@ -2096,15 +1952,6 @@ document.querySelectorAll('.size-btn').forEach(btn => {
   setTimeout(() => {
     $('splash-screen').classList.add('hide');
   }, 800);
-
-  // catch a midnight rollover even if the user never switches tabs
-  setInterval(async () => {
-    if (checkDateRollover()) {
-      await renderToday();
-      await renderWeek();
-      await renderDashboard();
-    }
-  }, 60000);
 })();
 </script>
 </body>
