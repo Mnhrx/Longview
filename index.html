@@ -439,8 +439,8 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 #barcode-reader video{width:100%;border-radius:12px;}
 .scan-controls{display:flex;justify-content:space-between;align-items:center;}
 #scan-flash-btn.on{color:var(--accent);}
-.scan-btn-row{display:flex;gap:8px;margin-bottom:4px;}
-.scan-btn-row .add-btn{flex:1;}
+.scan-btn-row{margin-bottom:4px;}
+.scan-btn-row .add-btn{width:100%;}
 .scan-zoom-wrap{display:flex;align-items:center;gap:10px;padding:6px 0;}
 .scan-zoom-label{font-size:12px;color:var(--text-dim);white-space:nowrap;}
 .scan-zoom-wrap input[type="range"]{
@@ -480,7 +480,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.12.3</div>
+  <div class="splash-version">v1.12.5</div>
 </div>
 <div class="wrap">
 
@@ -562,9 +562,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find something specific, like a packet of biscuits? Search online below (Open Food Facts) — picking a result saves it to "My foods" automatically, so you only ever look it up once.</div>
 
       <div class="scan-btn-row">
-        <button class="add-btn secondary" id="scan-barcode-btn">📷 Live scan</button>
-        <button class="add-btn secondary" id="scan-photo-btn">🖼️ From photo</button>
-        <input type="file" id="scan-photo-input" accept="image/*" capture="environment" style="display:none;">
+        <button class="add-btn secondary" id="scan-barcode-btn">📷 Scan a barcode</button>
       </div>
       <div id="barcode-scanner-wrap" style="display:none;">
         <div id="barcode-reader"></div>
@@ -835,7 +833,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.12.3<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.12.5<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1468,10 +1466,11 @@ async function useOffProduct(displayName, cal) {
 function extractCalFromProduct(p) {
   const nutriments = p.nutriments || {};
   let cal = null, calLabel = '';
-  if (nutriments['energy-kcal_serving']) {
+  // Use explicit null/undefined check so 0 kcal products are treated as valid
+  if (nutriments['energy-kcal_serving'] != null) {
     cal = Math.round(nutriments['energy-kcal_serving']);
     calLabel = p.serving_size ? `${cal} kcal / ${p.serving_size}` : `${cal} kcal / serving`;
-  } else if (nutriments['energy-kcal_100g']) {
+  } else if (nutriments['energy-kcal_100g'] != null) {
     cal = Math.round(nutriments['energy-kcal_100g']);
     calLabel = `${cal} kcal / 100g`;
   }
@@ -1499,7 +1498,7 @@ $('online-search-btn').addEventListener('click', async () => {
 
     products.slice(0, 8).forEach(p => {
       const { cal, calLabel } = extractCalFromProduct(p);
-      if (!cal) return;
+      if (cal == null) return;
 
       const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
       const row = document.createElement('div');
@@ -1616,35 +1615,6 @@ $('scan-flash-btn').addEventListener('click', async () => {
   }
 });
 
-// ---- photo-based barcode scan ----
-$('scan-photo-btn').addEventListener('click', () => $('scan-photo-input').click());
-$('scan-photo-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const resultsEl = $('barcode-manual-results');
-  resultsEl.innerHTML = '<div class="online-status">Reading barcode from photo…</div>';
-  try {
-    const formats = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.CODE_93,
-      Html5QrcodeSupportedFormats.CODABAR,
-      Html5QrcodeSupportedFormats.ITF,
-      Html5QrcodeSupportedFormats.QR_CODE
-    ] : undefined;
-    const photoScanner = new Html5Qrcode('barcode-reader', formats ? { formatsToSupport: formats, verbose: false } : undefined);
-    const decodedText = await photoScanner.scanFile(file, true);
-    resultsEl.innerHTML = `<div class="online-status">Found: ${decodedText} — looking it up…</div>`;
-    await lookupBarcode(decodedText, resultsEl);
-  } catch (err) {
-    resultsEl.innerHTML = '<div class="online-status">Couldn\'t read a barcode from that photo — try a clearer, well-lit shot with the barcode filling most of the frame.</div>';
-  }
-  e.target.value = '';
-});
 
 // ---- zoom control for live scanner ----
 $('scan-zoom').addEventListener('input', async (e) => {
@@ -1709,7 +1679,7 @@ async function lookupBarcode(code, targetEl) {
         resultsEl.innerHTML = '';
         products.slice(0, 5).forEach(p => {
           const { cal, calLabel } = extractCalFromProduct(p);
-          if (!cal) return;
+          if (cal == null) return;
           const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
           const row = document.createElement('div');
           row.className = 'online-item';
@@ -1749,7 +1719,7 @@ async function lookupBarcode(code, targetEl) {
   try {
     const p = found;
     const { cal, calLabel } = extractCalFromProduct(p);
-    if (!cal) {
+    if (cal == null) {
       resultsEl.innerHTML = '<div class="online-status">Found the product, but it has no usable calorie data in the database.</div>';
       return;
     }
@@ -1881,7 +1851,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.12.3', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.12.5', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
