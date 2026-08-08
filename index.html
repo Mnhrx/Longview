@@ -486,7 +486,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.13.0</div>
+  <div class="splash-version">v1.13.1</div>
 </div>
 <div class="wrap">
 
@@ -862,7 +862,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
         <div class="recipe-section">Ingredients</div>
         <ul class="recipe-list">
           <li>160g spaghetti or penne</li>
-          <li>250g minced pork or beef</li>
+          <li>250g minced beef or chicken</li>
           <li>1 can (400g) crushed tomatoes</li>
           <li>3 cloves garlic, minced</li>
           <li>1 small onion, diced</li>
@@ -878,7 +878,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
           <li>Pour in crushed tomatoes. Simmer 10 min until thickened. Taste and adjust seasoning.</li>
           <li>Toss in drained pasta, splash pasta water to loosen if needed. Serve with parmesan.</li>
         </ol>
-        <div class="recipe-tip">💡 The pasta water is starchy and helps the sauce cling to the pasta — don't skip it. Minced pork is cheaper than beef and works just as well here.</div>
+        <div class="recipe-tip">💡 The pasta water is starchy and helps the sauce cling to the pasta — don't skip it. Minced chicken is leaner and cheaper; minced beef gives a richer flavour. Both work well.</div>
       </div>
     </div>
 
@@ -895,7 +895,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
         <div class="recipe-section">Ingredients</div>
         <ul class="recipe-list">
           <li>160g spaghetti</li>
-          <li>200g minced pork or chicken</li>
+          <li>200g minced chicken or beef</li>
           <li>5 cloves garlic, thinly sliced</li>
           <li>3 tbsp good olive oil</li>
           <li>1 tsp chilli flakes (adjust to taste)</li>
@@ -1006,7 +1006,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.13.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.13.1<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1325,7 +1325,7 @@ const portionData = {
     { name: '1 palm-sized & thickness (~100g)', cal: 150 },
     { name: '2 palm-sized (~200g)', cal: 300 }
   ]},
-  'protein-fatty': { label: 'Meat / fish (fattier, e.g. pork belly, salmon)', portions: [
+  'protein-fatty': { label: 'Meat / fish (fattier, e.g. lamb, salmon)', portions: [
     { name: '1 palm-sized & thickness (~100g)', cal: 250 },
     { name: '2 palm-sized (~200g)', cal: 500 }
   ]},
@@ -1501,7 +1501,7 @@ const commonFoods = [
     { name: 'Char kway teow (1 plate)', cal: 750 },
     { name: 'Mee goreng (1 plate)', cal: 550 },
     { name: 'Wanton mee (1 bowl)', cal: 450 },
-    { name: 'Bak chor mee (1 bowl)', cal: 500 },
+    { name: 'Fishball noodles (1 bowl)', cal: 400 },
     { name: 'Roti prata, plain (1 pc)', cal: 300 },
     { name: 'Economical rice (2 dishes)', cal: 600 },
     { name: 'Kaya toast set (2 eggs)', cal: 350 },
@@ -2059,7 +2059,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.13.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.13.1', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
