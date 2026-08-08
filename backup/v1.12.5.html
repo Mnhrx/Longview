@@ -236,24 +236,20 @@ nav button:hover:not(.active){color:var(--text);}
 .empty-state{color:var(--text-dim);font-size:13.5px;text-align:center;padding:18px 0;}
 
 /* learn */
-/* recipes */
-.recipe-intro{color:var(--text-dim);font-size:13.5px;margin-bottom:16px;line-height:1.5;}
-.recipe-card{padding:16px;}
-.recipe-meta-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-.recipe-title{font-family:'Fraunces',serif;font-weight:600;font-size:16px;color:var(--text);margin-bottom:6px;}
-.recipe-tags{display:flex;flex-wrap:wrap;gap:6px;}
-.rtag{font-size:11.5px;color:var(--accent2);background:var(--panel-2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;}
-.recipe-toggle{
-  background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;
-  padding:7px 12px;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;min-height:36px;
+.learn-block{margin-bottom:18px;}
+.learn-block:last-child{margin-bottom:0;}
+.learn-block h3{font-family:'Fraunces',serif;font-size:15.5px;font-weight:600;margin:0 0 6px;color:var(--accent);}
+.learn-block p{font-size:14px;line-height:1.65;color:var(--text);margin:0;}
+.myth{
+  background:var(--panel-2);
+  border-left:3px solid var(--accent2);
+  border-radius:0 10px 10px 0;
+  padding:12px 14px;
+  margin-bottom:14px;
+  font-size:13.5px;
+  line-height:1.6;
 }
-.recipe-toggle:hover{border-color:var(--accent);color:var(--accent);}
-.recipe-body{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;}
-.recipe-section{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin:12px 0 6px;}
-.recipe-section:first-child{margin-top:0;}
-.recipe-list, .recipe-steps{margin:0 0 0 18px;padding:0;}
-.recipe-list li, .recipe-steps li{font-size:13.5px;line-height:1.6;color:var(--text);margin-bottom:4px;}
-.recipe-tip{background:var(--panel-2);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--text-dim);margin-top:12px;line-height:1.5;}
+.myth b{color:var(--accent2);}
 
 /* swaps */
 .swap{
@@ -435,8 +431,6 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   border-radius:4px;padding:1px 4px;margin-right:6px;text-transform:uppercase;letter-spacing:0.04em;
 }
 .online-status{color:var(--text-dim);font-size:13px;padding:8px 2px;}
-.inline-add-wrap{background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:6px;}
-.inline-add-label{font-size:12.5px;color:var(--text-dim);margin-bottom:10px;}
 #barcode-scanner-wrap{margin-top:10px;}
 #barcode-reader{
   border-radius:12px;overflow:hidden;border:1px solid var(--border);
@@ -486,7 +480,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.13.0</div>
+  <div class="splash-version">v1.12.5</div>
 </div>
 <div class="wrap">
 
@@ -502,7 +496,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     <button class="tab-btn" data-view="drinks">Drinks</button>
     <button class="tab-btn" data-view="week">Week</button>
     <button class="tab-btn" data-view="calc">Calculator</button>
-    <button class="tab-btn" data-view="learn">Recipes</button>
+    <button class="tab-btn" data-view="learn">Learn</button>
   </nav>
 
   <!-- DASHBOARD -->
@@ -815,198 +809,31 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <!-- RECIPES -->
+  <!-- LEARN -->
   <div class="view" id="view-learn">
-    <div class="recipe-intro">Simple, tasty recipes you can actually make. Each one is reasonably healthy, filling, and not complicated.</div>
-
-    <!-- Recipe 1: Sushi Rice with Pan-Fried Salmon -->
-    <div class="card recipe-card">
-      <div class="recipe-meta-row">
-        <div>
-          <div class="recipe-title">Japanese Sushi Rice with Pan-Fried Salmon</div>
-          <div class="recipe-tags"><span class="rtag">~550 kcal</span><span class="rtag">2 servings</span><span class="rtag">30 min</span></div>
-        </div>
-        <button class="recipe-toggle" data-target="r1">▾ View</button>
+    <div class="card">
+      <h2>Why "no food after 8pm" isn't the real lever</h2>
+      <div class="myth"><b>The idea:</b> stop eating by a certain hour and you'll lose weight.<br><b>What actually happens:</b> the body responds to total energy in vs. total energy out — it doesn't track the clock.</div>
+      <div class="learn-block">
+        <h3>What actually drives weight change</h3>
+        <p>Weight loss happens when you consistently take in fewer calories than you burn, averaged over days and weeks — not measured against any single meal or cutoff time. A 7pm dinner and a 9pm dinner with identical calories have the same effect on weight.</p>
       </div>
-      <div class="recipe-body" id="r1" style="display:none;">
-        <div class="recipe-section">Ingredients</div>
-        <ul class="recipe-list">
-          <li>300g Japanese short-grain rice</li>
-          <li>3 tbsp rice vinegar, 2 tbsp sugar, 1 tsp salt (sushi seasoning)</li>
-          <li>200–250g salmon belly or salmon skin pieces</li>
-          <li>1 tbsp soy sauce, 1 tsp sesame oil</li>
-          <li>Spring onion, sesame seeds to serve</li>
-        </ul>
-        <div class="recipe-section">Method</div>
-        <ol class="recipe-steps">
-          <li>Rinse rice until water runs clear. Cook in a rice cooker or pot (1:1.1 rice to water). Rest 10 min.</li>
-          <li>Mix rice vinegar, sugar, and salt until dissolved. Fold gently into hot rice. Fan to cool — don't refrigerate.</li>
-          <li>Pat salmon dry. Season lightly with salt and pepper. Heat a non-stick pan on medium-high, no oil needed for belly (it's fatty enough).</li>
-          <li>Lay salmon skin-side down for 3–4 min until skin is crispy, then flip for 1–2 min. Deglaze with soy sauce and sesame oil right at the end.</li>
-          <li>Serve salmon over sushi rice, top with spring onion and sesame seeds.</li>
-        </ol>
-        <div class="recipe-tip">💡 Salmon belly is cheap at most supermarkets and much more forgiving than fillet — hard to overcook. Salmon skin pieces are even cheaper and the crispy skin is the best part.</div>
+      <div class="learn-block">
+        <h3>Why the "8pm rule" seems to work anyway</h3>
+        <p>It's usually indirect. A cutoff time removes the window where a lot of extra eating happens — snacks in front of a screen, second helpings out of boredom. Cut that window and intake often drops without anyone tracking anything. The clock isn't the mechanism; it's just a simple rule that happens to reduce intake for some people.</p>
       </div>
-    </div>
-
-    <!-- Recipe 2a: Pasta with Minced Meat — Tomato -->
-    <div class="card recipe-card">
-      <div class="recipe-meta-row">
-        <div>
-          <div class="recipe-title">Pasta Bolognese (Tomato Minced Meat)</div>
-          <div class="recipe-tags"><span class="rtag">~620 kcal</span><span class="rtag">2 servings</span><span class="rtag">25 min</span></div>
-        </div>
-        <button class="recipe-toggle" data-target="r2">▾ View</button>
+      <div class="learn-block">
+        <h3>Why "weekly," not "daily," is the useful lens</h3>
+        <p>Day-to-day intake naturally swings — a birthday dinner, a stressful week, a big workout. Judging progress by a single day invites frustration for no reason. Looking at the week smooths that noise out and shows the actual trend, which is what the Week tab here is built around.</p>
       </div>
-      <div class="recipe-body" id="r2" style="display:none;">
-        <div class="recipe-section">Ingredients</div>
-        <ul class="recipe-list">
-          <li>160g spaghetti or penne</li>
-          <li>250g minced pork or beef</li>
-          <li>1 can (400g) crushed tomatoes</li>
-          <li>3 cloves garlic, minced</li>
-          <li>1 small onion, diced</li>
-          <li>1 tbsp olive oil</li>
-          <li>Salt, pepper, dried oregano, chilli flakes</li>
-          <li>Parmesan to serve (optional)</li>
-        </ul>
-        <div class="recipe-section">Method</div>
-        <ol class="recipe-steps">
-          <li>Boil pasta in salted water until al dente. Reserve a cup of pasta water before draining.</li>
-          <li>Heat olive oil in a pan. Fry onion until soft, then garlic for 1 min.</li>
-          <li>Add minced meat, break it up, cook until browned. Season with salt, pepper, oregano.</li>
-          <li>Pour in crushed tomatoes. Simmer 10 min until thickened. Taste and adjust seasoning.</li>
-          <li>Toss in drained pasta, splash pasta water to loosen if needed. Serve with parmesan.</li>
-        </ol>
-        <div class="recipe-tip">💡 The pasta water is starchy and helps the sauce cling to the pasta — don't skip it. Minced pork is cheaper than beef and works just as well here.</div>
-      </div>
-    </div>
-
-    <!-- Recipe 2b: Aglio Olio -->
-    <div class="card recipe-card">
-      <div class="recipe-meta-row">
-        <div>
-          <div class="recipe-title">Pasta Aglio Olio with Minced Meat</div>
-          <div class="recipe-tags"><span class="rtag">~580 kcal</span><span class="rtag">2 servings</span><span class="rtag">20 min</span></div>
-        </div>
-        <button class="recipe-toggle" data-target="r3">▾ View</button>
-      </div>
-      <div class="recipe-body" id="r3" style="display:none;">
-        <div class="recipe-section">Ingredients</div>
-        <ul class="recipe-list">
-          <li>160g spaghetti</li>
-          <li>200g minced pork or chicken</li>
-          <li>5 cloves garlic, thinly sliced</li>
-          <li>3 tbsp good olive oil</li>
-          <li>1 tsp chilli flakes (adjust to taste)</li>
-          <li>Salt, black pepper</li>
-          <li>Handful of fresh parsley or spring onion</li>
-        </ul>
-        <div class="recipe-section">Method</div>
-        <ol class="recipe-steps">
-          <li>Boil pasta in well-salted water until just al dente. Reserve a big cup of pasta water.</li>
-          <li>In a wide pan, heat olive oil on medium-low. Add garlic — cook slowly until golden (not brown). Add chilli flakes.</li>
-          <li>Push garlic to the side, turn up heat, add minced meat. Brown well, season.</li>
-          <li>Add drained pasta directly into the pan. Pour in 3–4 tbsp pasta water. Toss everything together — the starchy water and oil emulsify into a light sauce.</li>
-          <li>Finish with parsley or spring onion, a crack of black pepper.</li>
-        </ol>
-        <div class="recipe-tip">💡 Aglio olio lives or dies on two things: good olive oil and properly salted pasta water. Don't rush the garlic — low and slow gets you golden, not bitter.</div>
-      </div>
-    </div>
-
-    <!-- Recipe 3: Egg Fried Rice -->
-    <div class="card recipe-card">
-      <div class="recipe-meta-row">
-        <div>
-          <div class="recipe-title">Simple Egg Fried Rice</div>
-          <div class="recipe-tags"><span class="rtag">~420 kcal</span><span class="rtag">2 servings</span><span class="rtag">15 min</span></div>
-        </div>
-        <button class="recipe-toggle" data-target="r4">▾ View</button>
-      </div>
-      <div class="recipe-body" id="r4" style="display:none;">
-        <div class="recipe-section">Ingredients</div>
-        <ul class="recipe-list">
-          <li>2 cups day-old cooked rice (cold rice is key)</li>
-          <li>3 eggs</li>
-          <li>2 cloves garlic, minced</li>
-          <li>2 tbsp light soy sauce</li>
-          <li>1 tsp sesame oil</li>
-          <li>1 tbsp vegetable oil</li>
-          <li>Spring onion, white pepper</li>
-        </ul>
-        <div class="recipe-section">Method</div>
-        <ol class="recipe-steps">
-          <li>Beat eggs with a pinch of salt. Get your wok or pan very hot.</li>
-          <li>Add oil, then garlic — stir 20 seconds. Add rice, press and toss to break up clumps.</li>
-          <li>Push rice to the side, pour eggs in, scramble until just set, then fold into the rice.</li>
-          <li>Add soy sauce, sesame oil, white pepper. Toss on high heat 1–2 min.</li>
-          <li>Off the heat, add spring onion. Serve immediately.</li>
-        </ol>
-        <div class="recipe-tip">💡 Freshly cooked rice is too wet and clumps — day-old refrigerated rice fries up perfectly. This is the best use of leftover rice.</div>
-      </div>
-    </div>
-
-    <!-- Recipe 4: Miso Soup with Tofu -->
-    <div class="card recipe-card">
-      <div class="recipe-meta-row">
-        <div>
-          <div class="recipe-title">Miso Soup with Tofu & Wakame</div>
-          <div class="recipe-tags"><span class="rtag">~90 kcal</span><span class="rtag">2 servings</span><span class="rtag">10 min</span></div>
-        </div>
-        <button class="recipe-toggle" data-target="r5">▾ View</button>
-      </div>
-      <div class="recipe-body" id="r5" style="display:none;">
-        <div class="recipe-section">Ingredients</div>
-        <ul class="recipe-list">
-          <li>500ml dashi or plain water</li>
-          <li>2 tbsp white or red miso paste</li>
-          <li>150g silken or firm tofu, cubed</li>
-          <li>1 tbsp dried wakame seaweed (rehydrated)</li>
-          <li>Spring onion to serve</li>
-        </ul>
-        <div class="recipe-section">Method</div>
-        <ol class="recipe-steps">
-          <li>Rehydrate wakame in cold water for 5 min, then drain.</li>
-          <li>Heat dashi or water until just about to boil. Add tofu gently.</li>
-          <li>Turn off heat. Dissolve miso paste in a ladle of the hot liquid first, then stir into the pot. Never boil after adding miso — it kills the flavour.</li>
-          <li>Add wakame, serve immediately with spring onion.</li>
-        </ol>
-        <div class="recipe-tip">💡 Miso paste and wakame are available at most Asian supermarkets in Singapore — giant packs last months in the fridge/pantry. This makes an excellent low-calorie side alongside any meal.</div>
-      </div>
-    </div>
-
-    <!-- Recipe 5: Chicken Congee -->
-    <div class="card recipe-card">
-      <div class="recipe-meta-row">
-        <div>
-          <div class="recipe-title">Simple Chicken Congee (Porridge)</div>
-          <div class="recipe-tags"><span class="rtag">~350 kcal</span><span class="rtag">2 servings</span><span class="rtag">40 min</span></div>
-        </div>
-        <button class="recipe-toggle" data-target="r6">▾ View</button>
-      </div>
-      <div class="recipe-body" id="r6" style="display:none;">
-        <div class="recipe-section">Ingredients</div>
-        <ul class="recipe-list">
-          <li>100g uncooked jasmine rice</li>
-          <li>1L chicken stock or water</li>
-          <li>200g chicken breast or thigh, sliced thin</li>
-          <li>2 slices ginger</li>
-          <li>Soy sauce, sesame oil, white pepper</li>
-          <li>Spring onion, fried shallots, century egg (optional)</li>
-        </ul>
-        <div class="recipe-section">Method</div>
-        <ol class="recipe-steps">
-          <li>Bring stock and ginger to a boil. Add rice, stir well.</li>
-          <li>Reduce heat to a gentle simmer. Cook 25–30 min, stirring occasionally, until rice breaks down into a thick porridge. Add more water if too thick.</li>
-          <li>Add chicken slices, cook 3–4 min until just cooked through.</li>
-          <li>Season with soy sauce, sesame oil, white pepper. Serve topped with spring onion and fried shallots.</li>
-        </ol>
-        <div class="recipe-tip">💡 Congee is one of the most naturally low-calorie filling meals out there — mostly water and a small amount of rice, but incredibly satisfying. Great for days when you've already eaten a lot.</div>
+      <div class="learn-block">
+        <h3>A rough starting point</h3>
+        <p>A sustained deficit of about 500 kcal/day tends to track with roughly 0.5kg of loss per week for most people — a rough model, not a guarantee, since metabolism, water, and hormones all move the number around. Consistency over weeks matters far more than any single day's total.</p>
       </div>
     </div>
   </div>
 
-  <footer>Longview v1.13.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.12.5<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1636,52 +1463,6 @@ async function useOffProduct(displayName, cal) {
   $('online-results').innerHTML = '';
   $('online-search-btn').style.display = 'none';
 }
-
-// ---- inline manual add widget ----
-// Shows when online search returns nothing — pre-fills name from the search query
-// so user doesn't have to retype anything.
-function showInlineAdd(container, prefillName = '') {
-  container.innerHTML = `
-    <div class="inline-add-wrap">
-      <div class="inline-add-label">Not found online — add it yourself:</div>
-      <div class="field-row">
-        <input type="text" class="name" id="inline-add-name" placeholder="Food name" value="${escapeHtml(prefillName)}">
-      </div>
-      <div class="field-row">
-        <input type="number" class="num" id="inline-add-cal" placeholder="Calories" min="0">
-        <input type="number" class="num" id="inline-add-sugar" placeholder="Sugar (g)" min="0">
-      </div>
-      <button class="add-btn" id="inline-add-confirm">Add entry</button>
-    </div>
-  `;
-  // If name is already filled, jump focus to calories
-  if (prefillName) {
-    setTimeout(() => { const c = $('inline-add-cal'); if (c) c.focus(); }, 100);
-  }
-  $('inline-add-confirm').addEventListener('click', async () => {
-    const name = $('inline-add-name').value.trim();
-    const cal = parseFloat($('inline-add-cal').value) || 0;
-    const sugar = parseFloat($('inline-add-sugar').value) || 0;
-    if (!name) return;
-    const key = selectedDate;
-    const entries = await getEntries(key);
-    entries.push({ id: Date.now(), name, calories: cal, sugar });
-    await setEntries(key, entries);
-    // also save to My foods so it's searchable next time
-    const customFoods = await getCustomFoods();
-    if (!customFoods.some(f => f.name === name)) {
-      customFoods.push({ id: Date.now() + 1, name, cal });
-      await setCustomFoods(customFoods);
-      await refreshFoodIndex();
-      await renderCustomFoods();
-    }
-    container.innerHTML = `<div class="online-status">✓ "${escapeHtml(name)}" added and saved to My foods.</div>`;
-    $('quick-search').value = '';
-    $('autocomplete-list').innerHTML = '';
-    $('online-search-btn').style.display = 'none';
-    renderToday();
-  });
-}
 function extractCalFromProduct(p) {
   const nutriments = p.nutriments || {};
   let cal = null, calLabel = '';
@@ -1711,8 +1492,7 @@ $('online-search-btn').addEventListener('click', async () => {
 
     resultsEl.innerHTML = '';
     if (products.length === 0) {
-      resultsEl.innerHTML = '';
-      showInlineAdd(resultsEl, query);
+      resultsEl.innerHTML = '<div class="online-status">No online matches — try a different spelling, or just type it in manually.</div>';
       return;
     }
 
@@ -1735,7 +1515,7 @@ $('online-search-btn').addEventListener('click', async () => {
     });
 
     if (!resultsEl.children.length) {
-      showInlineAdd(resultsEl, query);
+      resultsEl.innerHTML = '<div class="online-status">Found matches, but none had usable calorie data.</div>';
     }
   } catch (err) {
     resultsEl.innerHTML = '<div class="online-status">Couldn\'t reach Open Food Facts — check your connection and try again.</div>';
@@ -1919,7 +1699,19 @@ async function lookupBarcode(code, targetEl) {
     } catch (e) {}
 
     if (!textSearchFound) {
-      showInlineAdd(resultsEl, '');
+      // Final fallback — guide user to the main search box
+      resultsEl.innerHTML = '<div class="online-status">Barcode not in the database. Search by name using the search bar above (e.g. "100 Plus Zero").</div>';
+      // Scroll to and focus the main search box
+      setTimeout(() => {
+        const searchInput = $('quick-search');
+        if (searchInput) {
+          searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          searchInput.focus();
+          // Show the online search button right away so one tap triggers it
+          $('online-search-btn').style.display = 'block';
+          $('online-search-btn').textContent = '🔎 Search Open Food Facts online';
+        }
+      }, 300);
     }
     return;
   }
@@ -2059,7 +1851,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.13.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.12.5', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2456,17 +2248,6 @@ document.querySelectorAll('.size-btn').forEach(btn => {
     btn.classList.add('active');
     drinkSize = btn.dataset.size;
     renderAllDrinkMenus();
-  });
-});
-
-// ---- recipe toggles ----
-document.querySelectorAll('.recipe-toggle').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = $(btn.dataset.target);
-    if (!target) return;
-    const isOpen = target.style.display !== 'none';
-    target.style.display = isOpen ? 'none' : 'block';
-    btn.textContent = isOpen ? '▾ View' : '▴ Hide';
   });
 });
 
