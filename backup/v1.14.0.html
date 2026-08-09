@@ -521,18 +521,18 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.15.0</div>
+  <div class="splash-version">v1.14.0</div>
 </div>
 
 <div id="whats-new-banner" style="display:none;">
   <div class="whats-new-inner">
-    <div class="whats-new-label">✦ What's new in v1.15.0</div>
+    <div class="whats-new-label">✦ What's new in v1.14.0</div>
     <ul class="whats-new-list">
-      <li>Send feedback directly from the app — suggestions go straight to the developer</li>
-      <li>Introducing Recipes! Included Recipes tab with some of my favourite meals. 5 new halal-friendly recipes (11 total)</li>
-      <li>Drinks tab: tap a brand to expand its menu, search filter added</li>
-      <li>Drinks now searchable from the Log tab search bar</li>
-      <li>Inline manual add when online search finds nothing</li>
+      <li>Drinks tab now sorted by brand with collapse/expand — tap a brand to see its menu</li>
+      <li>Drink search filter — find any drink without scrolling</li>
+      <li>Drinks now searchable from the Log tab too</li>
+      <li>When online search finds nothing, you can add the item inline without retyping</li>
+      <li>Introducing Recipes! Included Recipes tab with some of my favourite meals</li>
     </ul>
     <button class="add-btn" id="whats-new-dismiss">Got it</button>
   </div>
@@ -551,8 +551,8 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     <button class="tab-btn" data-view="today">Log</button>
     <button class="tab-btn" data-view="drinks">Drinks</button>
     <button class="tab-btn" data-view="week">Week</button>
-    <button class="tab-btn" data-view="calc">Calculator</button>
     <button class="tab-btn" data-view="learn">Recipes</button>
+    <button class="tab-btn" data-view="calc">Calculator</button>
   </nav>
 
   <!-- DASHBOARD -->
@@ -738,19 +738,6 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <div class="hint">Clears every logged entry, your saved target, and your saved custom foods. Export a backup first if you want a way back. Can't be undone.</div>
       <button class="add-btn danger" id="reset-btn">Reset all data</button>
       <div class="save-note" id="reset-note"></div>
-    </div>
-
-    <div class="card">
-      <h2>Send feedback</h2>
-      <div class="hint">Got a suggestion, found a bug, or want a food added? Send it directly to the developer.</div>
-      <div class="field-row">
-        <input type="text" id="feedback-name" placeholder="Your name (optional)">
-      </div>
-      <div class="field-row">
-        <textarea id="feedback-text" placeholder="Type your feedback or suggestion here..." rows="3" style="resize:vertical;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:12px;font-family:'Inter',sans-serif;font-size:15px;width:100%;min-height:90px;"></textarea>
-      </div>
-      <button class="add-btn secondary" id="feedback-send-btn">Send feedback</button>
-      <div class="save-note" id="feedback-note"></div>
     </div>
   </div>
 
@@ -1223,7 +1210,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <footer>Longview v1.15.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.14.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -2276,7 +2263,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.15.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.14.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2773,38 +2760,6 @@ document.querySelectorAll('.size-btn').forEach(btn => {
   });
 });
 
-// ---- feedback (Telegram) ----
-// TOKEN: split across two vars to reduce casual scraping — swap these if you regenerate via @BotFather
-const _tA = '8851381554';
-const _tB = 'AAHp9zONTYWmcHRw6QuZZvMROIQbiduRqWU';
-const _tC = 574133620; // your chat ID
-$('feedback-send-btn').addEventListener('click', async () => {
-  const text = $('feedback-text').value.trim();
-  const name = $('feedback-name').value.trim();
-  const noteEl = $('feedback-note');
-  if (!text) { noteEl.textContent = 'Please write something first.'; return; }
-  noteEl.textContent = 'Sending…';
-  const msg = `📬 Longview Feedback\n${name ? `From: ${name}\n` : ''}Message:\n${text}`;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${_tA}:${_tB}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: _tC, text: msg })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      noteEl.textContent = 'Sent! Thank you for your feedback.';
-      $('feedback-text').value = '';
-      $('feedback-name').value = '';
-    } else {
-      noteEl.textContent = 'Failed to send — check your connection and try again.';
-    }
-  } catch (e) {
-    noteEl.textContent = 'Failed to send — check your connection and try again.';
-  }
-  setTimeout(() => noteEl.textContent = '', 3000);
-});
-
 // ---- recipe toggles ----
 document.querySelectorAll('.recipe-toggle').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -2829,7 +2784,7 @@ document.querySelectorAll('.recipe-toggle').forEach(btn => {
   renderAllDrinkMenus();
 
   // what's new banner — show once per version
-  const CURRENT_VERSION = 'v1.15.0';
+  const CURRENT_VERSION = 'v1.14.0';
   const seenVersion = localStorage.getItem(STORAGE_PREFIX + 'seenVersion');
   if (seenVersion !== CURRENT_VERSION) {
     setTimeout(() => {
