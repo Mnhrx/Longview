@@ -1,0 +1,569 @@
+{
+  "luckin": [
+    {
+      "category": "Americano",
+      "items": [
+        {
+          "name": "Americano",
+          "calM": 26,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Dark Roast Americano",
+          "calM": 24,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Extra Strong Americano",
+          "calM": 24,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Grape Fizzy Americano",
+          "calM": 163,
+          "calL": 238,
+          "grade": "C"
+        },
+        {
+          "name": "Hot Orange Americano",
+          "calM": 197,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Iced Americano",
+          "calM": 26,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Iced Extra Strong Americano",
+          "calM": 31,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Little Butter Americano",
+          "calM": 197,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Orange Americano",
+          "calM": 197,
+          "calL": 287,
+          "grade": "C"
+        },
+        {
+          "name": "Pomelo Americano",
+          "calM": 158,
+          "calL": 231,
+          "grade": "C"
+        }
+      ]
+    },
+    {
+      "category": "Barista Coffee",
+      "items": [
+        {
+          "name": "Caffe Mocha",
+          "calM": 329,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Cappuccino",
+          "calM": 317,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Caramel Macchiato",
+          "calM": 333,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Flat White",
+          "calM": 307,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Latte",
+          "calM": 158,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Oat Milk Latte",
+          "calM": 278,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Oat Shakerato",
+          "calM": 182,
+          "calL": null,
+          "grade": "B"
+        }
+      ]
+    },
+    {
+      "category": "Flavored Lattes",
+      "items": [
+        {
+          "name": "Brown Sugar Boba Latte",
+          "calM": 307,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Coconut Latte",
+          "calM": 254,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Coconut Velvet Latte",
+          "calM": 432,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Creamy Dreamy Latte",
+          "calM": 605,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Dark Roast Latte",
+          "calM": 202,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Dark Roast Oat Latte",
+          "calM": 206,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Iced Minty Coconut Latte",
+          "calM": 250,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Little Butter Latte",
+          "calM": 350,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Mascarpone Latte",
+          "calM": 312,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Matcha Latte",
+          "calM": 446,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Matcha Oat Latte",
+          "calM": 331,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Pink Blossom Latte",
+          "calM": 240,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Pistachio Oat Latte",
+          "calM": 350,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Sea Salt Caramel Latte",
+          "calM": 288,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Snowy Matcha Latte",
+          "calM": 331,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Vanilla Flavoured Creamy Latte",
+          "calM": 360,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Velvet Latte",
+          "calM": 408,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Velvety Matcha Latte",
+          "calM": 221,
+          "calL": null,
+          "grade": "B"
+        }
+      ]
+    },
+    {
+      "category": "Frappe",
+      "items": [
+        {
+          "name": "Blue-ming Coconut Frappe",
+          "calM": 331,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Chocolate Frappe",
+          "calM": 370,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Matcha Frappe",
+          "calM": 442,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Matcha Jasmine Frappe",
+          "calM": 370,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Pistachio Chocolate Frappe",
+          "calM": 422,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Vanilla Flavored Frappe",
+          "calM": 360,
+          "calL": null,
+          "grade": "C"
+        }
+      ]
+    },
+    {
+      "category": "Juice & Caffeine Free",
+      "items": [
+        {
+          "name": "Active Apple Kale Tea",
+          "calM": 144,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Zesty Pomelo",
+          "calM": 139,
+          "calL": 203,
+          "grade": "C"
+        }
+      ]
+    },
+    {
+      "category": "Luckin Black Cup",
+      "items": [
+        {
+          "name": "Gesha Americano",
+          "calM": 24,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Gesha Flat White",
+          "calM": 269,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Gesha Latte",
+          "calM": 274,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Yirgacheffe Americano",
+          "calM": 27,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Yirgacheffe Flat White",
+          "calM": 307,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Yirgacheffe Latte",
+          "calM": 187,
+          "calL": null,
+          "grade": "B"
+        }
+      ]
+    },
+    {
+      "category": "Other Drinks",
+      "items": [
+        {
+          "name": "Chocolate Flavoured Milk",
+          "calM": 499,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Coconut Matcha Latte",
+          "calM": 374,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "First Crush Tea",
+          "calM": 206,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Jasmine Kiss Tea",
+          "calM": 206,
+          "calL": null,
+          "grade": "B"
+        },
+        {
+          "name": "Milk",
+          "calM": 360,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Tropical Coco-Mango Refresher",
+          "calM": 269,
+          "calL": null,
+          "grade": "C"
+        }
+      ]
+    },
+    {
+      "category": "Yuan-Yang",
+      "items": [
+        {
+          "name": "Ceylon Yuan-Yang",
+          "calM": 211,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Jasmine Blossom Yuan-Yang",
+          "calM": 221,
+          "calL": null,
+          "grade": "C"
+        }
+      ]
+    }
+  ],
+  "chagee": [
+    {
+      "category": "Brewed Tea",
+      "items": [
+        {
+          "name": "BO.YA Jasmine Tie Guan Yin Brewed Tea",
+          "calM": 120,
+          "calL": 175,
+          "grade": "B"
+        },
+        {
+          "name": "Da Hong Pao Pure Tea",
+          "calM": 96,
+          "calL": 140,
+          "grade": "B"
+        },
+        {
+          "name": "Glutinous Pure Green Tea",
+          "calM": 96,
+          "calL": 140,
+          "grade": "B"
+        },
+        {
+          "name": "Osmanthus Oolong Tea",
+          "calM": 106,
+          "calL": 154,
+          "grade": "B"
+        },
+        {
+          "name": "Peach Oolong Tea",
+          "calM": 106,
+          "calL": 154,
+          "grade": "B"
+        },
+        {
+          "name": "Tie Guan Yin Pure Tea",
+          "calM": 106,
+          "calL": 154,
+          "grade": "B"
+        }
+      ]
+    },
+    {
+      "category": "Fresh Fruit Tea",
+      "items": [
+        {
+          "name": "Da Hong Pao Lemon Tea",
+          "calM": 254,
+          "calL": 371,
+          "grade": "C"
+        },
+        {
+          "name": "Glutinous Lemon Tea",
+          "calM": 254,
+          "calL": 371,
+          "grade": "C"
+        },
+        {
+          "name": "Jasmine Lemon Tea",
+          "calM": 254,
+          "calL": 371,
+          "grade": "C"
+        }
+      ]
+    },
+    {
+      "category": "Fresh Milk Tea",
+      "items": [
+        {
+          "name": "BO.YA Jasmine Green Milk Tea",
+          "calM": 206,
+          "calL": 301,
+          "grade": "B"
+        },
+        {
+          "name": "BO.YA Jasmine Tie Guan Yin Milk Tea",
+          "calM": 206,
+          "calL": 301,
+          "grade": "B"
+        },
+        {
+          "name": "Da Hong Pao Milk Tea",
+          "calM": 178,
+          "calL": 259,
+          "grade": "B"
+        },
+        {
+          "name": "Glutinous Green Milk Tea",
+          "calM": 206,
+          "calL": 301,
+          "grade": "B"
+        },
+        {
+          "name": "Hojicha Genmai Milk Tea",
+          "calM": 230,
+          "calL": 336,
+          "grade": "B"
+        },
+        {
+          "name": "Lapsang Souchong Black Milk Tea",
+          "calM": 202,
+          "calL": 294,
+          "grade": "B"
+        },
+        {
+          "name": "Osmanthus Oolong Milk Tea",
+          "calM": 202,
+          "calL": 294,
+          "grade": "B"
+        },
+        {
+          "name": "Peach Oolong Milk Tea",
+          "calM": 216,
+          "calL": 315,
+          "grade": "B"
+        },
+        {
+          "name": "Tie Guan Yin Milk Tea",
+          "calM": 206,
+          "calL": 301,
+          "grade": "B"
+        }
+      ]
+    },
+    {
+      "category": "Snow Cap Milk Tea",
+      "items": [
+        {
+          "name": "Da Hong Pao Snow Cap Milk Tea",
+          "calM": 326,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Osmanthus Oolong Snow Cap Milk Tea",
+          "calM": 326,
+          "calL": null,
+          "grade": "C"
+        }
+      ]
+    },
+    {
+      "category": "Teaspresso",
+      "items": [
+        {
+          "name": "Caramel Da Hong Pao Tea Frappe",
+          "calM": 514,
+          "calL": null,
+          "grade": "D"
+        },
+        {
+          "name": "Da Hong Pao Tea Latte",
+          "calM": 298,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Da Hong Pao Teaspresso Pure",
+          "calM": 67,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Lapsang Souchong Tea Latte",
+          "calM": 298,
+          "calL": null,
+          "grade": "C"
+        },
+        {
+          "name": "Lapsang Souchong Teaspresso Pure",
+          "calM": 67,
+          "calL": null,
+          "grade": "A"
+        },
+        {
+          "name": "Oreo Lapsang Souchong Tea Frappe",
+          "calM": 446,
+          "calL": null,
+          "grade": "C"
+        }
+      ]
+    }
+  ]
+}

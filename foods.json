@@ -1,0 +1,173 @@
+[
+  {
+    "group": "Malay / Nusantara",
+    "items": [
+      { "name": "Nasi lemak, basic (coconut rice, egg, ikan bilis, sambal)", "cal": 500, "protein": 14, "carbs": 65, "fat": 20 },
+      { "name": "Nasi lemak with fried chicken", "cal": 780, "protein": 35, "carbs": 70, "fat": 38 },
+      { "name": "Nasi lemak with rendang", "cal": 720, "protein": 30, "carbs": 68, "fat": 32 },
+      { "name": "Nasi lemak with sambal sotong", "cal": 590, "protein": 20, "carbs": 68, "fat": 22 },
+      { "name": "Nasi padang (rice + 3 dishes)", "cal": 700, "protein": 28, "carbs": 75, "fat": 30 },
+      { "name": "Nasi campur (rice + 2 dishes)", "cal": 580, "protein": 22, "carbs": 65, "fat": 22 },
+      { "name": "Mee rebus (1 bowl)", "cal": 480, "protein": 18, "carbs": 72, "fat": 12 },
+      { "name": "Mee siam (1 bowl)", "cal": 390, "protein": 14, "carbs": 60, "fat": 10 },
+      { "name": "Lontong (1 bowl)", "cal": 420, "protein": 12, "carbs": 58, "fat": 16 },
+      { "name": "Soto ayam (1 bowl)", "cal": 350, "protein": 22, "carbs": 38, "fat": 10 },
+      { "name": "Soto with ketupat", "cal": 480, "protein": 24, "carbs": 58, "fat": 12 },
+      { "name": "Nasi goreng kampung (1 plate)", "cal": 620, "protein": 18, "carbs": 78, "fat": 24 },
+      { "name": "Mee goreng mamak (1 plate)", "cal": 550, "protein": 16, "carbs": 74, "fat": 18 },
+      { "name": "Roti canai, plain (1 pc)", "cal": 300, "protein": 6, "carbs": 42, "fat": 12 },
+      { "name": "Roti canai with curry dhal", "cal": 420, "protein": 12, "carbs": 55, "fat": 16 },
+      { "name": "Roti tissue (1 pc)", "cal": 380, "protein": 5, "carbs": 55, "fat": 16 },
+      { "name": "Roti telur (1 pc)", "cal": 380, "protein": 10, "carbs": 44, "fat": 18 },
+      { "name": "Tosai / dosa, plain (1 pc)", "cal": 200, "protein": 5, "carbs": 36, "fat": 4 },
+      { "name": "Curry chicken (1 serving)", "cal": 320, "protein": 26, "carbs": 10, "fat": 20 },
+      { "name": "Rendang chicken (1 serving)", "cal": 280, "protein": 24, "carbs": 6, "fat": 18 },
+      { "name": "Rendang beef (1 serving)", "cal": 310, "protein": 26, "carbs": 6, "fat": 20 },
+      { "name": "Sambal goreng (1 serving)", "cal": 180, "protein": 8, "carbs": 12, "fat": 11 },
+      { "name": "Sayur lodeh (1 bowl)", "cal": 140, "protein": 5, "carbs": 16, "fat": 7 },
+      { "name": "Gado-gado (1 plate)", "cal": 420, "protein": 14, "carbs": 38, "fat": 24 },
+      { "name": "Satay chicken (5 sticks + peanut sauce)", "cal": 400, "protein": 28, "carbs": 22, "fat": 22 },
+      { "name": "Satay beef (5 sticks + peanut sauce)", "cal": 420, "protein": 30, "carbs": 22, "fat": 24 },
+      { "name": "Ikan bakar (grilled fish, 1 medium)", "cal": 250, "protein": 32, "carbs": 4, "fat": 12 },
+      { "name": "Ikan goreng (fried fish, 1 piece)", "cal": 220, "protein": 24, "carbs": 8, "fat": 11 },
+      { "name": "Ayam goreng (fried chicken, 1 piece)", "cal": 280, "protein": 22, "carbs": 10, "fat": 18 },
+      { "name": "Ayam percik (1 piece)", "cal": 300, "protein": 24, "carbs": 12, "fat": 18 },
+      { "name": "Sup tulang merah (1 bowl)", "cal": 380, "protein": 28, "carbs": 16, "fat": 22 },
+      { "name": "Sup kambing (1 bowl)", "cal": 350, "protein": 26, "carbs": 14, "fat": 20 },
+      { "name": "Ketupat (2 pieces)", "cal": 160, "protein": 3, "carbs": 36, "fat": 0 },
+      { "name": "Lemang (1 piece)", "cal": 220, "protein": 3, "carbs": 38, "fat": 7 },
+      { "name": "Nasi impit (1 portion)", "cal": 140, "protein": 2, "carbs": 32, "fat": 0 },
+      { "name": "Bubur lambuk (1 bowl)", "cal": 280, "protein": 12, "carbs": 42, "fat": 7 },
+      { "name": "Bubur ayam (chicken congee, 1 bowl)", "cal": 300, "protein": 16, "carbs": 44, "fat": 6 },
+      { "name": "Kuih lapis (2 pieces)", "cal": 180, "protein": 2, "carbs": 38, "fat": 3 },
+      { "name": "Ondeh ondeh (5 pieces)", "cal": 220, "protein": 3, "carbs": 44, "fat": 4 },
+      { "name": "Kuih seri muka (1 piece)", "cal": 160, "protein": 3, "carbs": 30, "fat": 4 },
+      { "name": "Putu piring (3 pieces)", "cal": 180, "protein": 3, "carbs": 38, "fat": 3 },
+      { "name": "Kuih bahulu (3 pieces)", "cal": 150, "protein": 3, "carbs": 28, "fat": 4 },
+      { "name": "Agar-agar (1 piece)", "cal": 60, "protein": 1, "carbs": 14, "fat": 0 },
+      { "name": "Teh tarik (1 cup)", "cal": 140, "protein": 4, "carbs": 22, "fat": 4 },
+      { "name": "Teh tarik kurang manis", "cal": 100, "protein": 3, "carbs": 16, "fat": 3 },
+      { "name": "Bandung (1 glass)", "cal": 130, "protein": 2, "carbs": 28, "fat": 1 },
+      { "name": "Air sirap bandung (1 glass)", "cal": 110, "protein": 1, "carbs": 26, "fat": 0 },
+      { "name": "Milo ais (1 glass)", "cal": 180, "protein": 5, "carbs": 32, "fat": 4 },
+      { "name": "Milo dinosaur (1 cup)", "cal": 260, "protein": 6, "carbs": 46, "fat": 6 },
+      { "name": "Es cendol (1 cup)", "cal": 280, "protein": 3, "carbs": 56, "fat": 6 },
+      { "name": "Ice kachang (1 cup)", "cal": 250, "protein": 3, "carbs": 54, "fat": 3 }
+    ]
+  },
+  {
+    "group": "Hawker / Chinese SG",
+    "items": [
+      { "name": "Chicken rice (1 plate)", "cal": 600, "protein": 30, "carbs": 70, "fat": 18 },
+      { "name": "Char kway teow (1 plate)", "cal": 750, "protein": 20, "carbs": 90, "fat": 32 },
+      { "name": "Hokkien mee (1 plate)", "cal": 620, "protein": 22, "carbs": 80, "fat": 22 },
+      { "name": "Laksa (1 bowl)", "cal": 600, "protein": 20, "carbs": 72, "fat": 24 },
+      { "name": "Wanton mee (1 bowl)", "cal": 450, "protein": 18, "carbs": 60, "fat": 14 },
+      { "name": "Fishball noodles (1 bowl)", "cal": 400, "protein": 16, "carbs": 60, "fat": 8 },
+      { "name": "Fried rice (1 plate)", "cal": 650, "protein": 18, "carbs": 82, "fat": 24 },
+      { "name": "Economical rice (2 dishes)", "cal": 600, "protein": 20, "carbs": 72, "fat": 22 },
+      { "name": "Kaya toast set (2 eggs, coffee)", "cal": 350, "protein": 12, "carbs": 42, "fat": 14 },
+      { "name": "Bak kut teh (1 bowl)", "cal": 380, "protein": 32, "carbs": 8, "fat": 24 },
+      { "name": "Prawn noodle soup (1 bowl)", "cal": 480, "protein": 24, "carbs": 62, "fat": 14 },
+      { "name": "Oyster omelette (1 plate)", "cal": 430, "protein": 16, "carbs": 48, "fat": 20 },
+      { "name": "Carrot cake, white (1 plate)", "cal": 380, "protein": 8, "carbs": 50, "fat": 16 },
+      { "name": "Popiah (2 rolls)", "cal": 280, "protein": 10, "carbs": 40, "fat": 9 },
+      { "name": "Roast duck rice (1 plate)", "cal": 650, "protein": 32, "carbs": 68, "fat": 26 },
+      { "name": "Wonton soup (1 bowl)", "cal": 280, "protein": 14, "carbs": 36, "fat": 8 },
+      { "name": "Chee cheong fun (plain, 1 plate)", "cal": 320, "protein": 6, "carbs": 62, "fat": 5 },
+      { "name": "Dim sum, har gow (3 pcs)", "cal": 130, "protein": 8, "carbs": 16, "fat": 4 },
+      { "name": "Dim sum, siew mai (3 pcs)", "cal": 160, "protein": 10, "carbs": 14, "fat": 7 }
+    ]
+  },
+  {
+    "group": "Indian SG",
+    "items": [
+      { "name": "Biryani chicken (1 plate)", "cal": 680, "protein": 32, "carbs": 78, "fat": 22 },
+      { "name": "Biryani mutton (1 plate)", "cal": 720, "protein": 30, "carbs": 78, "fat": 26 },
+      { "name": "Naan, plain (1 pc)", "cal": 260, "protein": 8, "carbs": 44, "fat": 5 },
+      { "name": "Chapati (1 pc)", "cal": 120, "protein": 3, "carbs": 22, "fat": 3 },
+      { "name": "Dhal curry (1 serving)", "cal": 180, "protein": 10, "carbs": 26, "fat": 5 },
+      { "name": "Fish head curry (1 portion)", "cal": 320, "protein": 28, "carbs": 10, "fat": 18 },
+      { "name": "Tandoori chicken (half)", "cal": 320, "protein": 40, "carbs": 8, "fat": 14 },
+      { "name": "Prata, plain (1 pc)", "cal": 300, "protein": 6, "carbs": 42, "fat": 12 },
+      { "name": "Prata, egg (1 pc)", "cal": 380, "protein": 10, "carbs": 44, "fat": 18 }
+    ]
+  },
+  {
+    "group": "Meals",
+    "items": [
+      { "name": "White rice (1 bowl)", "cal": 200, "protein": 4, "carbs": 44, "fat": 0 },
+      { "name": "Boiled egg (1)", "cal": 70, "protein": 6, "carbs": 0, "fat": 5 },
+      { "name": "Banana (1 medium)", "cal": 105, "protein": 1, "carbs": 27, "fat": 0 },
+      { "name": "Apple (1 medium)", "cal": 95, "protein": 0, "carbs": 25, "fat": 0 },
+      { "name": "Instant noodles (1 pack)", "cal": 400, "protein": 10, "carbs": 54, "fat": 16 }
+    ]
+  },
+  {
+    "group": "Frozen & fried",
+    "items": [
+      { "name": "Chicken nuggets (6 pcs)", "cal": 290, "protein": 16, "carbs": 20, "fat": 16 },
+      { "name": "Fish fillet, breaded (1 pc)", "cal": 210, "protein": 14, "carbs": 18, "fat": 8 },
+      { "name": "Chicken cutlet / katsu (1 pc)", "cal": 280, "protein": 20, "carbs": 16, "fat": 14 },
+      { "name": "Popcorn chicken (small pack)", "cal": 280, "protein": 18, "carbs": 18, "fat": 14 },
+      { "name": "Fish fingers (4 pcs)", "cal": 240, "protein": 14, "carbs": 20, "fat": 10 }
+    ]
+  },
+  {
+    "group": "Snacks & biscuits",
+    "items": [
+      { "name": "Plain tea biscuits (4 pcs, e.g. Marie)", "cal": 120, "protein": 2, "carbs": 22, "fat": 3 },
+      { "name": "Digestive biscuits (2 pcs)", "cal": 140, "protein": 2, "carbs": 22, "fat": 6 },
+      { "name": "Chocolate-coated biscuits (2 pcs)", "cal": 150, "protein": 2, "carbs": 20, "fat": 7 },
+      { "name": "Cream-filled sandwich biscuits (3 pcs)", "cal": 160, "protein": 2, "carbs": 24, "fat": 7 },
+      { "name": "Potato chips (small pack, ~30g)", "cal": 160, "protein": 2, "carbs": 16, "fat": 10 },
+      { "name": "Prawn crackers / keropok (small pack)", "cal": 150, "protein": 2, "carbs": 20, "fat": 7 },
+      { "name": "Chocolate bar, standard (1 bar, ~45g)", "cal": 230, "protein": 3, "carbs": 28, "fat": 12 },
+      { "name": "Cup noodles (1 cup)", "cal": 300, "protein": 7, "carbs": 42, "fat": 11 },
+      { "name": "Ice cream (1 scoop)", "cal": 140, "protein": 3, "carbs": 18, "fat": 7 },
+      { "name": "Popcorn, sweet or salted (1 cup)", "cal": 150, "protein": 2, "carbs": 28, "fat": 4 },
+      { "name": "Granola / muesli bar (1 bar)", "cal": 120, "protein": 3, "carbs": 20, "fat": 4 },
+      { "name": "Plain crackers (5 pcs)", "cal": 80, "protein": 1, "carbs": 14, "fat": 2 }
+    ]
+  },
+  {
+    "group": "Fast food (generic)",
+    "items": [
+      { "name": "Burger, regular cheeseburger", "cal": 300, "protein": 16, "carbs": 30, "fat": 14 },
+      { "name": "Burger, large/premium", "cal": 550, "protein": 28, "carbs": 44, "fat": 28 },
+      { "name": "French fries, small", "cal": 230, "protein": 3, "carbs": 30, "fat": 11 },
+      { "name": "French fries, medium", "cal": 340, "protein": 4, "carbs": 44, "fat": 16 },
+      { "name": "Fried chicken (1 piece)", "cal": 280, "protein": 20, "carbs": 12, "fat": 16 },
+      { "name": "Pizza (1 slice, regular)", "cal": 285, "protein": 12, "carbs": 34, "fat": 11 },
+      { "name": "Sandwich / sub (6-inch)", "cal": 350, "protein": 18, "carbs": 42, "fat": 10 },
+      { "name": "Donut (1 glazed)", "cal": 260, "protein": 4, "carbs": 34, "fat": 12 }
+    ]
+  },
+  {
+    "group": "Kopitiam drinks",
+    "items": [
+      { "name": "Kopi (coffee, condensed milk)", "cal": 130 },
+      { "name": "Kopi Siew Dai (less sweet)", "cal": 100 },
+      { "name": "Kopi O (black coffee, sugar)", "cal": 70 },
+      { "name": "Kopi O Siew Dai (less sweet)", "cal": 45 },
+      { "name": "Kopi O Kosong (black, no sugar)", "cal": 5 },
+      { "name": "Kopi C (coffee, evaporated milk & sugar)", "cal": 120 },
+      { "name": "Kopi C Siew Dai (less sweet)", "cal": 90 },
+      { "name": "Teh (tea, condensed milk)", "cal": 150 },
+      { "name": "Teh Siew Dai (less sweet)", "cal": 115 },
+      { "name": "Teh O (tea, sugar, no milk)", "cal": 90 },
+      { "name": "Teh O Siew Dai (less sweet)", "cal": 55 },
+      { "name": "Teh O Kosong (plain tea, no sugar)", "cal": 5 },
+      { "name": "Teh C (tea, evaporated milk & sugar)", "cal": 130 },
+      { "name": "Teh C Siew Dai (less sweet)", "cal": 95 }
+    ]
+  },
+  {
+    "group": "Cafe & other drinks",
+    "items": [
+      { "name": "Latte, medium (dairy)", "cal": 190, "protein": 10, "carbs": 18, "fat": 8 },
+      { "name": "Milo (regular)", "cal": 200, "protein": 6, "carbs": 34, "fat": 5 },
+      { "name": "Soft drink (1 can)", "cal": 140, "protein": 0, "carbs": 39, "fat": 0 }
+    ]
+  }
+]

@@ -209,9 +209,6 @@ nav button:hover:not(.active){color:var(--text);}
 .total-box.cal .num{color:var(--accent);}
 .total-box.remaining .num{color:var(--good);}
 .total-box.remaining.over .num{color:var(--over);}
-.macro-summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0 8px;}
-.macro-pill{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;}
-.macro-note{font-size:11px;color:var(--text-dim);width:100%;}
 
 .entry-list{display:flex;flex-direction:column;gap:6px;}
 .entry{
@@ -524,18 +521,20 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.17.0</div>
+  <div class="splash-version">v1.16.0</div>
 </div>
 
 <div id="whats-new-banner" style="display:none;">
   <div class="whats-new-inner">
-    <div class="whats-new-label">✦ What's new in v1.17.0</div>
+    <div class="whats-new-label">✦ What's new in v1.16.0</div>
     <ul class="whats-new-list">
-      <li>Food catalog now loads from external JSON files — easier to update, faster to load</li>
-      <li>51 Malay/Nusantara foods added with macros (nasi padang, mee rebus, satay, kuih, and more)</li>
-      <li>Protein, carbs &amp; fat shown in search results when data is available — never required</li>
-      <li>Recipes + drinks loggable directly from their tabs</li>
-      <li>Feedback card in Log tab — suggestions go straight to the developer</li>
+      <li>Recipes now loggable directly from the Recipes tab — tap "+ Log" on any recipe</li>
+      <li>Recipes added to the Log tab search so you can find them by name</li>
+      <li>"What's new" link added below the footer — tap to re-read update notes anytime</li>
+      <li>Send feedback from the Log tab — goes straight to the developer via Telegram</li>
+      <li>Drinks tab: tap a brand to expand, filter search added, drinks searchable from Log tab</li>
+      <li>Inline add when online food search finds nothing — no retyping</li>
+      <li>11 halal-friendly recipes in the Recipes tab</li>
     </ul>
     <button class="add-btn" id="whats-new-dismiss">Got it</button>
   </div>
@@ -687,12 +686,6 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
           <div class="num" id="today-remaining">0</div>
           <div class="lbl">kcal left today</div>
         </div>
-      </div>
-      <div class="macro-summary" id="macro-summary" style="display:none;">
-        <span class="macro-pill" id="macro-protein">P: —</span>
-        <span class="macro-pill" id="macro-carbs">C: —</span>
-        <span class="macro-pill" id="macro-fat">F: —</span>
-        <div class="macro-note">macros from entries with nutrition data · optional</div>
       </div>
       <div class="entry-list" id="entry-list">
         <div class="empty-state">Nothing logged yet today.</div>
@@ -1268,7 +1261,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   <div style="text-align:center;margin-top:20px;">
     <button id="whats-new-reopen" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">✦ What's new in this version</button>
   </div>
-  <footer>Longview v1.17.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.16.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1386,7 +1379,32 @@ $('dash-log-exercise-btn').addEventListener('click', () => {
 });
 
 // ---- health tip of the day ----
-let healthTips = []; // loaded from tips.json
+const healthTips = [
+  "Protein and fibre at a meal tend to keep you fuller for longer than carbs alone.",
+  "A short walk after eating can help you feel more comfortable and settled.",
+  "A glass of water before a meal is an easy way to slow down and check in with your hunger.",
+  "Progress isn't a straight line — one off day doesn't undo a good week.",
+  "Swapping a sugary drink for water or unsweetened tea a few times a week adds up more than you'd think.",
+  "Eating slowly gives your body more time to register fullness.",
+  "A rough night's sleep can make cravings feel stronger the next day — that's normal, not a lack of willpower.",
+  "Frozen vegetables are just as nutritious as fresh, and they last a lot longer.",
+  "Reading a nutrition label gets easier with practice — start with just calories and serving size.",
+  "Movement counts even in small amounts — a 10-minute walk still matters.",
+  "Consistency beats intensity — small habits you can actually keep up tend to win long-term.",
+  "It's normal for weight to shift day to day — water, sodium, and hormones all play a part.",
+  "Adding vegetables to a dish you already love is often easier than switching to a whole new meal.",
+  "A bigger breakfast isn't required — even something small can help you feel more in control of the day.",
+  "Comparing your plate to someone else's isn't that useful — needs vary a lot person to person.",
+  "Muscle takes time to build — strength gains often show up before the scale moves much.",
+  "Fibre-rich foods like oats, beans, and vegetables can help you stay fuller between meals.",
+  "A missed workout doesn't erase progress — the overall pattern matters more than any single session.",
+  "Herbs and spices are a low-effort way to make simpler, less processed meals taste more exciting.",
+  "Standing up and moving for a minute or two every hour adds up over a full day.",
+  "Portion sizes have grown a lot over the decades — what looks 'normal' now is often more than needed.",
+  "Stress can affect appetite in either direction — noticing that pattern in yourself is genuinely useful.",
+  "Plain water is still the simplest way to stay hydrated — flavoured drinks aren't required.",
+  "Cooking at home, even simply, usually means less added sugar and salt than eating out."
+];
 function getDayOfYear(d) {
   const start = new Date(d.getFullYear(), 0, 0);
   return Math.floor((d - start) / 86400000);
@@ -1506,31 +1524,6 @@ async function renderToday() {
   }
   const totalCal = entries.reduce((s, e) => s + e.calories, 0);
   $('today-cal').textContent = totalCal;
-
-  // macro summary — look up each entry in food/recipe data
-  let totalProtein = 0, totalCarbs = 0, totalFat = 0, macroCount = 0;
-  const macroSource = [
-    ...commonFoods.flatMap(g => g.items),
-    ...recipeData
-  ].filter(f => f.protein != null);
-  entries.forEach(e => {
-    const match = macroSource.find(f => f.name === e.name || e.name.startsWith(f.name));
-    if (match) {
-      totalProtein += match.protein || 0;
-      totalCarbs += match.carbs || 0;
-      totalFat += match.fat || 0;
-      macroCount++;
-    }
-  });
-  const macroSummaryEl = $('macro-summary');
-  if (macroCount > 0) {
-    macroSummaryEl.style.display = 'flex';
-    $('macro-protein').textContent = `P: ${Math.round(totalProtein)}g`;
-    $('macro-carbs').textContent = `C: ${Math.round(totalCarbs)}g`;
-    $('macro-fat').textContent = `F: ${Math.round(totalFat)}g`;
-  } else {
-    macroSummaryEl.style.display = 'none';
-  }
 
   // exercise
   const exercise = await getExercise(key);
@@ -1657,7 +1650,30 @@ $('portion-fill-btn').addEventListener('click', () => {
 // ---- exercise estimator ----
 // Generic average-adult estimates (~70kg), not personalized by body weight — treat as
 // a starting point, and remember most fitness trackers overestimate burn by 20-40%.
-let exerciseData = []; // loaded from exercises.json
+const exerciseData = [
+  { name: 'Walking (moderate pace)', calPerMin: 4 },
+  { name: 'Brisk walking', calPerMin: 5 },
+  { name: 'Running (~8 km/h)', calPerMin: 10 },
+  { name: 'Running (~10 km/h)', calPerMin: 13 },
+  { name: 'Cycling (moderate)', calPerMin: 8 },
+  { name: 'Swimming (moderate)', calPerMin: 9 },
+  { name: 'Hiking', calPerMin: 7 },
+  { name: 'HIIT / circuit training', calPerMin: 10 },
+  { name: 'Weight training', calPerMin: 5 },
+  { name: 'Gym / general workout', calPerMin: 7 },
+  { name: 'Rowing machine', calPerMin: 9 },
+  { name: 'Elliptical', calPerMin: 8 },
+  { name: 'Stair climbing', calPerMin: 9 },
+  { name: 'Pilates', calPerMin: 4 },
+  { name: 'Yoga', calPerMin: 3 },
+  { name: 'Dancing', calPerMin: 6 },
+  { name: 'Basketball', calPerMin: 8 },
+  { name: 'Football / soccer', calPerMin: 9 },
+  { name: 'Tennis', calPerMin: 7 },
+  { name: 'Badminton', calPerMin: 6 },
+  { name: 'Boxing / bag training', calPerMin: 10 },
+  { name: 'IA', calPerMin: 4}
+];
 function populateExerciseSelect() {
   const sel = $('exercise-activity');
   exerciseData.forEach((a, i) => {
@@ -1731,17 +1747,86 @@ $('custom-add-btn').addEventListener('click', async () => {
   renderCustomFoods();
   refreshFoodIndex();
 });
-let commonFoods = []; // loaded from foods.json
+const commonFoods = [
+  { group: 'Meals', items: [
+    { name: 'Chicken rice (1 plate)', cal: 600 },
+    { name: 'Fried rice (1 plate)', cal: 650 },
+    { name: 'Nasi lemak (1 packet)', cal: 500 },
+    { name: 'Laksa (1 bowl)', cal: 600 },
+    { name: 'Char kway teow (1 plate)', cal: 750 },
+    { name: 'Mee goreng (1 plate)', cal: 550 },
+    { name: 'Wanton mee (1 bowl)', cal: 450 },
+    { name: 'Fishball noodles (1 bowl)', cal: 400 },
+    { name: 'Roti prata, plain (1 pc)', cal: 300 },
+    { name: 'Economical rice (2 dishes)', cal: 600 },
+    { name: 'Kaya toast set (2 eggs)', cal: 350 },
+    { name: 'Instant noodles (1 pack)', cal: 400 },
+    { name: 'White rice (1 bowl)', cal: 200 },
+    { name: 'Boiled egg (1)', cal: 70 },
+    { name: 'Banana (1 medium)', cal: 105 },
+    { name: 'Apple (1 medium)', cal: 95 }
+  ]},
+  { group: 'Frozen & fried', items: [
+    { name: 'Chicken nuggets (6 pcs)', cal: 290 },
+    { name: 'Fish fillet, breaded (1 pc)', cal: 210 },
+    { name: 'Chicken cutlet / katsu (1 pc)', cal: 280 },
+    { name: 'Popcorn chicken (small pack)', cal: 280 },
+    { name: 'Fish fingers (4 pcs)', cal: 240 }
+  ]},
+  { group: 'Snacks & biscuits', items: [
+    { name: 'Plain tea biscuits (4 pcs, e.g. Marie)', cal: 120 },
+    { name: 'Digestive biscuits (2 pcs)', cal: 140 },
+    { name: 'Chocolate-coated biscuits (2 pcs)', cal: 150 },
+    { name: 'Cream-filled sandwich biscuits (3 pcs)', cal: 160 },
+    { name: 'Potato chips (small pack, ~30g)', cal: 160 },
+    { name: 'Prawn crackers / keropok (small pack)', cal: 150 },
+    { name: 'Chocolate bar, standard (1 bar, ~45g)', cal: 230 },
+    { name: 'Cup noodles (1 cup)', cal: 300 },
+    { name: 'Ice cream (1 scoop)', cal: 140 },
+    { name: 'Popcorn, sweet or salted (1 cup)', cal: 150 },
+    { name: 'Granola / muesli bar (1 bar)', cal: 120 },
+    { name: 'Plain crackers (5 pcs)', cal: 80 }
+  ]},
+  { group: 'Fast food (generic)', items: [
+    { name: 'Burger, regular cheeseburger', cal: 300 },
+    { name: 'Burger, large/premium', cal: 550 },
+    { name: 'French fries, small', cal: 230 },
+    { name: 'French fries, medium', cal: 340 },
+    { name: 'Fried chicken (1 piece)', cal: 280 },
+    { name: 'Pizza (1 slice, regular)', cal: 285 },
+    { name: 'Sandwich / sub (6-inch)', cal: 350 },
+    { name: 'Donut (1 glazed)', cal: 260 }
+  ]},
+  { group: 'Kopitiam drinks', items: [
+    { name: 'Kopi (coffee, condensed milk)', cal: 130 },
+    { name: 'Kopi Siew Dai (less sweet)', cal: 100 },
+    { name: 'Kopi O (black coffee, sugar)', cal: 70 },
+    { name: 'Kopi O Siew Dai (less sweet)', cal: 45 },
+    { name: 'Kopi O Kosong (black, no sugar)', cal: 5 },
+    { name: 'Kopi C (coffee, evaporated milk & sugar)', cal: 120 },
+    { name: 'Kopi C Siew Dai (less sweet)', cal: 90 },
+    { name: 'Teh (tea, condensed milk)', cal: 150 },
+    { name: 'Teh Siew Dai (less sweet)', cal: 115 },
+    { name: 'Teh O (tea, sugar, no milk)', cal: 90 },
+    { name: 'Teh O Siew Dai (less sweet)', cal: 55 },
+    { name: 'Teh O Kosong (plain tea, no sugar)', cal: 5 },
+    { name: 'Teh C (tea, evaporated milk & sugar)', cal: 130 },
+    { name: 'Teh C Siew Dai (less sweet)', cal: 95 }
+  ]},
+  { group: 'Cafe & other drinks', items: [
+    { name: 'Latte, medium (dairy)', cal: 190 },
+    { name: 'Milo (regular)', cal: 200 },
+    { name: 'Soft drink (1 can)', cal: 140 }
+  ]}
+];
+
 let foodIndex = [];
 async function refreshFoodIndex() {
   const customFoods = await getCustomFoods();
   const index = [];
   customFoods.forEach(f => index.push({ name: f.name, cal: f.cal, group: 'My foods' }));
   commonFoods.forEach(g => {
-    g.items.forEach(item => index.push({
-      name: item.name, cal: item.cal, group: g.group,
-      protein: item.protein, carbs: item.carbs, fat: item.fat
-    }));
+    g.items.forEach(item => index.push({ name: item.name, cal: item.cal, group: g.group }));
   });
   foodIndex = index;
 }
@@ -1769,10 +1854,7 @@ $('quick-search').addEventListener('input', (e) => {
   matches.forEach(f => {
     const row = document.createElement('div');
     row.className = 'autocomplete-item';
-    const macroHint = (f.protein != null)
-      ? `<span style="font-size:10.5px;color:var(--text-dim);margin-left:6px;">P${Math.round(f.protein)}·C${Math.round(f.carbs)}·F${Math.round(f.fat)}</span>`
-      : '';
-    row.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="cal">${f.cal} kcal${macroHint}</span>`;
+    row.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="cal">${f.cal} kcal</span>`;
     row.addEventListener('click', () => {
       fillFromFood(f);
       $('quick-search').value = '';
@@ -2232,7 +2314,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.17.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.16.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2456,8 +2538,124 @@ $('calc-btn').addEventListener('click', () => {
 // Sourced from BBTea.sg's Singapore menu database (calM/calL as published; calL: null where
 // BBTea.sg doesn't list a Large size). Cross-checked against Luckin's Jan 2026 Nutri-Grade
 // reformulation announcement (no Nutri-Grade D drinks remain — matches this dataset).
-let luckinMenu = []; // loaded from drinks.json
-let chageeMenu = []; // loaded from drinks.json
+const luckinMenu = [
+  { category: 'Americano', items: [
+    { name: 'Americano', calM: 26, calL: null, grade: 'A' },
+    { name: 'Dark Roast Americano', calM: 24, calL: null, grade: 'A' },
+    { name: 'Extra Strong Americano', calM: 24, calL: null, grade: 'A' },
+    { name: 'Grape Fizzy Americano', calM: 163, calL: 238, grade: 'C' },
+    { name: 'Hot Orange Americano', calM: 197, calL: null, grade: 'C' },
+    { name: 'Iced Americano', calM: 26, calL: null, grade: 'A' },
+    { name: 'Iced Extra Strong Americano', calM: 31, calL: null, grade: 'A' },
+    { name: 'Little Butter Americano', calM: 197, calL: null, grade: 'C' },
+    { name: 'Orange Americano', calM: 197, calL: 287, grade: 'C' },
+    { name: 'Pomelo Americano', calM: 158, calL: 231, grade: 'C' }
+  ]},
+  { category: 'Barista Coffee', items: [
+    { name: 'Caffe Mocha', calM: 329, calL: null, grade: 'C' },
+    { name: 'Cappuccino', calM: 317, calL: null, grade: 'C' },
+    { name: 'Caramel Macchiato', calM: 333, calL: null, grade: 'C' },
+    { name: 'Flat White', calM: 307, calL: null, grade: 'C' },
+    { name: 'Latte', calM: 158, calL: null, grade: 'A' },
+    { name: 'Oat Milk Latte', calM: 278, calL: null, grade: 'B' },
+    { name: 'Oat Shakerato', calM: 182, calL: null, grade: 'B' }
+  ]},
+  { category: 'Flavored Lattes', items: [
+    { name: 'Brown Sugar Boba Latte', calM: 307, calL: null, grade: 'C' },
+    { name: 'Coconut Latte', calM: 254, calL: null, grade: 'C' },
+    { name: 'Coconut Velvet Latte', calM: 432, calL: null, grade: 'C' },
+    { name: 'Creamy Dreamy Latte', calM: 605, calL: null, grade: 'C' },
+    { name: 'Dark Roast Latte', calM: 202, calL: null, grade: 'B' },
+    { name: 'Dark Roast Oat Latte', calM: 206, calL: null, grade: 'B' },
+    { name: 'Iced Minty Coconut Latte', calM: 250, calL: null, grade: 'C' },
+    { name: 'Little Butter Latte', calM: 350, calL: null, grade: 'C' },
+    { name: 'Mascarpone Latte', calM: 312, calL: null, grade: 'C' },
+    { name: 'Matcha Latte', calM: 446, calL: null, grade: 'C' },
+    { name: 'Matcha Oat Latte', calM: 331, calL: null, grade: 'C' },
+    { name: 'Pink Blossom Latte', calM: 240, calL: null, grade: 'B' },
+    { name: 'Pistachio Oat Latte', calM: 350, calL: null, grade: 'B' },
+    { name: 'Sea Salt Caramel Latte', calM: 288, calL: null, grade: 'C' },
+    { name: 'Snowy Matcha Latte', calM: 331, calL: null, grade: 'C' },
+    { name: 'Vanilla Flavoured Creamy Latte', calM: 360, calL: null, grade: 'C' },
+    { name: 'Velvet Latte', calM: 408, calL: null, grade: 'C' },
+    { name: 'Velvety Matcha Latte', calM: 221, calL: null, grade: 'B' }
+  ]},
+  { category: 'Frappe', items: [
+    { name: 'Blue-ming Coconut Frappe', calM: 331, calL: null, grade: 'C' },
+    { name: 'Chocolate Frappe', calM: 370, calL: null, grade: 'C' },
+    { name: 'Matcha Frappe', calM: 442, calL: null, grade: 'C' },
+    { name: 'Matcha Jasmine Frappe', calM: 370, calL: null, grade: 'C' },
+    { name: 'Pistachio Chocolate Frappe', calM: 422, calL: null, grade: 'C' },
+    { name: 'Vanilla Flavored Frappe', calM: 360, calL: null, grade: 'C' }
+  ]},
+  { category: 'Juice & Caffeine Free', items: [
+    { name: 'Active Apple Kale Tea', calM: 144, calL: null, grade: 'C' },
+    { name: 'Zesty Pomelo', calM: 139, calL: 203, grade: 'C' }
+  ]},
+  { category: 'Luckin Black Cup', items: [
+    { name: 'Gesha Americano', calM: 24, calL: null, grade: 'A' },
+    { name: 'Gesha Flat White', calM: 269, calL: null, grade: 'C' },
+    { name: 'Gesha Latte', calM: 274, calL: null, grade: 'C' },
+    { name: 'Yirgacheffe Americano', calM: 27, calL: null, grade: 'A' },
+    { name: 'Yirgacheffe Flat White', calM: 307, calL: null, grade: 'C' },
+    { name: 'Yirgacheffe Latte', calM: 187, calL: null, grade: 'B' }
+  ]},
+  { category: 'Other Drinks', items: [
+    { name: 'Chocolate Flavoured Milk', calM: 499, calL: null, grade: 'C' },
+    { name: 'Coconut Matcha Latte', calM: 374, calL: null, grade: 'C' },
+    { name: 'First Crush Tea', calM: 206, calL: null, grade: 'B' },
+    { name: 'Jasmine Kiss Tea', calM: 206, calL: null, grade: 'B' },
+    { name: 'Milk', calM: 360, calL: null, grade: 'C' },
+    { name: 'Tropical Coco-Mango Refresher', calM: 269, calL: null, grade: 'C' }
+  ]},
+  { category: 'Yuan-Yang', items: [
+    { name: 'Ceylon Yuan-Yang', calM: 211, calL: null, grade: 'C' },
+    { name: 'Jasmine Blossom Yuan-Yang', calM: 221, calL: null, grade: 'C' }
+  ]}
+];
+const chageeMenu = [
+  { category: 'Seasonal Drinks', items: [
+    { name: 'Apple English Breakfast Milk Tea', calM: 184, calL: 217, grade:'B'},
+    { name: 'Apple English Breakfast Lemon Tea', calM: 184, calL: 230, grade:'C'},
+    { name: 'Apple English Breakfast Brewed Tea', calM:108, calL:130, grade:'A'}
+  ]},
+  { category: 'Brewed Tea', items: [
+    { name: 'BO.YA Jasmine Tie Guan Yin Brewed Tea', calM: 120, calL: 175, grade: 'B' },
+    { name: 'Da Hong Pao Pure Tea', calM: 96, calL: 140, grade: 'B' },
+    { name: 'Glutinous Pure Green Tea', calM: 96, calL: 140, grade: 'B' },
+    { name: 'Osmanthus Oolong Tea', calM: 106, calL: 154, grade: 'B' },
+    { name: 'Peach Oolong Tea', calM: 106, calL: 154, grade: 'B' },
+    { name: 'Tie Guan Yin Pure Tea', calM: 106, calL: 154, grade: 'B' }
+  ]},
+  { category: 'Fresh Fruit Tea', items: [
+    { name: 'Da Hong Pao Lemon Tea', calM: 254, calL: 371, grade: 'C' },
+    { name: 'Glutinous Lemon Tea', calM: 254, calL: 371, grade: 'C' },
+    { name: 'Jasmine Lemon Tea', calM: 254, calL: 371, grade: 'C' }
+  ]},
+  { category: 'Fresh Milk Tea', items: [
+    { name: 'BO.YA Jasmine Green Milk Tea', calM: 206, calL: 301, grade: 'B' },
+    { name: 'BO.YA Jasmine Tie Guan Yin Milk Tea', calM: 206, calL: 301, grade: 'B' },
+    { name: 'Da Hong Pao Milk Tea', calM: 178, calL: 259, grade: 'B' },
+    { name: 'Glutinous Green Milk Tea', calM: 206, calL: 301, grade: 'B' },
+    { name: 'Hojicha Genmai Milk Tea', calM: 230, calL: 336, grade: 'B' },
+    { name: 'Lapsang Souchong Black Milk Tea', calM: 202, calL: 294, grade: 'B' },
+    { name: 'Osmanthus Oolong Milk Tea', calM: 202, calL: 294, grade: 'B' },
+    { name: 'Peach Oolong Milk Tea', calM: 216, calL: 315, grade: 'B' },
+    { name: 'Tie Guan Yin Milk Tea', calM: 206, calL: 301, grade: 'B' }
+  ]},
+  { category: 'Snow Cap Milk Tea', items: [
+    { name: 'Da Hong Pao Snow Cap Milk Tea', calM: 326, calL: null, grade: 'C' },
+    { name: 'Osmanthus Oolong Snow Cap Milk Tea', calM: 326, calL: null, grade: 'C' }
+  ]},
+  { category: 'Teaspresso', items: [
+    { name: 'Caramel Da Hong Pao Tea Frappe', calM: 514, calL: null, grade: 'D' },
+    { name: 'Da Hong Pao Tea Latte', calM: 298, calL: null, grade: 'C' },
+    { name: 'Da Hong Pao Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
+    { name: 'Lapsang Souchong Tea Latte', calM: 298, calL: null, grade: 'C' },
+    { name: 'Lapsang Souchong Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
+    { name: 'Oreo Lapsang Souchong Tea Frappe', calM: 446, calL: null, grade: 'C' }
+  ]}  
+];
 
 let drinkSize = 'M';
 function getDisplayCal(item) {
@@ -2646,7 +2844,19 @@ $('feedback-send-btn').addEventListener('click', async () => {
 });
 
 // ---- recipe data (for search index + log buttons) ----
-let recipeData = []; // loaded from recipes.json
+const recipeData = [
+  { name: 'Japanese Sushi Rice with Pan-Fried Salmon', cal: 550 },
+  { name: 'Pasta Bolognese (Tomato Minced Meat)', cal: 620 },
+  { name: 'Pasta Aglio Olio with Minced Meat', cal: 580 },
+  { name: 'Simple Egg Fried Rice', cal: 420 },
+  { name: 'Miso Soup with Tofu & Wakame', cal: 90 },
+  { name: 'Simple Chicken Congee (Porridge)', cal: 350 },
+  { name: 'Honey Garlic Chicken', cal: 450 },
+  { name: 'Teriyaki Beef Rice Bowl', cal: 580 },
+  { name: 'Lemony Baked Salmon with Vegetables', cal: 420 },
+  { name: 'Spiced Lamb Mince with Rice (Keema-style)', cal: 520 },
+  { name: 'Grilled Chicken Wrap', cal: 480 }
+];
 
 // ---- recipe toggles ----
 document.querySelectorAll('.recipe-toggle').forEach(btn => {
@@ -2686,44 +2896,8 @@ function injectRecipesIntoIndex() {
   });
 }
 
-// ---- load data from JSON files ----
-async function loadDataFiles() {
-  const base = './';
-  const results = await Promise.allSettled([
-    fetch(base + 'foods.json').then(r => r.json()),
-    fetch(base + 'drinks.json').then(r => r.json()),
-    fetch(base + 'tips.json').then(r => r.json()),
-    fetch(base + 'exercises.json').then(r => r.json()),
-    fetch(base + 'recipes.json').then(r => r.json())
-  ]);
-  if (results[0].status === 'fulfilled') commonFoods = results[0].value;
-  if (results[1].status === 'fulfilled') {
-    luckinMenu = results[1].value.luckin || [];
-    chageeMenu = results[1].value.chagee || [];
-  }
-  if (results[2].status === 'fulfilled') healthTips = results[2].value;
-  if (results[3].status === 'fulfilled') {
-    exerciseData = results[3].value;
-    // re-populate exercise dropdown with loaded data
-    const sel = $('exercise-activity');
-    if (sel) {
-      sel.innerHTML = '';
-      exerciseData.forEach((a, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = a.name;
-        sel.appendChild(opt);
-      });
-    }
-  }
-  if (results[4].status === 'fulfilled') {
-    recipeData = results[4].value;
-  }
-}
-
 // ---- init ----
 (async function init() {
-  await loadDataFiles();
   populatePortionSelects();
   populateExerciseSelect();
   await refreshFoodIndex();
@@ -2736,7 +2910,7 @@ async function loadDataFiles() {
   injectRecipesIntoIndex();
 
   // what's new banner — show once per version
-  const CURRENT_VERSION = 'v1.17.0';
+  const CURRENT_VERSION = 'v1.16.0';
   const seenVersion = localStorage.getItem(STORAGE_PREFIX + 'seenVersion');
   if (seenVersion !== CURRENT_VERSION) {
     setTimeout(() => {

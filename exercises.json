@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Walking (moderate pace)",
+    "calPerMin": 4
+  },
+  {
+    "name": "Brisk walking",
+    "calPerMin": 5
+  },
+  {
+    "name": "Running (~8 km/h)",
+    "calPerMin": 10
+  },
+  {
+    "name": "Running (~10 km/h)",
+    "calPerMin": 13
+  },
+  {
+    "name": "Cycling (moderate)",
+    "calPerMin": 8
+  },
+  {
+    "name": "Swimming (moderate)",
+    "calPerMin": 9
+  },
+  {
+    "name": "Hiking",
+    "calPerMin": 7
+  },
+  {
+    "name": "HIIT / circuit training",
+    "calPerMin": 10
+  },
+  {
+    "name": "Weight training",
+    "calPerMin": 5
+  },
+  {
+    "name": "Gym / general workout",
+    "calPerMin": 7
+  },
+  {
+    "name": "Rowing machine",
+    "calPerMin": 9
+  },
+  {
+    "name": "Elliptical",
+    "calPerMin": 8
+  },
+  {
+    "name": "Stair climbing",
+    "calPerMin": 9
+  },
+  {
+    "name": "Pilates",
+    "calPerMin": 4
+  },
+  {
+    "name": "Yoga",
+    "calPerMin": 3
+  },
+  {
+    "name": "Dancing",
+    "calPerMin": 6
+  },
+  {
+    "name": "Basketball",
+    "calPerMin": 8
+  },
+  {
+    "name": "Football / soccer",
+    "calPerMin": 9
+  },
+  {
+    "name": "Tennis",
+    "calPerMin": 7
+  },
+  {
+    "name": "Badminton",
+    "calPerMin": 6
+  },
+  {
+    "name": "Boxing / bag training",
+    "calPerMin": 10
+  },
+  {
+    "name": "IA",
+    "calPerMin": 4
+  }
+]
