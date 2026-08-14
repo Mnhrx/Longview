@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Longview">
 <title>Longview — a simple way to eat a little healthier</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
@@ -126,6 +127,20 @@ nav button:hover:not(.active){color:var(--text);}
 .week-target-box{text-align:right;}
 .week-target-box .num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--text-dim);}
 .week-target-box .lbl{color:var(--text-dim);font-size:11.5px;margin-top:2px;}
+.week-breakdown{margin-top:18px;display:flex;flex-direction:column;gap:6px;}
+.week-day-row{
+  display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;
+  background:var(--panel-2);border-radius:9px;padding:10px 12px;cursor:pointer;
+}
+.week-day-row:hover{outline:1px solid var(--accent);}
+.week-day-row .day-name{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
+.week-day-row .day-name.today{color:var(--accent);font-weight:700;}
+.week-day-row .day-stats{display:flex;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;}
+.week-day-row .day-stats b{color:var(--text);font-weight:600;}
+.week-day-row .day-net{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;}
+.week-day-row .day-net.good{color:var(--good);}
+.week-day-row .day-net.bad{color:var(--over);}
+.week-day-row .day-net.empty{color:var(--text-dim);font-weight:400;font-size:11.5px;}
 .strip{display:flex;gap:8px;align-items:flex-end;height:120px;padding:0 2px;position:relative;}
 .strip::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border);}
 .daybar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;position:relative;}
@@ -194,6 +209,9 @@ nav button:hover:not(.active){color:var(--text);}
 .total-box.cal .num{color:var(--accent);}
 .total-box.remaining .num{color:var(--good);}
 .total-box.remaining.over .num{color:var(--over);}
+.macro-summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0 8px;}
+.macro-pill{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;}
+.macro-note{font-size:11px;color:var(--text-dim);width:100%;}
 
 .entry-list{display:flex;flex-direction:column;gap:6px;}
 .entry{
@@ -221,20 +239,24 @@ nav button:hover:not(.active){color:var(--text);}
 .empty-state{color:var(--text-dim);font-size:13.5px;text-align:center;padding:18px 0;}
 
 /* learn */
-.learn-block{margin-bottom:18px;}
-.learn-block:last-child{margin-bottom:0;}
-.learn-block h3{font-family:'Fraunces',serif;font-size:15.5px;font-weight:600;margin:0 0 6px;color:var(--accent);}
-.learn-block p{font-size:14px;line-height:1.65;color:var(--text);margin:0;}
-.myth{
-  background:var(--panel-2);
-  border-left:3px solid var(--accent2);
-  border-radius:0 10px 10px 0;
-  padding:12px 14px;
-  margin-bottom:14px;
-  font-size:13.5px;
-  line-height:1.6;
+/* recipes */
+.recipe-intro{color:var(--text-dim);font-size:13.5px;margin-bottom:16px;line-height:1.5;}
+.recipe-card{padding:16px;}
+.recipe-meta-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.recipe-title{font-family:'Fraunces',serif;font-weight:600;font-size:16px;color:var(--text);margin-bottom:6px;}
+.recipe-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.rtag{font-size:11.5px;color:var(--accent2);background:var(--panel-2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;}
+.recipe-toggle{
+  background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;
+  padding:7px 12px;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;min-height:36px;
 }
-.myth b{color:var(--accent2);}
+.recipe-toggle:hover{border-color:var(--accent);color:var(--accent);}
+.recipe-body{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;}
+.recipe-section{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin:12px 0 6px;}
+.recipe-section:first-child{margin-top:0;}
+.recipe-list, .recipe-steps{margin:0 0 0 18px;padding:0;}
+.recipe-list li, .recipe-steps li{font-size:13.5px;line-height:1.6;color:var(--text);margin-bottom:4px;}
+.recipe-tip{background:var(--panel-2);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--text-dim);margin-top:12px;line-height:1.5;}
 
 /* swaps */
 .swap{
@@ -304,6 +326,25 @@ nav button:hover:not(.active){color:var(--text);}
 .brand-block:last-child{margin-bottom:0;}
 .brand-title{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:2px;}
 .brand-sub{color:var(--text-dim);font-size:12px;margin-bottom:10px;}
+.brand-accordion-btn{
+  width:100%;display:flex;justify-content:space-between;align-items:center;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;cursor:pointer;margin-bottom:6px;min-height:54px;
+}
+.brand-accordion-btn .brand-accordion-name{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--text);}
+.brand-accordion-btn .brand-accordion-count{font-size:12px;color:var(--text-dim);}
+.brand-accordion-btn .brand-accordion-chevron{color:var(--text-dim);font-size:14px;transition:transform .2s;}
+.brand-accordion-btn.open .brand-accordion-chevron{transform:rotate(180deg);}
+.brand-accordion-body{display:none;padding:4px 0 12px;}
+.brand-accordion-body.open{display:block;}
+.drinks-search-result{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  background:var(--panel-2);border:1px solid var(--accent2);border-radius:9px;
+  padding:10px 12px;font-size:13.5px;margin-bottom:6px;
+}
+.drinks-search-result .name{color:var(--text);flex:1;}
+.drinks-search-result .brand-tag{font-size:11px;color:var(--text-dim);}
+.drinks-search-result .cal{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--accent2);white-space:nowrap;}
 .drink-item{
   display:flex;justify-content:space-between;align-items:center;gap:10px;
   padding:10px 0;border-bottom:1px solid var(--border);
@@ -346,6 +387,22 @@ nav button:hover:not(.active){color:var(--text);}
 .drink-category-title:first-child{margin-top:0;}
 
 footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;}
+
+/* what's new banner */
+#whats-new-banner{
+  position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:8000;
+  display:flex;align-items:flex-end;justify-content:center;padding:20px;
+}
+.whats-new-inner{
+  background:var(--panel);border:1px solid var(--border);border-radius:20px;
+  padding:22px;width:100%;max-width:480px;
+}
+.whats-new-label{
+  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;
+}
+.whats-new-list{margin:0 0 16px 18px;padding:0;}
+.whats-new-list li{font-size:13.5px;color:var(--text);line-height:1.6;margin-bottom:6px;}
 
 /* dashboard */
 .dash-hero{text-align:center;padding:28px 20px;}
@@ -416,6 +473,27 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   border-radius:4px;padding:1px 4px;margin-right:6px;text-transform:uppercase;letter-spacing:0.04em;
 }
 .online-status{color:var(--text-dim);font-size:13px;padding:8px 2px;}
+.inline-add-wrap{background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:6px;}
+.inline-add-label{font-size:12.5px;color:var(--text-dim);margin-bottom:10px;}
+#barcode-scanner-wrap{margin-top:10px;}
+#barcode-reader{
+  border-radius:12px;overflow:hidden;border:1px solid var(--border);
+  background:#000;min-height:220px;
+}
+#barcode-reader video{width:100%;border-radius:12px;}
+.scan-controls{display:flex;justify-content:space-between;align-items:center;}
+#scan-flash-btn.on{color:var(--accent);}
+.scan-btn-row{margin-bottom:4px;}
+.scan-btn-row .add-btn{width:100%;}
+.scan-zoom-wrap{display:flex;align-items:center;gap:10px;padding:6px 0;}
+.scan-zoom-label{font-size:12px;color:var(--text-dim);white-space:nowrap;}
+.scan-zoom-wrap input[type="range"]{
+  flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--border);
+  border-radius:2px;outline:none;
+}
+.scan-zoom-wrap input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:22px;height:22px;background:var(--accent);border-radius:50%;cursor:pointer;
+}
 
 /* category browser */
 .link-btn{
@@ -446,8 +524,23 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.7.5</div>
+  <div class="splash-version">v1.17.0</div>
 </div>
+
+<div id="whats-new-banner" style="display:none;">
+  <div class="whats-new-inner">
+    <div class="whats-new-label">✦ What's new in v1.17.0</div>
+    <ul class="whats-new-list">
+      <li>Food catalog now loads from external JSON files — easier to update, faster to load</li>
+      <li>51 Malay/Nusantara foods added with macros (nasi padang, mee rebus, satay, kuih, and more)</li>
+      <li>Protein, carbs &amp; fat shown in search results when data is available — never required</li>
+      <li>Recipes + drinks loggable directly from their tabs</li>
+      <li>Feedback card in Log tab — suggestions go straight to the developer</li>
+    </ul>
+    <button class="add-btn" id="whats-new-dismiss">Got it</button>
+  </div>
+</div>
+
 <div class="wrap">
 
   <header>
@@ -462,7 +555,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     <button class="tab-btn" data-view="drinks">Drinks</button>
     <button class="tab-btn" data-view="week">Week</button>
     <button class="tab-btn" data-view="calc">Calculator</button>
-    <button class="tab-btn" data-view="learn">Learn</button>
+    <button class="tab-btn" data-view="learn">Recipes</button>
   </nav>
 
   <!-- DASHBOARD -->
@@ -527,7 +620,24 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <h2>Log something</h2>
       <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find something specific, like a packet of biscuits? Search online below (Open Food Facts) — picking a result saves it to "My foods" automatically, so you only ever look it up once.</div>
 
-      <div class="quick-add-label">Search a saved item:</div>
+      <div class="scan-btn-row">
+        <button class="add-btn secondary" id="scan-barcode-btn">📷 Scan a barcode</button>
+      </div>
+      <div id="barcode-scanner-wrap" style="display:none;">
+        <div id="barcode-reader"></div>
+        <div class="scan-controls">
+          <button type="button" class="link-btn" id="scan-cancel-btn">Cancel scan</button>
+          <button type="button" class="link-btn" id="scan-flash-btn" style="display:none;">🔦 Flash</button>
+        </div>
+        <div class="scan-zoom-wrap" id="scan-zoom-wrap" style="display:none;">
+          <label class="scan-zoom-label">Zoom</label>
+          <input type="range" id="scan-zoom" min="1" max="5" step="0.1" value="1">
+        </div>
+        <div class="online-status" id="scan-status"></div>
+      </div>
+      <div class="online-results" id="barcode-manual-results"></div>
+
+      <div class="quick-add-label" style="margin-top:14px;">Search a saved item:</div>
       <div class="field-row search-wrap">
         <input type="text" id="quick-search" placeholder="Type to search, e.g. 'kopi' or 'rice'" autocomplete="off">
       </div>
@@ -577,6 +687,12 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
           <div class="num" id="today-remaining">0</div>
           <div class="lbl">kcal left today</div>
         </div>
+      </div>
+      <div class="macro-summary" id="macro-summary" style="display:none;">
+        <span class="macro-pill" id="macro-protein">P: —</span>
+        <span class="macro-pill" id="macro-carbs">C: —</span>
+        <span class="macro-pill" id="macro-fat">F: —</span>
+        <div class="macro-note">macros from entries with nutrition data · optional</div>
       </div>
       <div class="entry-list" id="entry-list">
         <div class="empty-state">Nothing logged yet today.</div>
@@ -632,6 +748,19 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <button class="add-btn danger" id="reset-btn">Reset all data</button>
       <div class="save-note" id="reset-note"></div>
     </div>
+
+    <div class="card">
+      <h2>Send feedback</h2>
+      <div class="hint">Got a suggestion, found a bug, or want a food added? Send it directly to the developer.</div>
+      <div class="field-row">
+        <input type="text" id="feedback-name" placeholder="Your name (optional)">
+      </div>
+      <div class="field-row">
+        <textarea id="feedback-text" placeholder="Type your feedback or suggestion here..." rows="3" style="resize:vertical;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:12px;font-family:'Inter',sans-serif;font-size:15px;width:100%;min-height:90px;"></textarea>
+      </div>
+      <button class="add-btn secondary" id="feedback-send-btn">Send feedback</button>
+      <div class="save-note" id="feedback-note"></div>
+    </div>
   </div>
 
   <!-- WEEK -->
@@ -654,6 +783,8 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       </div>
       <div class="hint" style="margin-top:6px;">Green bars = under target that day, rust = over. One high day doesn't matter much — the week total is what to watch. This is a rolling 7-day window (today back 6 days), not a fixed calendar week — and any logged exercise is already netted in.</div>
       <div class="hint" style="margin-top:0;">Want to know what you can eat right now, today? Check the "kcal left today" number on the Today tab — this Week view is for the bigger trend, not today's number.</div>
+
+      <div class="week-breakdown" id="week-breakdown"></div>
     </div>
   </div>
 
@@ -716,34 +847,26 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   <div class="view" id="view-drinks">
     <div class="card">
       <h2>What's in your usual order</h2>
-      <div class="hint">Calories and Singapore Nutri-Grade ratings, sourced from BBTea.sg's menu database (which cites the brands' mandatory Nutri-Grade disclosures) and cross-checked against Luckin's own Nutri-Grade announcement. Figures are per standard/full sugar recipe unless noted — treat as estimates, not exact.</div>
+      <div class="hint">Calories and Singapore Nutri-Grade ratings from BBTea.sg (citing mandatory Nutri-Grade disclosures). Per standard/full sugar recipe — treat as estimates.</div>
+
+      <div class="field-row" style="margin-bottom:10px;">
+        <input type="text" id="drinks-search" placeholder="Search drinks (e.g. 'matcha', 'lemon')..." autocomplete="off">
+      </div>
+      <div id="drinks-search-results" class="entry-list" style="margin-bottom:12px;"></div>
 
       <div class="size-toggle" id="size-toggle">
         <button type="button" class="size-btn active" data-size="M">Medium</button>
         <button type="button" class="size-btn" data-size="L">Large</button>
       </div>
-      <div class="hint" style="margin-top:-4px;">Large-cup figures marked <span class="est-tag">est.</span> are calculated from the Medium figure (Large runs ~46% more across both brands' actual data) since not every drink has a published Large number.</div>
 
-      <div class="hint" style="margin-top:2px;">These are for standard/full sugar. Choosing less sugar (e.g. 50% or 30%) lowers the number, but brands don't publish exact per-level figures — treat "less sugar" as directionally lower, not a precise amount.</div>
-
-      <div class="nutri-legend">
-        <span><span class="grade-badge grade-A">A</span>lowest sugar &amp; sat. fat</span>
+      <div class="nutri-legend" style="margin-top:10px;">
+        <span><span class="grade-badge grade-A">A</span>lowest</span>
         <span><span class="grade-badge grade-B">B</span>low</span>
         <span><span class="grade-badge grade-C">C</span>moderate</span>
         <span><span class="grade-badge grade-D">D</span>highest</span>
       </div>
 
-      <div class="brand-block">
-        <div class="brand-title">Luckin Coffee</div>
-        <div class="brand-sub">57 drinks across 8 categories</div>
-        <div id="luckin-menu"></div>
-      </div>
-
-      <div class="brand-block">
-        <div class="brand-title">CHAGEE</div>
-        <div class="brand-sub">26 drinks across 5 categories</div>
-        <div id="chagee-menu"></div>
-      </div>
+      <div id="brand-accordion"></div>
     </div>
 
     <div class="card">
@@ -756,31 +879,396 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
     </div>
   </div>
 
-  <!-- LEARN -->
+  <!-- RECIPES -->
   <div class="view" id="view-learn">
-    <div class="card">
-      <h2>Why "no food after 8pm" isn't the real lever</h2>
-      <div class="myth"><b>The idea:</b> stop eating by a certain hour and you'll lose weight.<br><b>What actually happens:</b> the body responds to total energy in vs. total energy out — it doesn't track the clock.</div>
-      <div class="learn-block">
-        <h3>What actually drives weight change</h3>
-        <p>Weight loss happens when you consistently take in fewer calories than you burn, averaged over days and weeks — not measured against any single meal or cutoff time. A 7pm dinner and a 9pm dinner with identical calories have the same effect on weight.</p>
+    <div class="recipe-intro">Simple, tasty recipes you can actually make. Each one is reasonably healthy, filling, and not complicated.</div>
+
+    <!-- Recipe 1: Sushi Rice with Pan-Fried Salmon -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Japanese Sushi Rice with Pan-Fried Salmon</div>
+          <div class="recipe-tags"><span class="rtag">~550 kcal</span><span class="rtag">2 servings</span><span class="rtag">30 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Japanese Sushi Rice with Pan-Fried Salmon" data-cal="550">+ Log</button>
+          <button class="recipe-toggle" data-target="r1">▾ View</button>
+        </div>
       </div>
-      <div class="learn-block">
-        <h3>Why the "8pm rule" seems to work anyway</h3>
-        <p>It's usually indirect. A cutoff time removes the window where a lot of extra eating happens — snacks in front of a screen, second helpings out of boredom. Cut that window and intake often drops without anyone tracking anything. The clock isn't the mechanism; it's just a simple rule that happens to reduce intake for some people.</p>
+      <div class="recipe-body" id="r1" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>300g Japanese short-grain rice</li>
+          <li>3 tbsp rice vinegar, 2 tbsp sugar, 1 tsp salt (sushi seasoning)</li>
+          <li>200–250g salmon belly or salmon skin pieces</li>
+          <li>1 tbsp soy sauce, 1 tsp sesame oil</li>
+          <li>Spring onion, sesame seeds to serve</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Rinse rice until water runs clear. Cook in a rice cooker or pot (1:1.1 rice to water). Rest 10 min.</li>
+          <li>Mix rice vinegar, sugar, and salt until dissolved. Fold gently into hot rice. Fan to cool — don't refrigerate.</li>
+          <li>Pat salmon dry. Season lightly with salt and pepper. Heat a non-stick pan on medium-high, no oil needed for belly (it's fatty enough).</li>
+          <li>Lay salmon skin-side down for 3–4 min until skin is crispy, then flip for 1–2 min. Deglaze with soy sauce and sesame oil right at the end.</li>
+          <li>Serve salmon over sushi rice, top with spring onion and sesame seeds.</li>
+        </ol>
+        <div class="recipe-tip">💡 Salmon belly is cheap at most supermarkets and much more forgiving than fillet — hard to overcook. Salmon skin pieces are even cheaper and the crispy skin is the best part.</div>
       </div>
-      <div class="learn-block">
-        <h3>Why "weekly," not "daily," is the useful lens</h3>
-        <p>Day-to-day intake naturally swings — a birthday dinner, a stressful week, a big workout. Judging progress by a single day invites frustration for no reason. Looking at the week smooths that noise out and shows the actual trend, which is what the Week tab here is built around.</p>
+    </div>
+
+    <!-- Recipe 2a: Pasta with Minced Meat — Tomato -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Pasta Bolognese (Tomato Minced Meat)</div>
+          <div class="recipe-tags"><span class="rtag">~620 kcal</span><span class="rtag">2 servings</span><span class="rtag">25 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Pasta Bolognese (Tomato Minced Meat)" data-cal="620">+ Log</button>
+          <button class="recipe-toggle" data-target="r2">▾ View</button>
+        </div>
       </div>
-      <div class="learn-block">
-        <h3>A rough starting point</h3>
-        <p>A sustained deficit of about 500 kcal/day tends to track with roughly 0.5kg of loss per week for most people — a rough model, not a guarantee, since metabolism, water, and hormones all move the number around. Consistency over weeks matters far more than any single day's total.</p>
+      <div class="recipe-body" id="r2" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>160g spaghetti or penne</li>
+          <li>250g minced beef or chicken</li>
+          <li>1 can (400g) crushed tomatoes</li>
+          <li>3 cloves garlic, minced</li>
+          <li>1 small onion, diced</li>
+          <li>1 tbsp olive oil</li>
+          <li>Salt, pepper, dried oregano, chilli flakes</li>
+          <li>Parmesan to serve (optional)</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Boil pasta in salted water until al dente. Reserve a cup of pasta water before draining.</li>
+          <li>Heat olive oil in a pan. Fry onion until soft, then garlic for 1 min.</li>
+          <li>Add minced meat, break it up, cook until browned. Season with salt, pepper, oregano.</li>
+          <li>Pour in crushed tomatoes. Simmer 10 min until thickened. Taste and adjust seasoning.</li>
+          <li>Toss in drained pasta, splash pasta water to loosen if needed. Serve with parmesan.</li>
+        </ol>
+        <div class="recipe-tip">💡 The pasta water is starchy and helps the sauce cling to the pasta — don't skip it. Minced chicken is leaner and cheaper; minced beef gives a richer flavour. Both work well.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 2b: Aglio Olio -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Pasta Aglio Olio with Minced Meat</div>
+          <div class="recipe-tags"><span class="rtag">~580 kcal</span><span class="rtag">2 servings</span><span class="rtag">20 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Pasta Aglio Olio with Minced Meat" data-cal="580">+ Log</button>
+          <button class="recipe-toggle" data-target="r3">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r3" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>160g spaghetti</li>
+          <li>200g minced chicken or beef</li>
+          <li>5 cloves garlic, thinly sliced</li>
+          <li>3 tbsp good olive oil</li>
+          <li>1 tsp chilli flakes (adjust to taste)</li>
+          <li>Salt, black pepper</li>
+          <li>Handful of fresh parsley or spring onion</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Boil pasta in well-salted water until just al dente. Reserve a big cup of pasta water.</li>
+          <li>In a wide pan, heat olive oil on medium-low. Add garlic — cook slowly until golden (not brown). Add chilli flakes.</li>
+          <li>Push garlic to the side, turn up heat, add minced meat. Brown well, season.</li>
+          <li>Add drained pasta directly into the pan. Pour in 3–4 tbsp pasta water. Toss everything together — the starchy water and oil emulsify into a light sauce.</li>
+          <li>Finish with parsley or spring onion, a crack of black pepper.</li>
+        </ol>
+        <div class="recipe-tip">💡 Aglio olio lives or dies on two things: good olive oil and properly salted pasta water. Don't rush the garlic — low and slow gets you golden, not bitter.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 3: Egg Fried Rice -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Simple Egg Fried Rice</div>
+          <div class="recipe-tags"><span class="rtag">~420 kcal</span><span class="rtag">2 servings</span><span class="rtag">15 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Simple Egg Fried Rice" data-cal="420">+ Log</button>
+          <button class="recipe-toggle" data-target="r4">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r4" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>2 cups day-old cooked rice (cold rice is key)</li>
+          <li>3 eggs</li>
+          <li>2 cloves garlic, minced</li>
+          <li>2 tbsp light soy sauce</li>
+          <li>1 tsp sesame oil</li>
+          <li>1 tbsp vegetable oil</li>
+          <li>Spring onion, white pepper</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Beat eggs with a pinch of salt. Get your wok or pan very hot.</li>
+          <li>Add oil, then garlic — stir 20 seconds. Add rice, press and toss to break up clumps.</li>
+          <li>Push rice to the side, pour eggs in, scramble until just set, then fold into the rice.</li>
+          <li>Add soy sauce, sesame oil, white pepper. Toss on high heat 1–2 min.</li>
+          <li>Off the heat, add spring onion. Serve immediately.</li>
+        </ol>
+        <div class="recipe-tip">💡 Freshly cooked rice is too wet and clumps — day-old refrigerated rice fries up perfectly. This is the best use of leftover rice.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 4: Miso Soup with Tofu -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Miso Soup with Tofu & Wakame</div>
+          <div class="recipe-tags"><span class="rtag">~90 kcal</span><span class="rtag">2 servings</span><span class="rtag">10 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Miso Soup with Tofu & Wakame" data-cal="90">+ Log</button>
+          <button class="recipe-toggle" data-target="r5">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r5" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>500ml dashi or plain water</li>
+          <li>2 tbsp white or red miso paste</li>
+          <li>150g silken or firm tofu, cubed</li>
+          <li>1 tbsp dried wakame seaweed (rehydrated)</li>
+          <li>Spring onion to serve</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Rehydrate wakame in cold water for 5 min, then drain.</li>
+          <li>Heat dashi or water until just about to boil. Add tofu gently.</li>
+          <li>Turn off heat. Dissolve miso paste in a ladle of the hot liquid first, then stir into the pot. Never boil after adding miso — it kills the flavour.</li>
+          <li>Add wakame, serve immediately with spring onion.</li>
+        </ol>
+        <div class="recipe-tip">💡 Miso paste and wakame are available at most Asian supermarkets in Singapore — giant packs last months in the fridge/pantry. This makes an excellent low-calorie side alongside any meal.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 5: Chicken Congee -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Simple Chicken Congee (Porridge)</div>
+          <div class="recipe-tags"><span class="rtag">~350 kcal</span><span class="rtag">2 servings</span><span class="rtag">40 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Simple Chicken Congee (Porridge)" data-cal="350">+ Log</button>
+          <button class="recipe-toggle" data-target="r6">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r6" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>100g uncooked jasmine rice</li>
+          <li>1L chicken stock or water</li>
+          <li>200g chicken breast or thigh, sliced thin</li>
+          <li>2 slices ginger</li>
+          <li>Soy sauce, sesame oil, white pepper</li>
+          <li>Spring onion, fried shallots, century egg (optional)</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Bring stock and ginger to a boil. Add rice, stir well.</li>
+          <li>Reduce heat to a gentle simmer. Cook 25–30 min, stirring occasionally, until rice breaks down into a thick porridge. Add more water if too thick.</li>
+          <li>Add chicken slices, cook 3–4 min until just cooked through.</li>
+          <li>Season with soy sauce, sesame oil, white pepper. Serve topped with spring onion and fried shallots.</li>
+        </ol>
+        <div class="recipe-tip">💡 Congee is one of the most naturally low-calorie filling meals out there — mostly water and a small amount of rice, but incredibly satisfying. Great for days when you've already eaten a lot.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 7: Honey Garlic Chicken -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Honey Garlic Chicken</div>
+          <div class="recipe-tags"><span class="rtag">~450 kcal</span><span class="rtag">2 servings</span><span class="rtag">20 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Honey Garlic Chicken" data-cal="450">+ Log</button>
+          <button class="recipe-toggle" data-target="r7">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r7" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>400g boneless chicken thigh or breast, sliced</li>
+          <li>4 cloves garlic, minced</li>
+          <li>3 tbsp honey</li>
+          <li>2 tbsp soy sauce</li>
+          <li>1 tbsp rice vinegar or apple cider vinegar</li>
+          <li>1 tsp sesame oil</li>
+          <li>1 tbsp vegetable oil</li>
+          <li>Steamed rice and spring onion to serve</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Mix honey, soy sauce, vinegar and sesame oil into a sauce. Set aside.</li>
+          <li>Heat vegetable oil in a pan on medium-high. Add chicken, cook 4–5 min until golden.</li>
+          <li>Add garlic, stir 30 seconds until fragrant.</li>
+          <li>Pour sauce over chicken. Toss and cook 2–3 min until sauce thickens and coats everything.</li>
+          <li>Serve over rice with spring onion.</li>
+        </ol>
+        <div class="recipe-tip">💡 Chicken thigh stays juicier than breast here — its fat bastes the meat as it cooks. If using breast, don't overcook or it'll dry out fast.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 8: Teriyaki Beef Rice Bowl -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Teriyaki Beef Rice Bowl</div>
+          <div class="recipe-tags"><span class="rtag">~580 kcal</span><span class="rtag">2 servings</span><span class="rtag">20 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Teriyaki Beef Rice Bowl" data-cal="580">+ Log</button>
+          <button class="recipe-toggle" data-target="r8">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r8" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>300g beef slices (shabu shabu cut or thin sirloin)</li>
+          <li>2 cups cooked rice</li>
+          <li>3 tbsp soy sauce</li>
+          <li>2 tbsp mirin or 1 tbsp sugar + 1 tbsp water</li>
+          <li>1 tbsp sake or water</li>
+          <li>1 tsp sesame oil</li>
+          <li>1 tbsp vegetable oil</li>
+          <li>Spring onion and sesame seeds to serve</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Mix soy sauce, mirin, sake into teriyaki sauce.</li>
+          <li>Heat oil in a pan on high. Add beef slices in a single layer — don't stir immediately, let them sear 1 min.</li>
+          <li>Flip, pour teriyaki sauce over, cook another 1–2 min until sauce reduces and caramelises slightly.</li>
+          <li>Finish with sesame oil off the heat.</li>
+          <li>Spoon over steamed rice, top with spring onion and sesame seeds.</li>
+        </ol>
+        <div class="recipe-tip">💡 Thin beef slices (like those sold for shabu shabu or sukiyaki) cook incredibly fast — this whole dish is done in under 5 minutes once your rice is ready. Available in most supermarkets in Singapore.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 9: Lemony Baked Salmon -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Lemony Baked Salmon with Vegetables</div>
+          <div class="recipe-tags"><span class="rtag">~420 kcal</span><span class="rtag">2 servings</span><span class="rtag">25 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Lemony Baked Salmon with Vegetables" data-cal="420">+ Log</button>
+          <button class="recipe-toggle" data-target="r9">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r9" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>2 salmon fillets (~150g each)</li>
+          <li>1 lemon, zested and sliced</li>
+          <li>2 tbsp olive oil</li>
+          <li>3 cloves garlic, minced</li>
+          <li>1 tsp dried herbs (oregano, thyme, or mixed herbs)</li>
+          <li>Salt and pepper</li>
+          <li>Any vegetables — broccoli, cherry tomatoes, zucchini, baby corn</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Preheat oven to 200°C. Line a baking tray with foil.</li>
+          <li>Mix olive oil, garlic, lemon zest, herbs. Rub over salmon and vegetables.</li>
+          <li>Arrange salmon and vegetables on the tray. Top salmon with lemon slices.</li>
+          <li>Bake 15–18 min until salmon flakes easily with a fork.</li>
+          <li>Season, serve immediately.</li>
+        </ol>
+        <div class="recipe-tip">💡 One pan, zero washing up. You can swap salmon for any firm fish fillet — tilapia and barramundi both work well and are cheaper.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 10: Turkish-style Lamb Mince with Rice -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Spiced Lamb Mince with Rice (Keema-style)</div>
+          <div class="recipe-tags"><span class="rtag">~520 kcal</span><span class="rtag">2 servings</span><span class="rtag">25 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Spiced Lamb Mince with Rice (Keema-style)" data-cal="520">+ Log</button>
+          <button class="recipe-toggle" data-target="r10">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r10" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>250g minced lamb or beef</li>
+          <li>1 onion, diced</li>
+          <li>3 cloves garlic, minced</li>
+          <li>1 tomato, diced (or 3 tbsp tomato paste)</li>
+          <li>1 tsp cumin, 1 tsp coriander, 1/2 tsp turmeric, 1/2 tsp chilli powder</li>
+          <li>Salt and pepper</li>
+          <li>Fresh coriander leaves</li>
+          <li>Steamed rice to serve</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Heat oil in a pan. Fry onion until golden, add garlic 1 min.</li>
+          <li>Add all spices, stir 30 seconds until fragrant.</li>
+          <li>Add minced meat, break up and cook until browned.</li>
+          <li>Add tomato, cook down 5–8 min until mixture is dry and aromatic. Season well.</li>
+          <li>Serve over rice, topped with fresh coriander.</li>
+        </ol>
+        <div class="recipe-tip">💡 This spice mix is flexible — go heavy on cumin for more depth, add more chilli for heat. Lamb has a stronger flavour that works really well with these spices; beef is milder. Both are halal-friendly at any certified halal butcher or supermarket halal section.</div>
+      </div>
+    </div>
+
+    <!-- Recipe 11: Chicken Wrap -->
+    <div class="card recipe-card">
+      <div class="recipe-meta-row">
+        <div>
+          <div class="recipe-title">Grilled Chicken Wrap</div>
+          <div class="recipe-tags"><span class="rtag">~480 kcal</span><span class="rtag">2 servings</span><span class="rtag">20 min</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="log-btn recipe-log-btn" data-name="Grilled Chicken Wrap" data-cal="480">+ Log</button>
+          <button class="recipe-toggle" data-target="r11">▾ View</button>
+        </div>
+      </div>
+      <div class="recipe-body" id="r11" style="display:none;">
+        <div class="recipe-section">Ingredients</div>
+        <ul class="recipe-list">
+          <li>2 boneless chicken thighs</li>
+          <li>2 large wraps or flatbreads</li>
+          <li>1 tbsp olive oil</li>
+          <li>1 tsp paprika, 1/2 tsp cumin, salt, pepper</li>
+          <li>Lettuce, sliced tomato, sliced cucumber</li>
+          <li>Plain yogurt or hummus to spread</li>
+          <li>Squeeze of lemon</li>
+        </ul>
+        <div class="recipe-section">Method</div>
+        <ol class="recipe-steps">
+          <li>Mix olive oil with paprika, cumin, salt and pepper. Coat chicken.</li>
+          <li>Grill or pan-fry chicken on medium-high heat, 5 min each side until cooked through. Rest 2 min, then slice.</li>
+          <li>Spread yogurt or hummus on the wrap. Layer in chicken, vegetables, squeeze of lemon.</li>
+          <li>Roll tightly and serve.</li>
+        </ol>
+        <div class="recipe-tip">💡 These keep well — make extra chicken and the next day's lunch is sorted. Works with leftover rotisserie chicken too.</div>
       </div>
     </div>
   </div>
 
-  <footer>Longview v1.7.5<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <div style="text-align:center;margin-top:20px;">
+    <button id="whats-new-reopen" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">✦ What's new in this version</button>
+  </div>
+  <footer>Longview v1.17.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -800,6 +1288,18 @@ function dayLabel(offsetDays) {
   return d.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2);
 }
 let selectedDate = todayKey(0);
+let lastKnownToday = todayKey(0);
+function checkDateRollover() {
+  const nowToday = todayKey(0);
+  if (nowToday !== lastKnownToday) {
+    // Only auto-advance if the user was viewing "today" — never override someone
+    // deliberately browsing a past date.
+    if (selectedDate === lastKnownToday) selectedDate = nowToday;
+    lastKnownToday = nowToday;
+    return true;
+  }
+  return false;
+}
 function formatDateNice(dateKey) {
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
@@ -863,6 +1363,7 @@ async function setExercise(dateKey, list) {
 
 // ---- nav ----
 function switchTab(viewName) {
+  checkDateRollover();
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const activeBtn = document.querySelector(`.tab-btn[data-view="${viewName}"]`);
@@ -885,32 +1386,7 @@ $('dash-log-exercise-btn').addEventListener('click', () => {
 });
 
 // ---- health tip of the day ----
-const healthTips = [
-  "Protein and fibre at a meal tend to keep you fuller for longer than carbs alone.",
-  "A short walk after eating can help you feel more comfortable and settled.",
-  "A glass of water before a meal is an easy way to slow down and check in with your hunger.",
-  "Progress isn't a straight line — one off day doesn't undo a good week.",
-  "Swapping a sugary drink for water or unsweetened tea a few times a week adds up more than you'd think.",
-  "Eating slowly gives your body more time to register fullness.",
-  "A rough night's sleep can make cravings feel stronger the next day — that's normal, not a lack of willpower.",
-  "Frozen vegetables are just as nutritious as fresh, and they last a lot longer.",
-  "Reading a nutrition label gets easier with practice — start with just calories and serving size.",
-  "Movement counts even in small amounts — a 10-minute walk still matters.",
-  "Consistency beats intensity — small habits you can actually keep up tend to win long-term.",
-  "It's normal for weight to shift day to day — water, sodium, and hormones all play a part.",
-  "Adding vegetables to a dish you already love is often easier than switching to a whole new meal.",
-  "A bigger breakfast isn't required — even something small can help you feel more in control of the day.",
-  "Comparing your plate to someone else's isn't that useful — needs vary a lot person to person.",
-  "Muscle takes time to build — strength gains often show up before the scale moves much.",
-  "Fibre-rich foods like oats, beans, and vegetables can help you stay fuller between meals.",
-  "A missed workout doesn't erase progress — the overall pattern matters more than any single session.",
-  "Herbs and spices are a low-effort way to make simpler, less processed meals taste more exciting.",
-  "Standing up and moving for a minute or two every hour adds up over a full day.",
-  "Portion sizes have grown a lot over the decades — what looks 'normal' now is often more than needed.",
-  "Stress can affect appetite in either direction — noticing that pattern in yourself is genuinely useful.",
-  "Plain water is still the simplest way to stay hydrated — flavoured drinks aren't required.",
-  "Cooking at home, even simply, usually means less added sugar and salt than eating out."
-];
+let healthTips = []; // loaded from tips.json
 function getDayOfYear(d) {
   const start = new Date(d.getFullYear(), 0, 0);
   return Math.floor((d - start) / 86400000);
@@ -1031,6 +1507,31 @@ async function renderToday() {
   const totalCal = entries.reduce((s, e) => s + e.calories, 0);
   $('today-cal').textContent = totalCal;
 
+  // macro summary — look up each entry in food/recipe data
+  let totalProtein = 0, totalCarbs = 0, totalFat = 0, macroCount = 0;
+  const macroSource = [
+    ...commonFoods.flatMap(g => g.items),
+    ...recipeData
+  ].filter(f => f.protein != null);
+  entries.forEach(e => {
+    const match = macroSource.find(f => f.name === e.name || e.name.startsWith(f.name));
+    if (match) {
+      totalProtein += match.protein || 0;
+      totalCarbs += match.carbs || 0;
+      totalFat += match.fat || 0;
+      macroCount++;
+    }
+  });
+  const macroSummaryEl = $('macro-summary');
+  if (macroCount > 0) {
+    macroSummaryEl.style.display = 'flex';
+    $('macro-protein').textContent = `P: ${Math.round(totalProtein)}g`;
+    $('macro-carbs').textContent = `C: ${Math.round(totalCarbs)}g`;
+    $('macro-fat').textContent = `F: ${Math.round(totalFat)}g`;
+  } else {
+    macroSummaryEl.style.display = 'none';
+  }
+
   // exercise
   const exercise = await getExercise(key);
   const exList = $('exercise-list');
@@ -1086,7 +1587,7 @@ const portionData = {
     { name: '1 palm-sized & thickness (~100g)', cal: 150 },
     { name: '2 palm-sized (~200g)', cal: 300 }
   ]},
-  'protein-fatty': { label: 'Meat / fish (fattier, e.g. pork belly, salmon)', portions: [
+  'protein-fatty': { label: 'Meat / fish (fattier, e.g. lamb, salmon)', portions: [
     { name: '1 palm-sized & thickness (~100g)', cal: 250 },
     { name: '2 palm-sized (~200g)', cal: 500 }
   ]},
@@ -1156,30 +1657,7 @@ $('portion-fill-btn').addEventListener('click', () => {
 // ---- exercise estimator ----
 // Generic average-adult estimates (~70kg), not personalized by body weight — treat as
 // a starting point, and remember most fitness trackers overestimate burn by 20-40%.
-const exerciseData = [
-  { name: 'Walking (moderate pace)', calPerMin: 4 },
-  { name: 'Brisk walking', calPerMin: 5 },
-  { name: 'Running (~8 km/h)', calPerMin: 10 },
-  { name: 'Running (~10 km/h)', calPerMin: 13 },
-  { name: 'Cycling (moderate)', calPerMin: 8 },
-  { name: 'Swimming (moderate)', calPerMin: 9 },
-  { name: 'Hiking', calPerMin: 7 },
-  { name: 'HIIT / circuit training', calPerMin: 10 },
-  { name: 'Weight training', calPerMin: 5 },
-  { name: 'Gym / general workout', calPerMin: 7 },
-  { name: 'Rowing machine', calPerMin: 9 },
-  { name: 'Elliptical', calPerMin: 8 },
-  { name: 'Stair climbing', calPerMin: 9 },
-  { name: 'Pilates', calPerMin: 4 },
-  { name: 'Yoga', calPerMin: 3 },
-  { name: 'Dancing', calPerMin: 6 },
-  { name: 'Basketball', calPerMin: 8 },
-  { name: 'Football / soccer', calPerMin: 9 },
-  { name: 'Tennis', calPerMin: 7 },
-  { name: 'Badminton', calPerMin: 6 },
-  { name: 'Boxing / bag training', calPerMin: 10 },
-  { name: 'Intimate Activities', calPerMin: 4}
-];
+let exerciseData = []; // loaded from exercises.json
 function populateExerciseSelect() {
   const sel = $('exercise-activity');
   exerciseData.forEach((a, i) => {
@@ -1253,86 +1731,17 @@ $('custom-add-btn').addEventListener('click', async () => {
   renderCustomFoods();
   refreshFoodIndex();
 });
-const commonFoods = [
-  { group: 'Meals', items: [
-    { name: 'Chicken rice (1 plate)', cal: 600 },
-    { name: 'Fried rice (1 plate)', cal: 650 },
-    { name: 'Nasi lemak (1 packet)', cal: 500 },
-    { name: 'Laksa (1 bowl)', cal: 600 },
-    { name: 'Char kway teow (1 plate)', cal: 750 },
-    { name: 'Mee goreng (1 plate)', cal: 550 },
-    { name: 'Wanton mee (1 bowl)', cal: 450 },
-    { name: 'Bak chor mee (1 bowl)', cal: 500 },
-    { name: 'Roti prata, plain (1 pc)', cal: 300 },
-    { name: 'Economical rice (2 dishes)', cal: 600 },
-    { name: 'Kaya toast set (2 eggs)', cal: 350 },
-    { name: 'Instant noodles (1 pack)', cal: 400 },
-    { name: 'White rice (1 bowl)', cal: 200 },
-    { name: 'Boiled egg (1)', cal: 70 },
-    { name: 'Banana (1 medium)', cal: 105 },
-    { name: 'Apple (1 medium)', cal: 95 }
-  ]},
-  { group: 'Frozen & fried', items: [
-    { name: 'Chicken nuggets (6 pcs)', cal: 290 },
-    { name: 'Fish fillet, breaded (1 pc)', cal: 210 },
-    { name: 'Chicken cutlet / katsu (1 pc)', cal: 280 },
-    { name: 'Popcorn chicken (small pack)', cal: 280 },
-    { name: 'Fish fingers (4 pcs)', cal: 240 }
-  ]},
-  { group: 'Snacks & biscuits', items: [
-    { name: 'Plain tea biscuits (4 pcs, e.g. Marie)', cal: 120 },
-    { name: 'Digestive biscuits (2 pcs)', cal: 140 },
-    { name: 'Chocolate-coated biscuits (2 pcs)', cal: 150 },
-    { name: 'Cream-filled sandwich biscuits (3 pcs)', cal: 160 },
-    { name: 'Potato chips (small pack, ~30g)', cal: 160 },
-    { name: 'Prawn crackers / keropok (small pack)', cal: 150 },
-    { name: 'Chocolate bar, standard (1 bar, ~45g)', cal: 230 },
-    { name: 'Cup noodles (1 cup)', cal: 300 },
-    { name: 'Ice cream (1 scoop)', cal: 140 },
-    { name: 'Popcorn, sweet or salted (1 cup)', cal: 150 },
-    { name: 'Granola / muesli bar (1 bar)', cal: 120 },
-    { name: 'Plain crackers (5 pcs)', cal: 80 }
-  ]},
-  { group: 'Fast food (generic)', items: [
-    { name: 'Burger, regular cheeseburger', cal: 300 },
-    { name: 'Burger, large/premium', cal: 550 },
-    { name: 'French fries, small', cal: 230 },
-    { name: 'French fries, medium', cal: 340 },
-    { name: 'Fried chicken (1 piece)', cal: 280 },
-    { name: 'Pizza (1 slice, regular)', cal: 285 },
-    { name: 'Sandwich / sub (6-inch)', cal: 350 },
-    { name: 'Donut (1 glazed)', cal: 260 }
-  ]},
-  { group: 'Kopitiam drinks', items: [
-    { name: 'Kopi (coffee, condensed milk)', cal: 130 },
-    { name: 'Kopi Siew Dai (less sweet)', cal: 100 },
-    { name: 'Kopi O (black coffee, sugar)', cal: 70 },
-    { name: 'Kopi O Siew Dai (less sweet)', cal: 45 },
-    { name: 'Kopi O Kosong (black, no sugar)', cal: 5 },
-    { name: 'Kopi C (coffee, evaporated milk & sugar)', cal: 120 },
-    { name: 'Kopi C Siew Dai (less sweet)', cal: 90 },
-    { name: 'Teh (tea, condensed milk)', cal: 150 },
-    { name: 'Teh Siew Dai (less sweet)', cal: 115 },
-    { name: 'Teh O (tea, sugar, no milk)', cal: 90 },
-    { name: 'Teh O Siew Dai (less sweet)', cal: 55 },
-    { name: 'Teh O Kosong (plain tea, no sugar)', cal: 5 },
-    { name: 'Teh C (tea, evaporated milk & sugar)', cal: 130 },
-    { name: 'Teh C Siew Dai (less sweet)', cal: 95 }
-  ]},
-  { group: 'Cafe & other drinks', items: [
-    { name: 'Latte, medium (dairy)', cal: 190 },
-    { name: 'Milo (regular)', cal: 200 },
-    { name: 'Soft drink (1 can)', cal: 140 }
-  ]}
-];
-
+let commonFoods = []; // loaded from foods.json
 let foodIndex = [];
 async function refreshFoodIndex() {
   const customFoods = await getCustomFoods();
   const index = [];
   customFoods.forEach(f => index.push({ name: f.name, cal: f.cal, group: 'My foods' }));
   commonFoods.forEach(g => {
-    g.items.forEach(item => index.push({ name: item.name, cal: item.cal, group: g.group }));
+    g.items.forEach(item => index.push({
+      name: item.name, cal: item.cal, group: g.group,
+      protein: item.protein, carbs: item.carbs, fat: item.fat
+    }));
   });
   foodIndex = index;
 }
@@ -1360,7 +1769,10 @@ $('quick-search').addEventListener('input', (e) => {
   matches.forEach(f => {
     const row = document.createElement('div');
     row.className = 'autocomplete-item';
-    row.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="cal">${f.cal} kcal</span>`;
+    const macroHint = (f.protein != null)
+      ? `<span style="font-size:10.5px;color:var(--text-dim);margin-left:6px;">P${Math.round(f.protein)}·C${Math.round(f.carbs)}·F${Math.round(f.fat)}</span>`
+      : '';
+    row.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="cal">${f.cal} kcal${macroHint}</span>`;
     row.addEventListener('click', () => {
       fillFromFood(f);
       $('quick-search').value = '';
@@ -1380,6 +1792,83 @@ $('quick-search').addEventListener('input', (e) => {
   }
 });
 
+// ---- shared: commit an Open Food Facts product to the log ----
+async function useOffProduct(displayName, cal) {
+  $('in-name').value = displayName;
+  $('in-cal').value = cal;
+  $('in-sugar').focus();
+  const customFoods = await getCustomFoods();
+  if (!customFoods.some(f => f.name === displayName)) {
+    customFoods.push({ id: Date.now(), name: displayName, cal });
+    await setCustomFoods(customFoods);
+    await refreshFoodIndex();
+    await renderCustomFoods();
+  }
+  $('quick-search').value = '';
+  $('autocomplete-list').innerHTML = '';
+  $('online-results').innerHTML = '';
+  $('online-search-btn').style.display = 'none';
+}
+
+// ---- inline manual add widget ----
+// Shows when online search returns nothing — pre-fills name from the search query
+// so user doesn't have to retype anything.
+function showInlineAdd(container, prefillName = '') {
+  container.innerHTML = `
+    <div class="inline-add-wrap">
+      <div class="inline-add-label">Not found online — add it yourself:</div>
+      <div class="field-row">
+        <input type="text" class="name" id="inline-add-name" placeholder="Food name" value="${escapeHtml(prefillName)}">
+      </div>
+      <div class="field-row">
+        <input type="number" class="num" id="inline-add-cal" placeholder="Calories" min="0">
+        <input type="number" class="num" id="inline-add-sugar" placeholder="Sugar (g)" min="0">
+      </div>
+      <button class="add-btn" id="inline-add-confirm">Add entry</button>
+    </div>
+  `;
+  // If name is already filled, jump focus to calories
+  if (prefillName) {
+    setTimeout(() => { const c = $('inline-add-cal'); if (c) c.focus(); }, 100);
+  }
+  $('inline-add-confirm').addEventListener('click', async () => {
+    const name = $('inline-add-name').value.trim();
+    const cal = parseFloat($('inline-add-cal').value) || 0;
+    const sugar = parseFloat($('inline-add-sugar').value) || 0;
+    if (!name) return;
+    const key = selectedDate;
+    const entries = await getEntries(key);
+    entries.push({ id: Date.now(), name, calories: cal, sugar });
+    await setEntries(key, entries);
+    // also save to My foods so it's searchable next time
+    const customFoods = await getCustomFoods();
+    if (!customFoods.some(f => f.name === name)) {
+      customFoods.push({ id: Date.now() + 1, name, cal });
+      await setCustomFoods(customFoods);
+      await refreshFoodIndex();
+      await renderCustomFoods();
+    }
+    container.innerHTML = `<div class="online-status">✓ "${escapeHtml(name)}" added and saved to My foods.</div>`;
+    $('quick-search').value = '';
+    $('autocomplete-list').innerHTML = '';
+    $('online-search-btn').style.display = 'none';
+    renderToday();
+  });
+}
+function extractCalFromProduct(p) {
+  const nutriments = p.nutriments || {};
+  let cal = null, calLabel = '';
+  // Use explicit null/undefined check so 0 kcal products are treated as valid
+  if (nutriments['energy-kcal_serving'] != null) {
+    cal = Math.round(nutriments['energy-kcal_serving']);
+    calLabel = p.serving_size ? `${cal} kcal / ${p.serving_size}` : `${cal} kcal / serving`;
+  } else if (nutriments['energy-kcal_100g'] != null) {
+    cal = Math.round(nutriments['energy-kcal_100g']);
+    calLabel = `${cal} kcal / 100g`;
+  }
+  return { cal, calLabel };
+}
+
 // ---- online search (Open Food Facts) ----
 $('online-search-btn').addEventListener('click', async () => {
   const query = $('quick-search').value.trim();
@@ -1395,22 +1884,14 @@ $('online-search-btn').addEventListener('click', async () => {
 
     resultsEl.innerHTML = '';
     if (products.length === 0) {
-      resultsEl.innerHTML = '<div class="online-status">No online matches — try a different spelling, or just type it in manually.</div>';
+      resultsEl.innerHTML = '';
+      showInlineAdd(resultsEl, query);
       return;
     }
 
     products.slice(0, 8).forEach(p => {
-      const nutriments = p.nutriments || {};
-      let cal = null;
-      let calLabel = '';
-      if (nutriments['energy-kcal_serving']) {
-        cal = Math.round(nutriments['energy-kcal_serving']);
-        calLabel = p.serving_size ? `${cal} kcal / ${p.serving_size}` : `${cal} kcal / serving`;
-      } else if (nutriments['energy-kcal_100g']) {
-        cal = Math.round(nutriments['energy-kcal_100g']);
-        calLabel = `${cal} kcal / 100g`;
-      }
-      if (!cal) return;
+      const { cal, calLabel } = extractCalFromProduct(p);
+      if (cal == null) return;
 
       const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
       const row = document.createElement('div');
@@ -1422,33 +1903,225 @@ $('online-search-btn').addEventListener('click', async () => {
         </span>
         <span class="cal">${cal} kcal</span>
       `;
-      row.addEventListener('click', async () => {
-        $('in-name').value = displayName;
-        $('in-cal').value = cal;
-        $('in-sugar').focus();
-        // auto-save so it's local and instant next time
-        const customFoods = await getCustomFoods();
-        if (!customFoods.some(f => f.name === displayName)) {
-          customFoods.push({ id: Date.now(), name: displayName, cal });
-          await setCustomFoods(customFoods);
-          await refreshFoodIndex();
-          await renderCustomFoods();
-        }
-        $('quick-search').value = '';
-        $('autocomplete-list').innerHTML = '';
-        $('online-results').innerHTML = '';
-        $('online-search-btn').style.display = 'none';
-      });
+      row.addEventListener('click', () => useOffProduct(displayName, cal));
       resultsEl.appendChild(row);
     });
 
     if (!resultsEl.children.length) {
-      resultsEl.innerHTML = '<div class="online-status">Found matches, but none had usable calorie data.</div>';
+      showInlineAdd(resultsEl, query);
     }
   } catch (err) {
     resultsEl.innerHTML = '<div class="online-status">Couldn\'t reach Open Food Facts — check your connection and try again.</div>';
   }
 });
+
+// ---- barcode scanning ----
+let barcodeScanner = null;
+let flashOn = false;
+async function stopBarcodeScanner() {
+  if (barcodeScanner) {
+    try { await barcodeScanner.stop(); barcodeScanner.clear(); } catch (e) {}
+    barcodeScanner = null;
+  }
+  flashOn = false;
+  $('scan-flash-btn').style.display = 'none';
+  $('scan-flash-btn').classList.remove('on');
+  $('scan-zoom-wrap').style.display = 'none';
+  $('scan-zoom').value = 1;
+  $('barcode-scanner-wrap').style.display = 'none';
+}
+$('scan-barcode-btn').addEventListener('click', async () => {
+  if (typeof Html5Qrcode === 'undefined') {
+    $('scan-status').textContent = "Scanner failed to load — check your connection and try again.";
+    $('barcode-scanner-wrap').style.display = 'block';
+    return;
+  }
+  $('barcode-scanner-wrap').style.display = 'block';
+  $('scan-status').textContent = 'Starting camera…';
+  const formats = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.CODE_93,
+    Html5QrcodeSupportedFormats.CODABAR,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.QR_CODE
+  ] : undefined;
+  barcodeScanner = new Html5Qrcode('barcode-reader', formats ? { formatsToSupport: formats, verbose: false } : undefined);
+  try {
+    await barcodeScanner.start(
+      { facingMode: 'environment' },
+      {
+        fps: 15,
+        // No qrbox — scan the entire camera frame. More reliable on iOS Safari
+        // where the cropped scan region often doesn't align with what's displayed.
+        disableFlip: false
+      },
+      async (decodedText) => {
+        $('scan-status').textContent = `Found: ${decodedText} — looking it up…`;
+        await stopBarcodeScanner();
+        await lookupBarcode(decodedText);
+      },
+      () => {} // ignore per-frame "no code found" noise
+    );
+    $('scan-status').textContent = 'Hold the barcode flat, well-lit, filling most of the frame — a little further back tends to focus better than very close up.';
+    // torch/flash and zoom: only some browsers expose these — fails silently elsewhere
+    try {
+      const capabilities = barcodeScanner.getRunningTrackCapabilities();
+      if (capabilities && capabilities.torch) {
+        $('scan-flash-btn').style.display = 'inline-block';
+      }
+    } catch (e) {}
+    try {
+      const videoEl = document.querySelector('#barcode-reader video');
+      if (videoEl && videoEl.srcObject) {
+        const vTrack = videoEl.srcObject.getVideoTracks()[0];
+        if (vTrack) {
+          const caps = vTrack.getCapabilities();
+          if (caps.zoom) {
+            $('scan-zoom-wrap').style.display = 'flex';
+            $('scan-zoom').min = caps.zoom.min;
+            $('scan-zoom').max = Math.min(caps.zoom.max, 8);
+            $('scan-zoom').step = caps.zoom.step || 0.1;
+            $('scan-zoom').value = caps.zoom.min;
+          }
+        }
+      }
+    } catch (e) {}
+  } catch (err) {
+    $('scan-status').textContent = "Couldn't access the camera — check camera permissions for this site in Settings.";
+  }
+});
+$('scan-cancel-btn').addEventListener('click', stopBarcodeScanner);
+$('scan-flash-btn').addEventListener('click', async () => {
+  if (!barcodeScanner) return;
+  try {
+    flashOn = !flashOn;
+    await barcodeScanner.applyVideoConstraints({ advanced: [{ torch: flashOn }] });
+    $('scan-flash-btn').classList.toggle('on', flashOn);
+  } catch (e) {
+    flashOn = false;
+    $('scan-status').textContent = "This device/browser doesn't support flash control from the web.";
+  }
+});
+
+
+// ---- zoom control for live scanner ----
+$('scan-zoom').addEventListener('input', async (e) => {
+  if (!barcodeScanner) return;
+  try {
+    const track = barcodeScanner.getRunningTrackSettings && barcodeScanner.getRunningTrackSettings();
+    // Access the actual video track for zoom
+    const videoEl = document.querySelector('#barcode-reader video');
+    if (videoEl && videoEl.srcObject) {
+      const vTrack = videoEl.srcObject.getVideoTracks()[0];
+      if (vTrack) {
+        const capabilities = vTrack.getCapabilities();
+        if (capabilities.zoom) {
+          const zoomVal = parseFloat(e.target.value);
+          const maxZoom = Math.min(capabilities.zoom.max, 5);
+          await vTrack.applyConstraints({ advanced: [{ zoom: Math.min(zoomVal, maxZoom) }] });
+        }
+      }
+    }
+  } catch (err) {
+    // zoom not supported — fail silently
+  }
+});
+
+async function lookupBarcode(code, targetEl) {
+  const resultsEl = targetEl || $('online-results');
+  resultsEl.innerHTML = '<div class="online-status">Looking up barcode…</div>';
+
+  // Try regional databases in order — sg/my products sometimes only appear regionally
+  const endpoints = [
+    `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://sg.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://my.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://au.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`,
+    `https://uk.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`
+  ];
+
+  let found = null;
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.status === 1 && data.product && data.product.product_name) {
+        found = data.product;
+        break;
+      }
+    } catch (e) { continue; }
+  }
+
+    if (!found) {
+    // Barcode not in database — try searching by the barcode number itself first
+    // (some products indexed with barcode in text fields), then fall back to name search
+    resultsEl.innerHTML = '<div class="online-status">Barcode not found — trying a text search…</div>';
+    let textSearchFound = false;
+    try {
+      const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(code)}&json=1&page_size=5&search_simple=1&action=process`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const products = (data.products || []).filter(p => p.product_name);
+      if (products.length > 0) {
+        resultsEl.innerHTML = '';
+        products.slice(0, 5).forEach(p => {
+          const { cal, calLabel } = extractCalFromProduct(p);
+          if (cal == null) return;
+          const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
+          const row = document.createElement('div');
+          row.className = 'online-item';
+          row.innerHTML = `
+            <span>
+              <span class="online-tag">web</span><span class="name">${escapeHtml(displayName)}</span>
+              <span class="brand">${escapeHtml(calLabel)}</span>
+            </span>
+            <span class="cal">${cal} kcal</span>
+          `;
+          row.addEventListener('click', () => { useOffProduct(displayName, cal); resultsEl.innerHTML = ''; });
+          resultsEl.appendChild(row);
+          textSearchFound = true;
+        });
+        if (!resultsEl.children.length) textSearchFound = false;
+      }
+    } catch (e) {}
+
+    if (!textSearchFound) {
+      showInlineAdd(resultsEl, '');
+    }
+    return;
+  }
+
+  try {
+    const p = found;
+    const { cal, calLabel } = extractCalFromProduct(p);
+    if (cal == null) {
+      resultsEl.innerHTML = '<div class="online-status">Found the product, but it has no usable calorie data in the database.</div>';
+      return;
+    }
+    const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
+    resultsEl.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'online-item';
+    row.innerHTML = `
+      <span>
+        <span class="online-tag">scanned</span><span class="name">${escapeHtml(displayName)}</span>
+        <span class="brand">${escapeHtml(calLabel)}</span>
+      </span>
+      <span class="cal">${cal} kcal</span>
+    `;
+    row.addEventListener('click', () => useOffProduct(displayName, cal));
+    resultsEl.appendChild(row);
+    await useOffProduct(displayName, cal);
+  } catch (err) {
+    resultsEl.innerHTML = '<div class="online-status">Couldn\'t look up that barcode — check your connection and try again.</div>';
+  }
+}
 
 // category browser: chips -> items -> back
 function renderCategoryChips() {
@@ -1559,7 +2232,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.7.5', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.17.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1628,6 +2301,7 @@ async function renderWeek() {
   strip.innerHTML = '';
   let weekNet = 0;
   let anyLogged = false;
+  const breakdownRows = [];
 
   for (let offset = 6; offset >= 0; offset--) {
     const key = todayKey(offset);
@@ -1662,7 +2336,29 @@ async function renderWeek() {
     label.textContent = dayLabel(offset);
     dayEl.appendChild(bar); dayEl.appendChild(label);
     strip.appendChild(dayEl);
+
+    // breakdown row (built oldest-to-newest here, reversed to newest-first below)
+    const row = document.createElement('div');
+    row.className = 'week-day-row';
+    row.addEventListener('click', () => { selectedDate = key; switchTab('today'); });
+    let netHtml;
+    if (!hasData) {
+      netHtml = '<span class="day-net empty">—</span>';
+    } else {
+      const sign = diff <= 0 ? '−' : '+';
+      netHtml = `<span class="day-net ${diff <= 0 ? 'good' : 'bad'}">${sign}${Math.abs(Math.round(diff)).toLocaleString()}</span>`;
+    }
+    row.innerHTML = `
+      <span class="day-name${offset === 0 ? ' today' : ''}">${dayLabel(offset)}</span>
+      <span class="day-stats"><b>${dayCal.toLocaleString()}</b> eaten · <b>${dayBurned.toLocaleString()}</b> burned</span>
+      ${netHtml}
+    `;
+    breakdownRows.push(row);
   }
+  breakdownRows.reverse();
+  const breakdownEl = $('week-breakdown');
+  breakdownEl.innerHTML = '';
+  breakdownRows.forEach(r => breakdownEl.appendChild(r));
 
   const netEl = $('week-net');
   if (!anyLogged) {
@@ -1760,124 +2456,8 @@ $('calc-btn').addEventListener('click', () => {
 // Sourced from BBTea.sg's Singapore menu database (calM/calL as published; calL: null where
 // BBTea.sg doesn't list a Large size). Cross-checked against Luckin's Jan 2026 Nutri-Grade
 // reformulation announcement (no Nutri-Grade D drinks remain — matches this dataset).
-const luckinMenu = [
-  { category: 'Americano', items: [
-    { name: 'Americano', calM: 26, calL: null, grade: 'A' },
-    { name: 'Dark Roast Americano', calM: 24, calL: null, grade: 'A' },
-    { name: 'Extra Strong Americano', calM: 24, calL: null, grade: 'A' },
-    { name: 'Grape Fizzy Americano', calM: 163, calL: 238, grade: 'C' },
-    { name: 'Hot Orange Americano', calM: 197, calL: null, grade: 'C' },
-    { name: 'Iced Americano', calM: 26, calL: null, grade: 'A' },
-    { name: 'Iced Extra Strong Americano', calM: 31, calL: null, grade: 'A' },
-    { name: 'Little Butter Americano', calM: 197, calL: null, grade: 'C' },
-    { name: 'Orange Americano', calM: 197, calL: 287, grade: 'C' },
-    { name: 'Pomelo Americano', calM: 158, calL: 231, grade: 'C' }
-  ]},
-  { category: 'Barista Coffee', items: [
-    { name: 'Caffe Mocha', calM: 329, calL: null, grade: 'C' },
-    { name: 'Cappuccino', calM: 317, calL: null, grade: 'C' },
-    { name: 'Caramel Macchiato', calM: 333, calL: null, grade: 'C' },
-    { name: 'Flat White', calM: 307, calL: null, grade: 'C' },
-    { name: 'Latte', calM: 158, calL: null, grade: 'A' },
-    { name: 'Oat Milk Latte', calM: 278, calL: null, grade: 'B' },
-    { name: 'Oat Shakerato', calM: 182, calL: null, grade: 'B' }
-  ]},
-  { category: 'Flavored Lattes', items: [
-    { name: 'Brown Sugar Boba Latte', calM: 307, calL: null, grade: 'C' },
-    { name: 'Coconut Latte', calM: 254, calL: null, grade: 'C' },
-    { name: 'Coconut Velvet Latte', calM: 432, calL: null, grade: 'C' },
-    { name: 'Creamy Dreamy Latte', calM: 605, calL: null, grade: 'C' },
-    { name: 'Dark Roast Latte', calM: 202, calL: null, grade: 'B' },
-    { name: 'Dark Roast Oat Latte', calM: 206, calL: null, grade: 'B' },
-    { name: 'Iced Minty Coconut Latte', calM: 250, calL: null, grade: 'C' },
-    { name: 'Little Butter Latte', calM: 350, calL: null, grade: 'C' },
-    { name: 'Mascarpone Latte', calM: 312, calL: null, grade: 'C' },
-    { name: 'Matcha Latte', calM: 446, calL: null, grade: 'C' },
-    { name: 'Matcha Oat Latte', calM: 331, calL: null, grade: 'C' },
-    { name: 'Pink Blossom Latte', calM: 240, calL: null, grade: 'B' },
-    { name: 'Pistachio Oat Latte', calM: 350, calL: null, grade: 'B' },
-    { name: 'Sea Salt Caramel Latte', calM: 288, calL: null, grade: 'C' },
-    { name: 'Snowy Matcha Latte', calM: 331, calL: null, grade: 'C' },
-    { name: 'Vanilla Flavoured Creamy Latte', calM: 360, calL: null, grade: 'C' },
-    { name: 'Velvet Latte', calM: 408, calL: null, grade: 'C' },
-    { name: 'Velvety Matcha Latte', calM: 221, calL: null, grade: 'B' }
-  ]},
-  { category: 'Frappe', items: [
-    { name: 'Blue-ming Coconut Frappe', calM: 331, calL: null, grade: 'C' },
-    { name: 'Chocolate Frappe', calM: 370, calL: null, grade: 'C' },
-    { name: 'Matcha Frappe', calM: 442, calL: null, grade: 'C' },
-    { name: 'Matcha Jasmine Frappe', calM: 370, calL: null, grade: 'C' },
-    { name: 'Pistachio Chocolate Frappe', calM: 422, calL: null, grade: 'C' },
-    { name: 'Vanilla Flavored Frappe', calM: 360, calL: null, grade: 'C' }
-  ]},
-  { category: 'Juice & Caffeine Free', items: [
-    { name: 'Active Apple Kale Tea', calM: 144, calL: null, grade: 'C' },
-    { name: 'Zesty Pomelo', calM: 139, calL: 203, grade: 'C' }
-  ]},
-  { category: 'Luckin Black Cup', items: [
-    { name: 'Gesha Americano', calM: 24, calL: null, grade: 'A' },
-    { name: 'Gesha Flat White', calM: 269, calL: null, grade: 'C' },
-    { name: 'Gesha Latte', calM: 274, calL: null, grade: 'C' },
-    { name: 'Yirgacheffe Americano', calM: 27, calL: null, grade: 'A' },
-    { name: 'Yirgacheffe Flat White', calM: 307, calL: null, grade: 'C' },
-    { name: 'Yirgacheffe Latte', calM: 187, calL: null, grade: 'B' }
-  ]},
-  { category: 'Other Drinks', items: [
-    { name: 'Chocolate Flavoured Milk', calM: 499, calL: null, grade: 'C' },
-    { name: 'Coconut Matcha Latte', calM: 374, calL: null, grade: 'C' },
-    { name: 'First Crush Tea', calM: 206, calL: null, grade: 'B' },
-    { name: 'Jasmine Kiss Tea', calM: 206, calL: null, grade: 'B' },
-    { name: 'Milk', calM: 360, calL: null, grade: 'C' },
-    { name: 'Tropical Coco-Mango Refresher', calM: 269, calL: null, grade: 'C' }
-  ]},
-  { category: 'Yuan-Yang', items: [
-    { name: 'Ceylon Yuan-Yang', calM: 211, calL: null, grade: 'C' },
-    { name: 'Jasmine Blossom Yuan-Yang', calM: 221, calL: null, grade: 'C' }
-  ]}
-];
-const chageeMenu = [
-  { category: 'Seasonal Drinks', items: [
-    { name: 'Apple English Breakfast Milk Tea', calM: 184, calL: 217, grade:'B'},
-    { name: 'Apple English Breakfast Lemon Tea', calM: 184, calL: 230, grade:'C'},
-    { name: 'Apple English Breakfast Brewed Tea', calM:108, calL:130, grade:'A'}
-  ]},
-  { category: 'Brewed Tea', items: [
-    { name: 'BO.YA Jasmine Tie Guan Yin Brewed Tea', calM: 120, calL: 175, grade: 'B' },
-    { name: 'Da Hong Pao Pure Tea', calM: 96, calL: 140, grade: 'B' },
-    { name: 'Glutinous Pure Green Tea', calM: 96, calL: 140, grade: 'B' },
-    { name: 'Osmanthus Oolong Tea', calM: 106, calL: 154, grade: 'B' },
-    { name: 'Peach Oolong Tea', calM: 106, calL: 154, grade: 'B' },
-    { name: 'Tie Guan Yin Pure Tea', calM: 106, calL: 154, grade: 'B' }
-  ]},
-  { category: 'Fresh Fruit Tea', items: [
-    { name: 'Da Hong Pao Lemon Tea', calM: 254, calL: 371, grade: 'C' },
-    { name: 'Glutinous Lemon Tea', calM: 254, calL: 371, grade: 'C' },
-    { name: 'Jasmine Lemon Tea', calM: 254, calL: 371, grade: 'C' }
-  ]},
-  { category: 'Fresh Milk Tea', items: [
-    { name: 'BO.YA Jasmine Green Milk Tea', calM: 206, calL: 301, grade: 'B' },
-    { name: 'BO.YA Jasmine Tie Guan Yin Milk Tea', calM: 206, calL: 301, grade: 'B' },
-    { name: 'Da Hong Pao Milk Tea', calM: 178, calL: 259, grade: 'B' },
-    { name: 'Glutinous Green Milk Tea', calM: 206, calL: 301, grade: 'B' },
-    { name: 'Hojicha Genmai Milk Tea', calM: 230, calL: 336, grade: 'B' },
-    { name: 'Lapsang Souchong Black Milk Tea', calM: 202, calL: 294, grade: 'B' },
-    { name: 'Osmanthus Oolong Milk Tea', calM: 202, calL: 294, grade: 'B' },
-    { name: 'Peach Oolong Milk Tea', calM: 216, calL: 315, grade: 'B' },
-    { name: 'Tie Guan Yin Milk Tea', calM: 206, calL: 301, grade: 'B' }
-  ]},
-  { category: 'Snow Cap Milk Tea', items: [
-    { name: 'Da Hong Pao Snow Cap Milk Tea', calM: 326, calL: null, grade: 'C' },
-    { name: 'Osmanthus Oolong Snow Cap Milk Tea', calM: 326, calL: null, grade: 'C' }
-  ]},
-  { category: 'Teaspresso', items: [
-    { name: 'Caramel Da Hong Pao Tea Frappe', calM: 514, calL: null, grade: 'D' },
-    { name: 'Da Hong Pao Tea Latte', calM: 298, calL: null, grade: 'C' },
-    { name: 'Da Hong Pao Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
-    { name: 'Lapsang Souchong Tea Latte', calM: 298, calL: null, grade: 'C' },
-    { name: 'Lapsang Souchong Teaspresso Pure', calM: 67, calL: null, grade: 'A' },
-    { name: 'Oreo Lapsang Souchong Tea Frappe', calM: 446, calL: null, grade: 'C' }
-  ]}  
-];
+let luckinMenu = []; // loaded from drinks.json
+let chageeMenu = []; // loaded from drinks.json
 
 let drinkSize = 'M';
 function getDisplayCal(item) {
@@ -1886,32 +2466,118 @@ function getDisplayCal(item) {
   return { value: Math.round(item.calM * 1.46), estimated: true };
 }
 
-function renderDrinkMenu(containerId, menu) {
-  const container = $(containerId);
-  container.innerHTML = '';
-  menu.forEach(cat => {
-    const catTitle = document.createElement('div');
-    catTitle.className = 'drink-category-title';
-    catTitle.textContent = cat.category;
-    container.appendChild(catTitle);
-
-    cat.items.forEach(item => {
-      const { value, estimated } = getDisplayCal(item);
-      const row = document.createElement('div');
-      row.className = 'drink-item';
-      row.innerHTML = `
-        <span class="drink-name">${escapeHtml(item.name)}</span>
-        <span class="drink-meta">
-          <span class="drink-cal">${value} kcal${estimated ? '<span class="est-tag">est.</span>' : ''}</span>
-          <span class="grade-badge grade-${item.grade}">${item.grade}</span>
-          <button class="log-btn" data-name="${escapeHtml(item.name)} (${drinkSize})" data-cal="${value}">+ Log</button>
-        </span>
-      `;
-      container.appendChild(row);
+// ---- build a flat drink index for local search ----
+function buildDrinkIndex() {
+  const index = [];
+  const brands = [
+    { brand: 'Luckin Coffee', menu: luckinMenu },
+    { brand: 'CHAGEE', menu: chageeMenu }
+  ];
+  brands.forEach(({ brand, menu }) => {
+    menu.forEach(cat => {
+      cat.items.forEach(item => {
+        index.push({ brand, category: cat.category, item });
+      });
     });
   });
-  container.querySelectorAll('.log-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  return index;
+}
+let drinkIndex = [];
+
+function makeDrinkRow(item, brandName) {
+  const { value, estimated } = getDisplayCal(item);
+  const row = document.createElement('div');
+  row.className = 'drink-item';
+  row.innerHTML = `
+    <span class="drink-name">${escapeHtml(item.name)}</span>
+    <span class="drink-meta">
+      <span class="drink-cal">${value} kcal${estimated ? '<span class="est-tag">est.</span>' : ''}</span>
+      <span class="grade-badge grade-${item.grade}">${item.grade}</span>
+      <button class="log-btn" data-name="${escapeHtml(item.name)} (${drinkSize})" data-cal="${value}">+ Log</button>
+    </span>
+  `;
+  row.querySelector('.log-btn').addEventListener('click', async () => {
+    const btn = row.querySelector('.log-btn');
+    const key = selectedDate;
+    const entries = await getEntries(key);
+    entries.push({ id: Date.now(), name: btn.dataset.name, calories: parseFloat(btn.dataset.cal), sugar: 0 });
+    await setEntries(key, entries);
+    btn.textContent = 'Logged ✓';
+    btn.classList.add('done');
+    setTimeout(() => { btn.textContent = '+ Log'; btn.classList.remove('done'); }, 1500);
+    renderToday();
+  });
+  return row;
+}
+
+function renderBrandAccordion() {
+  const accordion = $('brand-accordion');
+  accordion.innerHTML = '';
+  const brands = [
+    { brand: 'Luckin Coffee', menu: luckinMenu },
+    { brand: 'CHAGEE', menu: chageeMenu }
+  ];
+  brands.forEach(({ brand, menu }) => {
+    const totalDrinks = menu.reduce((s, c) => s + c.items.length, 0);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'brand-accordion-btn';
+    btn.innerHTML = `
+      <div>
+        <div class="brand-accordion-name">${escapeHtml(brand)}</div>
+        <div class="brand-accordion-count">${totalDrinks} drinks</div>
+      </div>
+      <span class="brand-accordion-chevron">▼</span>
+    `;
+    const body = document.createElement('div');
+    body.className = 'brand-accordion-body';
+    menu.forEach(cat => {
+      const catTitle = document.createElement('div');
+      catTitle.className = 'drink-category-title';
+      catTitle.textContent = cat.category;
+      body.appendChild(catTitle);
+      cat.items.forEach(item => body.appendChild(makeDrinkRow(item, brand)));
+    });
+    btn.addEventListener('click', () => {
+      const isOpen = body.classList.contains('open');
+      body.classList.toggle('open', !isOpen);
+      btn.classList.toggle('open', !isOpen);
+    });
+    accordion.appendChild(btn);
+    accordion.appendChild(body);
+  });
+}
+
+// ---- drinks search ----
+$('drinks-search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const resultsEl = $('drinks-search-results');
+  resultsEl.innerHTML = '';
+  if (!q) return;
+  const matches = drinkIndex.filter(d =>
+    d.item.name.toLowerCase().includes(q) || d.category.toLowerCase().includes(q) || d.brand.toLowerCase().includes(q)
+  ).slice(0, 10);
+  if (!matches.length) {
+    resultsEl.innerHTML = '<div class="empty-state" style="padding:10px 0;">No drinks match that search.</div>';
+    return;
+  }
+  matches.forEach(({ brand, item }) => {
+    const { value, estimated } = getDisplayCal(item);
+    const row = document.createElement('div');
+    row.className = 'drinks-search-result';
+    row.innerHTML = `
+      <div>
+        <div class="name">${escapeHtml(item.name)}</div>
+        <div class="brand-tag">${escapeHtml(brand)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <span class="cal">${value} kcal</span>
+        <span class="grade-badge grade-${item.grade}">${item.grade}</span>
+        <button class="log-btn" data-name="${escapeHtml(item.name)} (${drinkSize})" data-cal="${value}">+ Log</button>
+      </div>
+    `;
+    row.querySelector('.log-btn').addEventListener('click', async () => {
+      const btn = row.querySelector('.log-btn');
       const key = selectedDate;
       const entries = await getEntries(key);
       entries.push({ id: Date.now(), name: btn.dataset.name, calories: parseFloat(btn.dataset.cal), sugar: 0 });
@@ -1921,11 +2587,22 @@ function renderDrinkMenu(containerId, menu) {
       setTimeout(() => { btn.textContent = '+ Log'; btn.classList.remove('done'); }, 1500);
       renderToday();
     });
+    resultsEl.appendChild(row);
   });
-}
+});
+
 function renderAllDrinkMenus() {
-  renderDrinkMenu('luckin-menu', luckinMenu);
-  renderDrinkMenu('chagee-menu', chageeMenu);
+  drinkIndex = buildDrinkIndex();
+  renderBrandAccordion();
+  // also inject all drinks into the food search index so users can find them in the Log tab
+  const drinkFoods = drinkIndex.map(d => ({
+    name: `${d.item.name} (${d.brand}, M)`,
+    cal: d.item.calM,
+    group: 'Drinks'
+  }));
+  // merge into foodIndex without duplicates
+  const existingNames = new Set(foodIndex.map(f => f.name));
+  drinkFoods.forEach(df => { if (!existingNames.has(df.name)) foodIndex.push(df); });
 }
 document.querySelectorAll('.size-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1936,8 +2613,117 @@ document.querySelectorAll('.size-btn').forEach(btn => {
   });
 });
 
+// ---- feedback (Telegram) ----
+// TOKEN: split across two vars to reduce casual scraping — swap these if you regenerate via @BotFather
+const _tA = '8851381554';
+const _tB = 'AAHp9zONTYWmcHRw6QuZZvMROIQbiduRqWU';
+const _tC = 574133620; // your chat ID
+$('feedback-send-btn').addEventListener('click', async () => {
+  const text = $('feedback-text').value.trim();
+  const name = $('feedback-name').value.trim();
+  const noteEl = $('feedback-note');
+  if (!text) { noteEl.textContent = 'Please write something first.'; return; }
+  noteEl.textContent = 'Sending…';
+  const msg = `📬 Longview Feedback\n${name ? `From: ${name}\n` : ''}Message:\n${text}`;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${_tA}:${_tB}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: _tC, text: msg })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      noteEl.textContent = 'Sent! Thank you for your feedback.';
+      $('feedback-text').value = '';
+      $('feedback-name').value = '';
+    } else {
+      noteEl.textContent = 'Failed to send — check your connection and try again.';
+    }
+  } catch (e) {
+    noteEl.textContent = 'Failed to send — check your connection and try again.';
+  }
+  setTimeout(() => noteEl.textContent = '', 3000);
+});
+
+// ---- recipe data (for search index + log buttons) ----
+let recipeData = []; // loaded from recipes.json
+
+// ---- recipe toggles ----
+document.querySelectorAll('.recipe-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = $(btn.dataset.target);
+    if (!target) return;
+    const isOpen = target.style.display !== 'none';
+    target.style.display = isOpen ? 'none' : 'block';
+    btn.textContent = isOpen ? '▾ View' : '▴ Hide';
+  });
+});
+
+// wire "Log this recipe" buttons
+document.querySelectorAll('.recipe-log-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const name = btn.dataset.name;
+    const cal = parseInt(btn.dataset.cal, 10);
+    const key = selectedDate;
+    const entries = await getEntries(key);
+    entries.push({ id: Date.now(), name, calories: cal, sugar: 0 });
+    await setEntries(key, entries);
+    btn.textContent = 'Logged ✓';
+    btn.classList.add('done');
+    setTimeout(() => { btn.textContent = '+ Log'; btn.classList.remove('done'); }, 1500);
+    renderToday();
+    renderDashboard();
+  });
+});
+
+// inject recipes into food search index
+function injectRecipesIntoIndex() {
+  const existingNames = new Set(foodIndex.map(f => f.name));
+  recipeData.forEach(r => {
+    if (!existingNames.has(r.name)) {
+      foodIndex.push({ name: r.name, cal: r.cal, group: 'Recipes' });
+    }
+  });
+}
+
+// ---- load data from JSON files ----
+async function loadDataFiles() {
+  const base = './';
+  const results = await Promise.allSettled([
+    fetch(base + 'foods.json').then(r => r.json()),
+    fetch(base + 'drinks.json').then(r => r.json()),
+    fetch(base + 'tips.json').then(r => r.json()),
+    fetch(base + 'exercises.json').then(r => r.json()),
+    fetch(base + 'recipes.json').then(r => r.json())
+  ]);
+  if (results[0].status === 'fulfilled') commonFoods = results[0].value;
+  if (results[1].status === 'fulfilled') {
+    luckinMenu = results[1].value.luckin || [];
+    chageeMenu = results[1].value.chagee || [];
+  }
+  if (results[2].status === 'fulfilled') healthTips = results[2].value;
+  if (results[3].status === 'fulfilled') {
+    exerciseData = results[3].value;
+    // re-populate exercise dropdown with loaded data
+    const sel = $('exercise-activity');
+    if (sel) {
+      sel.innerHTML = '';
+      exerciseData.forEach((a, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = a.name;
+        sel.appendChild(opt);
+      });
+    }
+  }
+  if (results[4].status === 'fulfilled') {
+    recipeData = results[4].value;
+  }
+}
+
 // ---- init ----
 (async function init() {
+  await loadDataFiles();
   populatePortionSelects();
   populateExerciseSelect();
   await refreshFoodIndex();
@@ -1947,11 +2733,37 @@ document.querySelectorAll('.size-btn').forEach(btn => {
   await renderWeek();
   await renderDashboard();
   renderAllDrinkMenus();
+  injectRecipesIntoIndex();
+
+  // what's new banner — show once per version
+  const CURRENT_VERSION = 'v1.17.0';
+  const seenVersion = localStorage.getItem(STORAGE_PREFIX + 'seenVersion');
+  if (seenVersion !== CURRENT_VERSION) {
+    setTimeout(() => {
+      $('whats-new-banner').style.display = 'flex';
+    }, 1400); // show after splash fades
+  }
+  $('whats-new-dismiss').addEventListener('click', () => {
+    localStorage.setItem(STORAGE_PREFIX + 'seenVersion', CURRENT_VERSION);
+    $('whats-new-banner').style.display = 'none';
+  });
+  $('whats-new-reopen').addEventListener('click', () => {
+    $('whats-new-banner').style.display = 'flex';
+  });
 
   // keep the splash visible briefly so it doesn't just flash
   setTimeout(() => {
     $('splash-screen').classList.add('hide');
   }, 800);
+
+  // catch a midnight rollover even if the user never switches tabs
+  setInterval(async () => {
+    if (checkDateRollover()) {
+      await renderToday();
+      await renderWeek();
+      await renderDashboard();
+    }
+  }, 60000);
 })();
 </script>
 </body>

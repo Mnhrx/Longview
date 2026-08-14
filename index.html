@@ -388,6 +388,60 @@ nav button:hover:not(.active){color:var(--text);}
 
 footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;}
 
+/* app header */
+.app-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;}
+.app-header .eyebrow{position:absolute;}
+.app-title{flex:1;margin:0;}
+.gear-btn{
+  flex-shrink:0;background:var(--panel-2);border:1px solid var(--border);
+  color:var(--text-dim);border-radius:10px;padding:8px 12px;font-size:18px;
+  cursor:pointer;min-height:44px;min-width:44px;margin-top:4px;
+}
+.gear-btn:hover{color:var(--text);}
+
+/* settings sheet */
+#settings-sheet{position:fixed;inset:0;z-index:9000;}
+.settings-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.6);}
+.settings-panel{
+  position:absolute;bottom:0;left:0;right:0;
+  background:var(--panel);border-top:1px solid var(--border);
+  border-radius:20px 20px 0 0;padding:0 0 40px;
+  max-height:85vh;overflow-y:auto;
+}
+.settings-panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 20px 12px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--panel);z-index:1;
+}
+.settings-panel-title{font-family:'Fraunces',serif;font-size:18px;font-weight:600;}
+.settings-close{background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:4px 8px;min-height:44px;min-width:44px;}
+.settings-section{padding:16px 20px 0;}
+.settings-section-label{font-size:11px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:10px;}
+.settings-section-label.danger-label{color:var(--over);}
+.settings-row-btn{
+  width:100%;text-align:left;background:var(--panel-2);border:1px solid var(--border);
+  color:var(--text);border-radius:10px;padding:13px 14px;font-family:'Inter',sans-serif;
+  font-size:14px;cursor:pointer;margin-bottom:8px;min-height:44px;display:block;
+}
+.settings-row-btn:hover{border-color:var(--accent);}
+.settings-row-btn.danger{color:var(--over);border-color:var(--over);}
+
+/* collapsible cards */
+.collapsible-card{padding:0;}
+.collapsible-header{
+  width:100%;display:flex;justify-content:space-between;align-items:center;
+  background:none;border:none;color:var(--text);padding:16px 20px;
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:500;cursor:pointer;
+  min-height:54px;text-align:left;
+}
+.collapsible-header:hover{color:var(--accent);}
+.chevron{font-size:13px;color:var(--text-dim);transition:transform .2s;}
+.collapsible-header.open .chevron{transform:rotate(180deg);}
+.collapsible-body{padding:0 20px 18px;}
+
+/* calc target section */
+.calc-target-label{font-size:13px;color:var(--text-dim);margin-bottom:12px;}
+
 /* what's new banner */
 #whats-new-banner{
   position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:8000;
@@ -524,29 +578,69 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 <div id="splash-screen">
   <div class="splash-mark">longview</div>
   <div class="splash-tagline">a simple way to eat a little healthier</div>
-  <div class="splash-version">v1.17.0</div>
+  <div class="splash-version">v1.18.0</div>
 </div>
 
 <div id="whats-new-banner" style="display:none;">
   <div class="whats-new-inner">
-    <div class="whats-new-label">✦ What's new in v1.17.0</div>
+    <div class="whats-new-label">✦ What's new in v1.18.0</div>
     <ul class="whats-new-list">
-      <li>Food catalog now loads from external JSON files — easier to update, faster to load</li>
-      <li>51 Malay/Nusantara foods added with macros (nasi padang, mee rebus, satay, kuih, and more)</li>
-      <li>Protein, carbs &amp; fat shown in search results when data is available — never required</li>
-      <li>Recipes + drinks loggable directly from their tabs</li>
-      <li>Feedback card in Log tab — suggestions go straight to the developer</li>
+      <li>Log tab rebuilt — much cleaner. Today's entries at top, Log food below, everything else (exercise, portion estimator, My foods) collapsed behind a tap (v1.18.0)</li>
+      <li>Settings moved to a ⚙ gear icon — backup, restore, feedback, reset, what's new all in one sheet (v1.18.0)</li>
+      <li>Daily target now lives in the Calculator tab alongside the TDEE calculator (v1.18.0)</li>
+      <li>My foods is now filterable — type to search your saved items (v1.18.0)</li>
+      <li>Past day access moved to a "View a past day" link at the bottom of today's entries — Log tab stays clean by default (v1.18.0)</li>
+      <li>Macros (P/C/F) optional on log form — auto-fills from food data and Open Food Facts (v1.18.0)</li>
+      <li>51 Malay/Nusantara foods added with macros (v1.17.0)</li>
     </ul>
     <button class="add-btn" id="whats-new-dismiss">Got it</button>
   </div>
 </div>
 
+<!-- SETTINGS SHEET (gear icon) -->
+<div id="settings-sheet" style="display:none;">
+  <div class="settings-overlay" id="settings-overlay"></div>
+  <div class="settings-panel">
+    <div class="settings-panel-header">
+      <div class="settings-panel-title">Settings</div>
+      <button class="settings-close" id="settings-close">✕</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Data</div>
+      <button class="settings-row-btn" id="export-btn">Export backup (.json)</button>
+      <button class="settings-row-btn" id="import-btn">Import backup</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Feedback</div>
+      <div class="field-row"><input type="text" id="feedback-name" placeholder="Your name (optional)"></div>
+      <div class="field-row">
+        <textarea id="feedback-text" placeholder="Suggestion, bug, or food to add…" rows="3" style="resize:vertical;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:12px;font-family:'Inter',sans-serif;font-size:15px;width:100%;min-height:80px;"></textarea>
+      </div>
+      <button class="add-btn secondary" id="feedback-send-btn">Send feedback</button>
+      <div class="save-note" id="feedback-note"></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">About</div>
+      <button class="settings-row-btn" id="settings-whats-new-btn">✦ What's new in this version</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label danger-label">Danger zone</div>
+      <button class="settings-row-btn danger" id="reset-btn">Reset all data</button>
+      <div class="save-note" id="reset-note"></div>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
 
-  <header>
+  <header class="app-header">
     <div class="eyebrow">longview</div>
-    <h1>A simple way to eat a little healthier.</h1>
-    <p class="sub">Log a few days, see the week's trend, and get a target based on your own numbers — no strict rules, and no single day to obsess over.</p>
+    <h1 class="app-title">A simple way to eat a little healthier.</h1>
+    <button class="gear-btn" id="gear-btn" aria-label="Settings">⚙</button>
   </header>
 
   <nav>
@@ -600,28 +694,43 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
 
   <!-- TODAY -->
   <div class="view" id="view-today">
+
+    <!-- ── TODAY'S ENTRIES (primary) ────────────────────── -->
     <div class="card">
-      <h2>Estimate by portion</h2>
-      <div class="hint">Don't know the weight? Use scoops, handfuls, or palm-sized amounts instead — this converts it to a rough calorie count.</div>
-      <div class="field-row">
-        <select id="portion-food"></select>
+      <div class="day-header">
+        <h2 id="today-heading">Today</h2>
+        <button type="button" class="link-btn" id="jump-today-btn" style="display:none;">‹ Today</button>
       </div>
-      <div class="field-row">
-        <select id="portion-size"></select>
+      <div class="totals">
+        <div class="total-box cal">
+          <div class="num" id="today-cal">0</div>
+          <div class="lbl" id="today-cal-label">kcal logged</div>
+        </div>
+        <div class="total-box remaining" id="today-remaining-box">
+          <div class="num" id="today-remaining">0</div>
+          <div class="lbl">kcal left</div>
+        </div>
       </div>
-      <div class="field-row">
-        <input type="number" class="num" id="portion-qty" value="1" min="0.5" step="0.5" style="max-width:100px;">
-        <div class="portion-result" id="portion-result">≈ — kcal</div>
+      <div class="macro-summary" id="macro-summary" style="display:none;">
+        <span class="macro-pill" id="macro-protein">P: —</span>
+        <span class="macro-pill" id="macro-carbs">C: —</span>
+        <span class="macro-pill" id="macro-fat">F: —</span>
+        <div class="macro-note">macros from entries with nutrition data</div>
       </div>
-      <button class="add-btn secondary" id="portion-fill-btn">Use this estimate</button>
+      <div class="entry-list" id="entry-list">
+        <div class="empty-state">Nothing logged yet today.</div>
+      </div>
+      <button type="button" class="link-btn" id="past-day-toggle" style="margin-top:10px;">View a past day ▾</button>
+      <div id="past-day-panel" style="display:none;margin-top:8px;">
+        <input type="date" id="date-picker" style="background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:10px 12px;font-size:16px;width:100%;min-height:44px;color-scheme:dark;">
+      </div>
     </div>
 
+    <!-- ── LOG FOOD (primary) ─────────────────────────────── -->
     <div class="card">
-      <h2>Log something</h2>
-      <div class="hint">Rough numbers are fine — the pattern matters more than precision. Can't find something specific, like a packet of biscuits? Search online below (Open Food Facts) — picking a result saves it to "My foods" automatically, so you only ever look it up once.</div>
-
+      <h2>Log food</h2>
       <div class="scan-btn-row">
-        <button class="add-btn secondary" id="scan-barcode-btn">📷 Scan a barcode</button>
+        <button class="add-btn secondary" id="scan-barcode-btn">📷 Scan barcode</button>
       </div>
       <div id="barcode-scanner-wrap" style="display:none;">
         <div id="barcode-reader"></div>
@@ -637,130 +746,106 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       </div>
       <div class="online-results" id="barcode-manual-results"></div>
 
-      <div class="quick-add-label" style="margin-top:14px;">Search a saved item:</div>
-      <div class="field-row search-wrap">
-        <input type="text" id="quick-search" placeholder="Type to search, e.g. 'kopi' or 'rice'" autocomplete="off">
+      <div class="field-row search-wrap" style="margin-top:10px;">
+        <input type="text" id="quick-search" placeholder="Search foods, drinks, recipes…" autocomplete="off">
       </div>
       <div class="autocomplete-list" id="autocomplete-list"></div>
-      <button type="button" class="link-btn" id="online-search-btn" style="display:none;">🔎 Search Open Food Facts online</button>
+      <button type="button" class="link-btn" id="online-search-btn" style="display:none;">🔎 Search Open Food Facts</button>
       <div class="online-results" id="online-results"></div>
 
-      <button type="button" class="link-btn" id="browse-categories-btn">Or browse by category ▾</button>
+      <button type="button" class="link-btn" id="browse-categories-btn">Browse by category ▾</button>
       <div class="category-panel" id="category-panel" style="display:none;">
         <div class="category-chips" id="category-chips"></div>
         <div id="category-items"></div>
       </div>
 
-      <div class="field-row">
-        <input type="text" class="name" id="in-name" placeholder="e.g. chicken rice">
+      <div class="field-row" style="margin-top:8px;">
+        <input type="text" class="name" id="in-name" placeholder="Food name">
       </div>
       <div class="field-row">
-        <input type="number" class="num" id="in-cal" placeholder="calories" min="0">
-        <input type="number" class="num" id="in-sugar" placeholder="sugar (g), optional" min="0">
+        <input type="number" class="num" id="in-cal" placeholder="Calories" min="0">
+        <input type="number" class="num" id="in-sugar" placeholder="Sugar (g)" min="0">
+      </div>
+      <button type="button" class="link-btn" id="toggle-macros-btn">+ Add macros (optional)</button>
+      <div id="macro-fields" style="display:none;">
+        <div class="field-row">
+          <input type="number" class="num" id="in-protein" placeholder="Protein (g)" min="0">
+          <input type="number" class="num" id="in-carbs" placeholder="Carbs (g)" min="0">
+          <input type="number" class="num" id="in-fat" placeholder="Fat (g)" min="0">
+        </div>
       </div>
       <button class="add-btn" id="add-btn">Add entry</button>
     </div>
 
-    <div class="card">
-      <h2>My foods</h2>
-      <div class="hint">Add items you eat often — they'll show up in the dropdown above next time, so you don't have to look up the calories twice.</div>
-      <div class="field-row">
-        <input type="text" class="num" id="custom-name" placeholder="food name">
-        <input type="number" class="num" id="custom-cal" placeholder="calories" min="0" style="max-width:110px;">
-      </div>
-      <button class="add-btn secondary" id="custom-add-btn">Save to my foods</button>
-      <div class="entry-list" id="custom-food-list" style="margin-top:12px;"></div>
-    </div>
-
-    <div class="card">
-      <div class="day-header">
-        <h2 id="today-heading">Today</h2>
-        <input type="date" id="date-picker">
-      </div>
-      <button type="button" class="link-btn" id="jump-today-btn" style="display:none;">‹ Back to today</button>
-      <div class="totals">
-        <div class="total-box cal">
-          <div class="num" id="today-cal">0</div>
-          <div class="lbl" id="today-cal-label">kcal logged today</div>
+    <!-- ── LOG EXERCISE (collapsed) ───────────────────────── -->
+    <div class="card collapsible-card" id="exercise-card">
+      <button class="collapsible-header" id="exercise-toggle">
+        <span>+ Log exercise</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapsible-body" id="exercise-body" style="display:none;">
+        <div class="hint" style="margin-top:10px;">Estimates run high — consider counting only 50–75% of the estimate if you're aiming for a deficit.</div>
+        <div class="field-row">
+          <select id="exercise-activity"></select>
+          <input type="number" class="num" id="exercise-duration" placeholder="minutes" min="1" style="max-width:110px;">
         </div>
-        <div class="total-box remaining" id="today-remaining-box">
-          <div class="num" id="today-remaining">0</div>
-          <div class="lbl">kcal left today</div>
+        <div class="field-row">
+          <div class="portion-result" id="exercise-result">≈ — kcal</div>
         </div>
-      </div>
-      <div class="macro-summary" id="macro-summary" style="display:none;">
-        <span class="macro-pill" id="macro-protein">P: —</span>
-        <span class="macro-pill" id="macro-carbs">C: —</span>
-        <span class="macro-pill" id="macro-fat">F: —</span>
-        <div class="macro-note">macros from entries with nutrition data · optional</div>
-      </div>
-      <div class="entry-list" id="entry-list">
-        <div class="empty-state">Nothing logged yet today.</div>
+        <button class="add-btn secondary" id="exercise-fill-btn">Use this estimate</button>
+        <div class="field-row" style="margin-top:12px;">
+          <input type="text" class="name" id="ex-name" placeholder="e.g. evening run">
+        </div>
+        <div class="field-row">
+          <input type="number" class="num" id="ex-cal" placeholder="calories burned" min="0">
+        </div>
+        <button class="add-btn" id="add-exercise-btn">Log exercise</button>
+        <div class="hint" id="exercise-burned-total" style="margin:12px 0 6px;">0 kcal burned today</div>
+        <div class="entry-list" id="exercise-list"></div>
       </div>
     </div>
 
-    <div class="card">
-      <h2>Log exercise</h2>
-      <div class="hint">Optional — adds back to today's remaining budget. Estimates run high on most apps/watches, so if you're aiming for a deficit, consider counting only 50–75% of the estimate rather than the full number.</div>
-      <div class="field-row">
-        <select id="exercise-activity"></select>
-        <input type="number" class="num" id="exercise-duration" placeholder="minutes" min="1" style="max-width:110px;">
+    <!-- ── ESTIMATE BY PORTION (collapsed) ───────────────── -->
+    <div class="card collapsible-card">
+      <button class="collapsible-header" id="portion-toggle">
+        <span>Estimate by portion size</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapsible-body" id="portion-body" style="display:none;">
+        <div class="hint" style="margin-top:10px;">Don't know the weight? Use scoops, handfuls, or palm-sized amounts instead.</div>
+        <div class="field-row">
+          <select id="portion-food"></select>
+        </div>
+        <div class="field-row">
+          <select id="portion-size"></select>
+        </div>
+        <div class="field-row">
+          <input type="number" class="num" id="portion-qty" value="1" min="0.5" step="0.5" style="max-width:100px;">
+          <div class="portion-result" id="portion-result">≈ — kcal</div>
+        </div>
+        <button class="add-btn secondary" id="portion-fill-btn">Use this estimate</button>
       </div>
-      <div class="field-row">
-        <div class="portion-result" id="exercise-result">≈ — kcal</div>
-      </div>
-      <button class="add-btn secondary" id="exercise-fill-btn">Use this estimate</button>
-      <div class="field-row" style="margin-top:14px;">
-        <input type="text" class="name" id="ex-name" placeholder="e.g. evening run">
-      </div>
-      <div class="field-row">
-        <input type="number" class="num" id="ex-cal" placeholder="calories burned" min="0">
-      </div>
-      <button class="add-btn" id="add-exercise-btn">Log exercise</button>
-      <div class="hint" id="exercise-burned-total" style="margin:12px 0 6px;">0 kcal burned today</div>
-      <div class="entry-list" id="exercise-list"></div>
     </div>
 
-    <div class="card">
-      <h2>Daily target</h2>
-      <div class="hint">Used to color the week strip. The Calculator tab can set this for you based on your numbers.</div>
-      <div class="settings-row">
-        <label>Calorie target / day</label>
-        <input type="number" id="set-cal" placeholder="2000">
+    <!-- ── MY FOODS (collapsed, filterable) ──────────────── -->
+    <div class="card collapsible-card">
+      <button class="collapsible-header" id="myfoods-toggle">
+        <span>My foods</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapsible-body" id="myfoods-body" style="display:none;">
+        <div class="hint" style="margin-top:10px;">Saved foods appear in search — add anything you eat often.</div>
+        <div class="field-row">
+          <input type="text" class="num" id="custom-name" placeholder="Food name">
+          <input type="number" class="num" id="custom-cal" placeholder="Calories" min="0" style="max-width:110px;">
+        </div>
+        <button class="add-btn secondary" id="custom-add-btn">Save to my foods</button>
+        <div class="field-row search-wrap" style="margin-top:12px;">
+          <input type="text" id="myfoods-filter" placeholder="Filter my foods…" autocomplete="off">
+        </div>
+        <div class="entry-list" id="custom-food-list" style="margin-top:8px;"></div>
       </div>
-      <div class="weekly-derived">≈ <b id="weekly-derived-num">14,000</b> kcal / week at this rate</div>
-      <button class="add-btn" id="save-settings">Save target</button>
-      <div class="save-note" id="save-note"></div>
     </div>
 
-    <div class="card">
-      <h2>Backup &amp; restore</h2>
-      <div class="hint">Your data lives only in this home screen icon's storage — deleting the icon deletes it too. Export a backup before removing or reinstalling the icon, and import it back after.</div>
-      <button class="add-btn secondary" id="export-btn">Export backup (.json)</button>
-      <button class="add-btn secondary" id="import-btn" style="margin-top:8px;">Import backup</button>
-      <input type="file" id="import-input" accept="application/json" style="display:none;">
-      <div class="save-note" id="import-note"></div>
-    </div>
-
-    <div class="card reset-card">
-      <h2>Start over</h2>
-      <div class="hint">Clears every logged entry, your saved target, and your saved custom foods. Export a backup first if you want a way back. Can't be undone.</div>
-      <button class="add-btn danger" id="reset-btn">Reset all data</button>
-      <div class="save-note" id="reset-note"></div>
-    </div>
-
-    <div class="card">
-      <h2>Send feedback</h2>
-      <div class="hint">Got a suggestion, found a bug, or want a food added? Send it directly to the developer.</div>
-      <div class="field-row">
-        <input type="text" id="feedback-name" placeholder="Your name (optional)">
-      </div>
-      <div class="field-row">
-        <textarea id="feedback-text" placeholder="Type your feedback or suggestion here..." rows="3" style="resize:vertical;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:12px;font-family:'Inter',sans-serif;font-size:15px;width:100%;min-height:90px;"></textarea>
-      </div>
-      <button class="add-btn secondary" id="feedback-send-btn">Send feedback</button>
-      <div class="save-note" id="feedback-note"></div>
-    </div>
+    <!-- hidden inputs needed by existing handlers -->
+    <input type="file" id="import-input" accept="application/json" style="display:none;">
   </div>
 
   <!-- WEEK -->
@@ -840,6 +925,17 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
       <div class="deficit-options" id="deficit-options"></div>
 
       <div class="calc-note">This is a starting estimate, not a prescription — real energy needs shift with muscle mass, hormones, sleep, and stress. If she has any health condition or is unsure what's appropriate, a doctor or dietitian can tailor this properly.</div>
+
+      <div class="calc-target-section" id="calc-target-section" style="display:block;border-top:1px solid var(--border);margin-top:18px;padding-top:18px;">
+        <div class="calc-target-label">Or set a manual target:</div>
+        <div class="settings-row">
+          <label>Calorie target / day</label>
+          <input type="number" id="set-cal" placeholder="2000">
+        </div>
+        <div class="weekly-derived">≈ <b id="weekly-derived-num">14,000</b> kcal / week at this rate</div>
+        <button class="add-btn" id="save-settings">Save target</button>
+        <div class="save-note" id="save-note"></div>
+      </div>
     </div>
   </div>
 
@@ -1268,7 +1364,7 @@ footer{text-align:center;color:var(--text-dim);font-size:11.5px;margin-top:24px;
   <div style="text-align:center;margin-top:20px;">
     <button id="whats-new-reopen" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">✦ What's new in this version</button>
   </div>
-  <footer>Longview v1.17.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
+  <footer>Longview v1.18.0<br>General guidance only — not a substitute for advice from a doctor or dietitian.<br>Data is saved only on this device, in this browser. Clearing Safari's website data will erase it.</footer>
 </div>
 
 <script>
@@ -1361,6 +1457,50 @@ async function setExercise(dateKey, list) {
   catch (e) { console.error('Failed to save exercise', e); }
 }
 
+// ---- gear / settings sheet ----
+function openSettings() { $('settings-sheet').style.display = 'block'; }
+function closeSettings() { $('settings-sheet').style.display = 'none'; }
+$('gear-btn').addEventListener('click', openSettings);
+$('settings-close').addEventListener('click', closeSettings);
+$('settings-overlay').addEventListener('click', closeSettings);
+$('settings-whats-new-btn').addEventListener('click', () => {
+  closeSettings();
+  $('whats-new-banner').style.display = 'flex';
+});
+
+// ---- collapsible cards ----
+function setupCollapsible(toggleId, bodyId) {
+  const btn = $(toggleId);
+  const body = $(bodyId);
+  if (!btn || !body) return;
+  btn.addEventListener('click', () => {
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    btn.classList.toggle('open', !isOpen);
+  });
+}
+setupCollapsible('exercise-toggle', 'exercise-body');
+setupCollapsible('portion-toggle', 'portion-body');
+setupCollapsible('myfoods-toggle', 'myfoods-body');
+
+// ---- past day toggle ----
+$('past-day-toggle').addEventListener('click', () => {
+  const panel = $('past-day-panel');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  $('past-day-toggle').textContent = isOpen ? 'View a past day ▾' : 'View a past day ▴';
+  if (!isOpen) setTimeout(() => $('date-picker').showPicker && $('date-picker').showPicker(), 100);
+});
+
+// ---- my foods filter ----
+$('myfoods-filter') && $('myfoods-filter').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#custom-food-list .entry-row').forEach(row => {
+    const name = row.querySelector('.entry-name')?.textContent.toLowerCase() || '';
+    row.style.display = name.includes(q) ? '' : 'none';
+  });
+});
+
 // ---- nav ----
 function switchTab(viewName) {
   checkDateRollover();
@@ -1372,7 +1512,8 @@ function switchTab(viewName) {
   $('view-' + viewName).classList.add('active');
   // Always re-pull from storage on tab switch so nothing shows stale data
   if (viewName === 'week') renderWeek();
-  if (viewName === 'today') { renderSettings(); renderToday(); }
+  if (viewName === 'today') renderToday();
+  if (viewName === 'calc') renderSettings();
   if (viewName === 'dashboard') renderDashboard();
 }
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1749,6 +1890,13 @@ async function refreshFoodIndex() {
 function fillFromFood(f) {
   $('in-name').value = f.name;
   $('in-cal').value = f.cal;
+  if (f.protein != null || f.carbs != null || f.fat != null) {
+    $('macro-fields').style.display = 'block';
+    $('toggle-macros-btn').textContent = '− Hide macros';
+    $('in-protein').value = f.protein != null ? f.protein : '';
+    $('in-carbs').value = f.carbs != null ? f.carbs : '';
+    $('in-fat').value = f.fat != null ? f.fat : '';
+  }
   $('in-sugar').focus();
 }
 
@@ -1793,13 +1941,24 @@ $('quick-search').addEventListener('input', (e) => {
 });
 
 // ---- shared: commit an Open Food Facts product to the log ----
-async function useOffProduct(displayName, cal) {
+async function useOffProduct(displayName, cal, protein=null, carbs=null, fat=null) {
   $('in-name').value = displayName;
   $('in-cal').value = cal;
+  if (protein != null || carbs != null || fat != null) {
+    $('macro-fields').style.display = 'block';
+    $('toggle-macros-btn').textContent = '− Hide macros';
+    $('in-protein').value = protein != null ? protein : '';
+    $('in-carbs').value = carbs != null ? carbs : '';
+    $('in-fat').value = fat != null ? fat : '';
+  }
   $('in-sugar').focus();
   const customFoods = await getCustomFoods();
   if (!customFoods.some(f => f.name === displayName)) {
-    customFoods.push({ id: Date.now(), name: displayName, cal });
+    const foodEntry = { id: Date.now(), name: displayName, cal };
+    if (protein != null) foodEntry.protein = protein;
+    if (carbs != null) foodEntry.carbs = carbs;
+    if (fat != null) foodEntry.fat = fat;
+    customFoods.push(foodEntry);
     await setCustomFoods(customFoods);
     await refreshFoodIndex();
     await renderCustomFoods();
@@ -1824,10 +1983,15 @@ function showInlineAdd(container, prefillName = '') {
         <input type="number" class="num" id="inline-add-cal" placeholder="Calories" min="0">
         <input type="number" class="num" id="inline-add-sugar" placeholder="Sugar (g)" min="0">
       </div>
+      <div class="field-row" style="margin-top:4px;">
+        <input type="number" class="num" id="inline-add-protein" placeholder="Protein (g)" min="0">
+        <input type="number" class="num" id="inline-add-carbs" placeholder="Carbs (g)" min="0">
+        <input type="number" class="num" id="inline-add-fat" placeholder="Fat (g)" min="0">
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Macros optional — check the pack label if available</div>
       <button class="add-btn" id="inline-add-confirm">Add entry</button>
     </div>
   `;
-  // If name is already filled, jump focus to calories
   if (prefillName) {
     setTimeout(() => { const c = $('inline-add-cal'); if (c) c.focus(); }, 100);
   }
@@ -1835,15 +1999,25 @@ function showInlineAdd(container, prefillName = '') {
     const name = $('inline-add-name').value.trim();
     const cal = parseFloat($('inline-add-cal').value) || 0;
     const sugar = parseFloat($('inline-add-sugar').value) || 0;
+    const protein = $('inline-add-protein').value !== '' ? parseFloat($('inline-add-protein').value) : null;
+    const carbs = $('inline-add-carbs').value !== '' ? parseFloat($('inline-add-carbs').value) : null;
+    const fat = $('inline-add-fat').value !== '' ? parseFloat($('inline-add-fat').value) : null;
     if (!name) return;
     const key = selectedDate;
     const entries = await getEntries(key);
-    entries.push({ id: Date.now(), name, calories: cal, sugar });
+    const entry = { id: Date.now(), name, calories: cal, sugar };
+    if (protein != null) entry.protein = protein;
+    if (carbs != null) entry.carbs = carbs;
+    if (fat != null) entry.fat = fat;
+    entries.push(entry);
     await setEntries(key, entries);
-    // also save to My foods so it's searchable next time
     const customFoods = await getCustomFoods();
     if (!customFoods.some(f => f.name === name)) {
-      customFoods.push({ id: Date.now() + 1, name, cal });
+      const foodEntry = { id: Date.now() + 1, name, cal };
+      if (protein != null) foodEntry.protein = protein;
+      if (carbs != null) foodEntry.carbs = carbs;
+      if (fat != null) foodEntry.fat = fat;
+      customFoods.push(foodEntry);
       await setCustomFoods(customFoods);
       await refreshFoodIndex();
       await renderCustomFoods();
@@ -1866,7 +2040,15 @@ function extractCalFromProduct(p) {
     cal = Math.round(nutriments['energy-kcal_100g']);
     calLabel = `${cal} kcal / 100g`;
   }
-  return { cal, calLabel };
+  // Extract macros — prefer serving figures, fall back to per-100g
+  const getVal = (key) => {
+    const v = nutriments[key + '_serving'] != null ? nutriments[key + '_serving'] : nutriments[key + '_100g'];
+    return v != null ? Math.round(v * 10) / 10 : null;
+  };
+  const protein = getVal('proteins');
+  const carbs = getVal('carbohydrates');
+  const fat = getVal('fat');
+  return { cal, calLabel, protein, carbs, fat };
 }
 
 // ---- online search (Open Food Facts) ----
@@ -1890,7 +2072,7 @@ $('online-search-btn').addEventListener('click', async () => {
     }
 
     products.slice(0, 8).forEach(p => {
-      const { cal, calLabel } = extractCalFromProduct(p);
+      const { cal, calLabel, protein, carbs, fat } = extractCalFromProduct(p);
       if (cal == null) return;
 
       const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
@@ -1899,11 +2081,11 @@ $('online-search-btn').addEventListener('click', async () => {
       row.innerHTML = `
         <span>
           <span class="online-tag">web</span><span class="name">${escapeHtml(displayName)}</span>
-          <span class="brand">${escapeHtml(calLabel)}</span>
+          <span class="brand">${escapeHtml(calLabel)}${protein!=null?` · P${protein}·C${carbs}·F${fat}g`:''}</span>
         </span>
         <span class="cal">${cal} kcal</span>
       `;
-      row.addEventListener('click', () => useOffProduct(displayName, cal));
+      row.addEventListener('click', () => useOffProduct(displayName, cal, protein, carbs, fat));
       resultsEl.appendChild(row);
     });
 
@@ -2071,7 +2253,7 @@ async function lookupBarcode(code, targetEl) {
       if (products.length > 0) {
         resultsEl.innerHTML = '';
         products.slice(0, 5).forEach(p => {
-          const { cal, calLabel } = extractCalFromProduct(p);
+          const { cal, calLabel, protein, carbs, fat } = extractCalFromProduct(p);
           if (cal == null) return;
           const displayName = p.brands ? `${p.product_name} (${p.brands.split(',')[0]})` : p.product_name;
           const row = document.createElement('div');
@@ -2079,11 +2261,11 @@ async function lookupBarcode(code, targetEl) {
           row.innerHTML = `
             <span>
               <span class="online-tag">web</span><span class="name">${escapeHtml(displayName)}</span>
-              <span class="brand">${escapeHtml(calLabel)}</span>
+              <span class="brand">${escapeHtml(calLabel)}${protein!=null?` · P${protein}·C${carbs}·F${fat}g`:''}</span>
             </span>
             <span class="cal">${cal} kcal</span>
           `;
-          row.addEventListener('click', () => { useOffProduct(displayName, cal); resultsEl.innerHTML = ''; });
+          row.addEventListener('click', () => { useOffProduct(displayName, cal, protein, carbs, fat); resultsEl.innerHTML = ''; });
           resultsEl.appendChild(row);
           textSearchFound = true;
         });
@@ -2099,7 +2281,7 @@ async function lookupBarcode(code, targetEl) {
 
   try {
     const p = found;
-    const { cal, calLabel } = extractCalFromProduct(p);
+    const { cal, calLabel, protein, carbs, fat } = extractCalFromProduct(p);
     if (cal == null) {
       resultsEl.innerHTML = '<div class="online-status">Found the product, but it has no usable calorie data in the database.</div>';
       return;
@@ -2117,7 +2299,7 @@ async function lookupBarcode(code, targetEl) {
     `;
     row.addEventListener('click', () => useOffProduct(displayName, cal));
     resultsEl.appendChild(row);
-    await useOffProduct(displayName, cal);
+    await useOffProduct(displayName, cal, protein, carbs, fat);
   } catch (err) {
     resultsEl.innerHTML = '<div class="online-status">Couldn\'t look up that barcode — check your connection and try again.</div>';
   }
@@ -2172,16 +2354,31 @@ $('browse-categories-btn').addEventListener('click', () => {
   if (!isOpen) renderCategoryChips();
 });
 
+$('toggle-macros-btn').addEventListener('click', () => {
+  const panel = $('macro-fields');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  $('toggle-macros-btn').textContent = isOpen ? '+ Add macros (optional)' : '− Hide macros';
+});
+
 $('add-btn').addEventListener('click', async () => {
   const name = $('in-name').value.trim();
   const cal = parseFloat($('in-cal').value) || 0;
   const sugar = parseFloat($('in-sugar').value) || 0;
+  const protein = $('in-protein').value !== '' ? parseFloat($('in-protein').value) : null;
+  const carbs = $('in-carbs').value !== '' ? parseFloat($('in-carbs').value) : null;
+  const fat = $('in-fat').value !== '' ? parseFloat($('in-fat').value) : null;
   if (!name) return;
   const key = selectedDate;
   const entries = await getEntries(key);
-  entries.push({ id: Date.now(), name, calories: cal, sugar });
+  const entry = { id: Date.now(), name, calories: cal, sugar };
+  if (protein != null) entry.protein = protein;
+  if (carbs != null) entry.carbs = carbs;
+  if (fat != null) entry.fat = fat;
+  entries.push(entry);
   await setEntries(key, entries);
   $('in-name').value = ''; $('in-cal').value = ''; $('in-sugar').value = '';
+  $('in-protein').value = ''; $('in-carbs').value = ''; $('in-fat').value = '';
   renderToday();
 });
 
@@ -2232,7 +2429,7 @@ $('export-btn').addEventListener('click', async () => {
       const dateKey = k.replace(STORAGE_PREFIX + 'exercise:', '');
       try { exerciseAll[dateKey] = JSON.parse(localStorage.getItem(k)); } catch (e) {}
     });
-  const backup = { app: 'longview', version: '1.17.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
+  const backup = { app: 'longview', version: '1.18.0', exportedAt: new Date().toISOString(), settings, customFoods, entries, exercise: exerciseAll };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2736,7 +2933,7 @@ async function loadDataFiles() {
   injectRecipesIntoIndex();
 
   // what's new banner — show once per version
-  const CURRENT_VERSION = 'v1.17.0';
+  const CURRENT_VERSION = 'v1.18.0';
   const seenVersion = localStorage.getItem(STORAGE_PREFIX + 'seenVersion');
   if (seenVersion !== CURRENT_VERSION) {
     setTimeout(() => {
