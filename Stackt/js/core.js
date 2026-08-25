@@ -101,22 +101,35 @@ export const store = {
 };
 
 export const router = {
-  current: "home",
+  // null until the first navigate() — otherwise booting straight to "home"
+  // would look like a no-op navigation and never render.
+  current: null,
   modules: {}, // registered as { home: { render }, books: { render, openAddForm }, ... }
+  onNavigate: null, // main.js hooks history into this
 
   register(name, mod) {
     this.modules[name] = mod;
   },
 
-  navigate(view) {
+  navigate(view, opts = {}) {
     if (!this.modules[view]) return;
+    if (view === this.current && !opts.force) {
+      if (this.onNavigate) this.onNavigate(view, opts);
+      return;
+    }
+
+    // Home is the root, so anything leaving it goes "forward" and anything
+    // returning to it goes "back" — that drives which way the screen slides.
+    const direction = opts.direction || (view === "home" ? "back" : "forward");
     this.current = view;
 
     transitionSwap(() => {
       const container = document.getElementById("view");
       container.innerHTML = "";
       this.modules[view].render(container, store);
-    });
+    }, direction);
+
+    if (this.onNavigate) this.onNavigate(view, opts);
 
     const isHome = view === "home";
     const mod = this.modules[view];

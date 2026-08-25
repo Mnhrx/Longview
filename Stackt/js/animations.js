@@ -70,17 +70,25 @@ export function confettiBurst(x, y, count = 18) {
 }
 
 /** Wraps a DOM-swapping render function in the View Transitions API when
- * available, falling back to a plain CSS class-based fade/slide. */
-export function transitionSwap(renderFn) {
+ * available, falling back to a CSS class-based slide.
+ * `direction` is "forward" (going deeper) or "back" (returning) — the screen
+ * slides in from the right going forward and from the left coming back, which
+ * reads as real navigation rather than a generic cross-fade. */
+export function transitionSwap(renderFn, direction = "forward") {
+  const root = document.documentElement;
+  root.dataset.nav = direction;
+
   if (document.startViewTransition) {
-    document.startViewTransition(() => renderFn());
+    const t = document.startViewTransition(() => renderFn());
+    t.finished.finally(() => delete root.dataset.nav);
   } else {
     const view = document.getElementById("view");
-    view.classList.remove("view-enter");
+    const cls = direction === "back" ? "view-enter-back" : "view-enter-fwd";
+    view.classList.remove("view-enter-fwd", "view-enter-back");
     renderFn();
-    // force reflow so the animation replays
-    void view.offsetWidth;
-    view.classList.add("view-enter");
+    void view.offsetWidth; // force reflow so the animation replays
+    view.classList.add(cls);
+    delete root.dataset.nav;
   }
 }
 

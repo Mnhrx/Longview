@@ -1,10 +1,12 @@
 // ============================================
 // Placeholder module factory — used for modules not built out yet
-// (LPs, Music, Photos, Finance). Keeps the tab bar fully working end-to-end
+// (LPs, Music, Photos, Finance). Keeps navigation working end-to-end
 // while those get built module-by-module.
 // ============================================
 
-export function makePlaceholder(emoji, label) {
+import { ICONS } from "./icons.js";
+
+export function makePlaceholder(iconKey, label) {
   function openAddForm() {
     // no-op until this module is built
   }
@@ -14,7 +16,7 @@ export function makePlaceholder(emoji, label) {
     render(container) {
       container.innerHTML = `
         <div class="coming-soon">
-          <span class="coming-soon-emoji">${emoji}</span>
+          <span class="coming-soon-icon">${ICONS[iconKey] || ""}</span>
           <h2>${label}</h2>
           <p>This module is coming soon — same app, same data, new screen.</p>
         </div>

@@ -3,7 +3,7 @@
 // Bump CACHE_NAME whenever you deploy changes so old clients pick them up.
 // ============================================
 
-const CACHE_NAME = "stackt-v8";
+const CACHE_NAME = "stackt-v9";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const ASSETS = [
   "./js/ui.js",
   "./js/animations.js",
   "./js/home.js",
+  "./js/icons.js",
   "./js/books.js",
   "./js/barcode.js",
   "./js/placeholder.js",

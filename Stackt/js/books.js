@@ -8,6 +8,7 @@ import { openModal, closeModal, escapeHtml } from "./ui.js";
 import { confettiBurst, bounceTap, nudge, staggerIn } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl } from "./barcode.js";
+import { ICONS } from "./icons.js";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -35,6 +36,36 @@ function hasLoan(book) {
 }
 function isOwned(book) {
   return (book.copies || []).length > 0;
+}
+
+/** Whole days between two YYYY-MM-DD strings, counting both ends
+ *  (finishing the same day you started reads as "1 day", not "0"). */
+function daysBetween(startStr, endStr) {
+  if (!startStr || !endStr) return null;
+  const a = new Date(startStr + "T00:00:00");
+  const b = new Date(endStr + "T00:00:00");
+  if (isNaN(a) || isNaN(b)) return null;
+  const diff = Math.round((b - a) / 86400000);
+  return diff < 0 ? null : diff + 1;
+}
+
+function daysLabel(n) {
+  if (n == null) return "";
+  return n === 1 ? "1 day" : `${n} days`;
+}
+
+/** How a reading span should read in the UI, given whatever dates exist. */
+function readingSpanText(book) {
+  const { startedDate, finishedDate } = book;
+  if (startedDate && finishedDate) {
+    return `${startedDate} → ${finishedDate} · took ${daysLabel(daysBetween(startedDate, finishedDate))}`;
+  }
+  if (startedDate) {
+    const running = daysBetween(startedDate, today());
+    return `Started ${startedDate}${running ? ` · ${daysLabel(running)} so far` : ""}`;
+  }
+  if (finishedDate) return `Finished ${finishedDate}`;
+  return null;
 }
 
 function getBooks(store) {
@@ -79,7 +110,7 @@ function render(container, store) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search title or author..." value="${escapeHtml(searchQuery)}">
-    <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">📷</button>
+    <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
 
@@ -159,7 +190,7 @@ function renderAuthorList(bodyHolder, store, container) {
   if (authors.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = `<div class="empty-state-emoji">✍️</div><p>No authors yet</p>`;
+    empty.innerHTML = `<div class="empty-state-icon">${ICONS.author}</div><p>No authors yet</p>`;
     bodyHolder.appendChild(empty);
     return;
   }
@@ -188,7 +219,7 @@ function renderBookGrid(container, books, onTap) {
   if (books.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = `<div class="empty-state-emoji">🗂️</div><p>No books match — tap 📷 or + to add one</p>`;
+    empty.innerHTML = `<div class="empty-state-icon">${ICONS.empty}</div><p>No books match — tap the camera or + to add one</p>`;
     container.appendChild(empty);
     return;
   }
@@ -346,25 +377,6 @@ function priceLinksHtml(book) {
   `;
 }
 
-// Google Books' API is one of the few price sources that actually allows a client-side
-// fetch (Kinokuniya/Blackwell's don't, and browsers block reading their pages directly).
-// This runs automatically, no tap required — but coverage is inconsistent, so the card
-// just disappears rather than show an empty/broken state when no price is listed.
-async function wirePriceNote(sheet, book) {
-  const card = sheet.querySelector("#livePriceCard");
-  const valueEl = sheet.querySelector("#livePriceValue");
-  if (!card || !valueEl || !book.isbn) {
-    if (card) card.classList.add("hidden");
-    return;
-  }
-  const price = await lookupGoogleBooksPrice(book.isbn);
-  if (price) {
-    valueEl.textContent = `${price.currency} ${price.amount} on Google Books`;
-    card.classList.add("found");
-  } else {
-    card.classList.add("hidden");
-  }
-}
 
 // ---------- detail modal: view mode + edit mode ----------
 
@@ -404,7 +416,7 @@ function viewModeHtml(book, opts) {
     ${book.isbn ? `
       <div class="cover-tap-target" id="coverTapTarget">
         ${coverBlockHtml(book)}
-        <span class="cover-zoom-badge">🔍</span>
+        <span class="cover-zoom-badge">${ICONS.zoom}</span>
       </div>
     ` : coverBlockHtml(book)}
     <p class="detail-author">${escapeHtml(book.creator || "Unknown author")}</p>
@@ -415,6 +427,8 @@ function viewModeHtml(book, opts) {
       `).join("")}
     </div>
 
+    ${readingDatesHtml(book)}
+
     ${owned ? `
       <div class="copies-section">
         <p class="copies-heading">Your Copies (${copies.length})</p>
@@ -424,13 +438,34 @@ function viewModeHtml(book, opts) {
     ` : `
       <div class="status-pill status-to-read" style="margin-bottom:6px;">Wishlist${book.price != null ? ` · $${Number(book.price).toFixed(2)}` : ""}</div>
       ${book.price != null && book.priceCheckedDate ? `<p class="price-checked-note">You checked this price on ${book.priceCheckedDate}</p>` : ""}
-      <div class="live-price-card" id="livePriceCard">
-        <span class="live-price-label">🔎 Live check</span>
-        <span class="live-price-value" id="livePriceValue">Checking Google Books for a live price…</span>
-      </div>
       ${priceLinksHtml(book)}
       <button class="btn btn-secondary" id="gotCopyBtn" type="button" style="margin-top:14px;">I got a copy — mark as owned</button>
     `}
+  `;
+}
+
+/** Reading-dates block: a summary line plus always-editable date inputs.
+ *  Shown once a book is Reading or Read — a to-read book has nothing to date yet. */
+function readingDatesHtml(book) {
+  if (book.readingStatus !== "reading" && book.readingStatus !== "read") return "";
+  const span = readingSpanText(book);
+  return `
+    <div class="reading-dates" id="readingDates">
+      <div class="reading-dates-head">
+        <span class="reading-dates-title">Reading log</span>
+        ${span ? `<span class="reading-dates-span">${escapeHtml(span)}</span>` : ""}
+      </div>
+      <div class="date-pair">
+        <label class="date-field">
+          <span>Started</span>
+          <input type="date" id="d-started" value="${book.startedDate || ""}">
+        </label>
+        <label class="date-field">
+          <span>Finished</span>
+          <input type="date" id="d-finished" value="${book.finishedDate || ""}">
+        </label>
+      </div>
+    </div>
   `;
 }
 
@@ -470,7 +505,6 @@ function editModeHtml(book) {
 
 function wireViewMode(sheet, book, store, container) {
   wireCover(sheet, book);
-  wirePriceNote(sheet, book);
 
   const coverTapTarget = sheet.querySelector("#coverTapTarget");
   if (coverTapTarget) {
@@ -481,11 +515,44 @@ function wireViewMode(sheet, book, store, container) {
     btn.addEventListener("click", () => {
       const wasRead = book.readingStatus === "read";
       const newStatus = btn.dataset.status;
-      store.updateItem(book.id, { readingStatus: newStatus });
+      const patch = { readingStatus: newStatus };
+
+      // Auto-stamp the obvious dates so the common path needs no typing —
+      // but never overwrite a date that's already set, since the user may
+      // have corrected it by hand.
+      if (newStatus === "reading" && !book.startedDate) patch.startedDate = today();
+      if (newStatus === "read") {
+        if (!book.startedDate) patch.startedDate = today();
+        if (!book.finishedDate) patch.finishedDate = today();
+      }
+      // Going back to "to-read" means you haven't read it — clear the log.
+      if (newStatus === "to-read") {
+        patch.startedDate = null;
+        patch.finishedDate = null;
+      }
+      // Re-reading: moving Read -> Reading clears the finish date only.
+      if (newStatus === "reading" && wasRead) patch.finishedDate = null;
+
+      store.updateItem(book.id, patch);
       reopenDetail(store, container, book.id);
       if (!wasRead && newStatus === "read") {
         confettiBurst(window.innerWidth / 2, window.innerHeight / 2);
       }
+    });
+  });
+
+  // Reading dates stay editable at any time — change either one and it saves
+  // immediately, with the "took N days" line recomputed.
+  const startedInput = sheet.querySelector("#d-started");
+  const finishedInput = sheet.querySelector("#d-finished");
+  [startedInput, finishedInput].forEach((input) => {
+    if (!input) return;
+    input.addEventListener("change", () => {
+      store.updateItem(book.id, {
+        startedDate: startedInput.value || null,
+        finishedDate: finishedInput.value || null,
+      });
+      reopenDetail(store, container, book.id);
     });
   });
 
@@ -527,14 +594,62 @@ function wireViewMode(sheet, book, store, container) {
           nudge(row.querySelector(".lend-to-input"));
           return;
         }
+        const lentDate = row.querySelector(".lend-start-input").value || today();
         const dueDate = row.querySelector(".due-date-input").value || null;
         const updatedCopies = copies.map((cc) =>
-          cc.id === c.id ? { ...cc, currentLoan: { lentTo, lentDate: today(), dueDate } } : cc
+          cc.id === c.id ? { ...cc, currentLoan: { lentTo, lentDate, dueDate } } : cc
         );
         store.updateItem(book.id, { copies: updatedCopies });
         reopenDetail(store, container, book.id);
       });
     }
+
+    // An active loan's borrower and dates stay editable — fix a typo or a
+    // wrong start date without having to return and re-lend the copy.
+    const loanWho = row.querySelector(".loan-who");
+    const loanStart = row.querySelector(".loan-start");
+    const loanDue = row.querySelector(".loan-due");
+    [loanWho, loanStart, loanDue].forEach((input) => {
+      if (!input) return;
+      input.addEventListener("change", () => {
+        const updatedCopies = copies.map((cc) =>
+          cc.id === c.id
+            ? {
+                ...cc,
+                currentLoan: {
+                  ...cc.currentLoan,
+                  lentTo: loanWho.value.trim() || cc.currentLoan.lentTo,
+                  lentDate: loanStart.value || null,
+                  dueDate: loanDue.value || null,
+                },
+              }
+            : cc
+        );
+        store.updateItem(book.id, { copies: updatedCopies });
+        reopenDetail(store, container, book.id);
+      });
+    });
+
+    // Past loans are editable too, so a return date can be corrected later.
+    row.querySelectorAll(".loan-history-row").forEach((histRow) => {
+      const idx = Number(histRow.dataset.historyIndex);
+      const hStart = histRow.querySelector(".hist-start");
+      const hEnd = histRow.querySelector(".hist-end");
+      [hStart, hEnd].forEach((input) => {
+        if (!input) return;
+        input.addEventListener("change", () => {
+          const updatedCopies = copies.map((cc) => {
+            if (cc.id !== c.id) return cc;
+            const hist = [...(cc.history || [])];
+            if (!hist[idx]) return cc;
+            hist[idx] = { ...hist[idx], lentDate: hStart.value || null, returnedDate: hEnd.value || null };
+            return { ...cc, history: hist };
+          });
+          store.updateItem(book.id, { copies: updatedCopies });
+          reopenDetail(store, container, book.id);
+        });
+      });
+    });
 
     if (returnBtn) {
       returnBtn.addEventListener("click", () => {
@@ -600,24 +715,83 @@ function reopenDetail(store, container, bookId) {
 
 function buildCopyRow(copy) {
   const onLoan = !!copy.currentLoan;
+  const loan = copy.currentLoan;
+  const out = onLoan ? daysBetween(loan.lentDate, today()) : null;
+  const history = copy.history || [];
+
   return `
     <div class="copy-row" data-copy-id="${copy.id}">
       <div class="copy-status ${onLoan ? "on-loan" : "on-shelf"}">
         ${onLoan
-          ? `→ Lent to ${escapeHtml(copy.currentLoan.lentTo)} since ${copy.currentLoan.lentDate}${copy.currentLoan.dueDate ? ` · due ${copy.currentLoan.dueDate}` : ""}`
+          ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}${loan.dueDate ? ` · due ${loan.dueDate}` : ""}`
           : `On your shelf since ${copy.acquiredDate}`}
       </div>
+
+      ${onLoan ? `
+        <div class="loan-edit">
+          <label class="date-field">
+            <span>Borrower</span>
+            <input type="text" class="loan-who" value="${escapeHtml(loan.lentTo || "")}">
+          </label>
+          <div class="date-pair">
+            <label class="date-field">
+              <span>Lent on</span>
+              <input type="date" class="loan-start" value="${loan.lentDate || ""}">
+            </label>
+            <label class="date-field">
+              <span>Due</span>
+              <input type="date" class="loan-due" value="${loan.dueDate || ""}">
+            </label>
+          </div>
+        </div>
+      ` : ""}
+
       <div class="copy-actions">
         ${onLoan
           ? `<button class="return-trigger" type="button">Mark Returned</button>`
           : `<button class="lend-trigger" type="button">Lend This Copy</button>`}
         <button class="remove-copy danger" type="button">Remove</button>
       </div>
+
       ${!onLoan ? `
         <div class="lend-inline-form">
           <input type="text" class="lend-to-input" placeholder="Who's borrowing it?">
-          <input type="date" class="due-date-input">
+          <div class="date-pair">
+            <label class="date-field">
+              <span>Lent on</span>
+              <input type="date" class="lend-start-input" value="${today()}">
+            </label>
+            <label class="date-field">
+              <span>Due</span>
+              <input type="date" class="due-date-input">
+            </label>
+          </div>
           <button class="btn btn-primary confirm-lend" type="button" style="margin-top:2px;">Confirm Loan</button>
+        </div>
+      ` : ""}
+
+      ${history.length ? `
+        <div class="loan-history">
+          <p class="loan-history-title">Past loans (${history.length})</p>
+          ${history.map((h, i) => {
+            const span = daysBetween(h.lentDate, h.returnedDate);
+            return `
+              <div class="loan-history-row" data-history-index="${i}">
+                <span class="loan-history-who">${escapeHtml(h.lentTo || "someone")}</span>
+                <span class="loan-history-span">${h.lentDate || "?"} → ${h.returnedDate || "?"}${span ? ` · ${daysLabel(span)}` : ""}</span>
+                <div class="date-pair">
+                  <label class="date-field">
+                    <span>Lent</span>
+                    <input type="date" class="hist-start" value="${h.lentDate || ""}">
+                  </label>
+                  <label class="date-field">
+                    <span>Returned</span>
+                    <input type="date" class="hist-end" value="${h.returnedDate || ""}">
+                  </label>
+                </div>
+              </div>
+            `;
+          }).join("")}
         </div>
       ` : ""}
     </div>
@@ -792,9 +966,9 @@ function openScanModal(store, container) {
       <div id="scanArea">
         <div id="html5qr-reader" class="scan-video-wrap"></div>
         <div class="scan-zoom-wrap hidden" id="zoomWrap">
-          <span class="scan-zoom-label">🔍 Zoom</span>
+          <span class="scan-zoom-label">${ICONS.zoom}</span>
           <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
-          <button class="torch-btn hidden" id="torchBtn" type="button">🔦</button>
+          <button class="torch-btn hidden" id="torchBtn" type="button" aria-label="Toggle flash">${ICONS.torch}</button>
         </div>
       </div>
       <p class="scan-hint" id="scanHint">Starting camera…</p>

@@ -10,6 +10,7 @@
   --yellow: #FFC738;
   --mint: #00D9A3;
   --purple: #8B5CF6;
+  --red-accent: #E8102D; /* the Stackt logo dot */
 
   --card-radius: 22px;
   --border-w: 3px;
@@ -88,7 +89,13 @@ html, body {
   letter-spacing: -0.5px;
   margin: 0;
 }
-.logo-dot { color: var(--pink); }
+/* -webkit-text-fill-color is set on .logo-btn to stop iOS turning the wordmark
+   blue — but it inherits, so the accent dot has to override it explicitly or it
+   goes black too. */
+.logo-dot {
+  color: var(--red-accent);
+  -webkit-text-fill-color: var(--red-accent);
+}
 
 .fab-inline {
   width: 44px;
@@ -207,7 +214,10 @@ html, body {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* contain, not cover — book covers vary in aspect ratio and `cover` was
+     shaving the edges off. Letterboxing against the tile color keeps the
+     whole cover visible. */
+  object-fit: contain;
   opacity: 0;
   transition: opacity .35s ease;
 }
@@ -269,18 +279,25 @@ html, body {
   padding: 60px 20px;
   opacity: 0.6;
 }
-.empty-state-emoji { font-size: 40px; margin-bottom: 10px; }
+.empty-state-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+}
+.empty-state-icon svg { width: 100%; height: 100%; display: block; }
 
 /* ---------- coming soon placeholder ---------- */
 .coming-soon {
   text-align: center;
   padding: 80px 20px;
 }
-.coming-soon-emoji {
-  font-size: 48px;
+.coming-soon-icon {
+  width: 64px;
+  height: 64px;
   display: inline-block;
   animation: wobble 2.4s var(--spring) infinite;
 }
+.coming-soon-icon svg { width: 100%; height: 100%; display: block; }
 @keyframes wobble {
   0%, 100% { transform: rotate(0deg); }
   25% { transform: rotate(-8deg); }
@@ -328,23 +345,54 @@ html, body {
 .home-tile-sub { font-size: 11px; opacity: 0.65; font-weight: 700; }
 .home-tile[data-tone="dark"] .home-tile-sub { opacity: 0.8; }
 
-/* ---------- view transition ---------- */
-.view-enter {
-  animation: viewIn .32s var(--spring) both;
+/* ---------- view transition ----------
+   Directional slide: going deeper (home -> a module) the new screen comes in
+   from the right; coming back it comes in from the left, and the old screen
+   leaves the opposite way. Reads as real navigation, and matches the direction
+   of an iOS edge-swipe-back. */
+
+/* fallback path (no View Transitions API) */
+.view-enter-fwd  { animation: slideInRight .3s var(--spring) both; }
+.view-enter-back { animation: slideInLeft  .3s var(--spring) both; }
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-@keyframes viewIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
-::view-transition-old(root) {
-  animation: viewOutOld .22s ease-in both;
+/* View Transitions API path */
+:root[data-nav="forward"]::view-transition-old(root) {
+  animation: navOutLeft .26s ease-in both;
 }
-::view-transition-new(root) {
-  animation: viewInNew .32s var(--spring) both;
+:root[data-nav="forward"]::view-transition-new(root) {
+  animation: navInRight .32s var(--spring) both;
 }
-@keyframes viewOutOld { to { opacity: 0; transform: scale(0.97); } }
-@keyframes viewInNew  { from { opacity: 0; transform: scale(1.02); } }
+:root[data-nav="back"]::view-transition-old(root) {
+  animation: navOutRight .26s ease-in both;
+}
+:root[data-nav="back"]::view-transition-new(root) {
+  animation: navInLeft .32s var(--spring) both;
+}
+
+@keyframes navOutLeft  { to   { opacity: 0; transform: translateX(-22px); } }
+@keyframes navInRight  { from { opacity: 0; transform: translateX(30px); } }
+@keyframes navOutRight { to   { opacity: 0; transform: translateX(22px); } }
+@keyframes navInLeft   { from { opacity: 0; transform: translateX(-30px); } }
+
+/* no direction set (first paint) — plain fade, nothing to slide from */
+::view-transition-old(root) { animation: fadeOutPlain .2s ease-in both; }
+::view-transition-new(root) { animation: fadeInPlain .28s var(--spring) both; }
+@keyframes fadeOutPlain { to { opacity: 0; } }
+@keyframes fadeInPlain { from { opacity: 0; transform: scale(1.01); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .view-enter-fwd, .view-enter-back { animation: fadeInPlain .2s ease both; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .01s; }
+}
 
 /* ---------- modal ---------- */
 .modal-backdrop {
@@ -459,16 +507,20 @@ html, body {
 }
 .scan-btn {
   flex: 0 0 auto;
-  padding: 11px 14px;
+  width: 46px;
+  height: 46px;
+  padding: 9px;
   border-radius: 14px;
   border: var(--border-w) solid var(--ink);
   background: var(--mint);
-  font-weight: 800;
-  font-size: 18px;
   cursor: pointer;
   box-shadow: 3px 3px 0 var(--ink);
   transition: transform .15s var(--spring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.scan-btn svg { width: 100%; height: 100%; display: block; }
 .scan-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
 
 .mode-toggle {
@@ -682,7 +734,7 @@ html, body {
   height: 100%;
   border-radius: 18px;
   border: var(--border-w) solid var(--ink);
-  object-fit: cover;
+  object-fit: contain; /* show the whole cover rather than cropping its edges */
   background: #eee;
   display: block;
   opacity: 0;
@@ -720,10 +772,11 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  padding: 6px;
   box-shadow: 2px 2px 0 var(--ink);
   z-index: 2;
 }
+.cover-zoom-badge svg { width: 100%; height: 100%; display: block; }
 
 /* ---------- cover lightbox ---------- */
 .lightbox-backdrop {
@@ -763,7 +816,7 @@ html, body {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain; /* full cover, uncropped */
   border-radius: 18px;
   border: var(--border-w) solid #fff;
   opacity: 0;
@@ -818,6 +871,99 @@ html, body {
 .status-toggle-btn.active.reading { background: var(--blue); color: #fff; }
 .status-toggle-btn.active.read { background: var(--mint); }
 
+/* ---------- reading log / date fields ---------- */
+.reading-dates {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: #fff;
+}
+.reading-dates-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+.reading-dates-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+}
+.reading-dates-span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.date-pair {
+  display: flex;
+  gap: 10px;
+}
+.date-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.date-field > span {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.5;
+}
+.date-field input {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--ink);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 700;
+  background: #fff;
+  color: var(--ink);
+  min-height: 38px;
+}
+
+/* ---------- loan editing ---------- */
+.loan-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+}
+.loan-history {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 2px dashed rgba(26,26,46,0.25);
+}
+.loan-history-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+  margin: 0 0 8px;
+}
+.loan-history-row {
+  margin-bottom: 12px;
+}
+.loan-history-who {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+}
+.loan-history-span {
+  display: block;
+  font-size: 11px;
+  opacity: 0.6;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
 .danger-zone {
   margin-top: 20px;
   padding-top: 16px;
@@ -855,41 +1001,13 @@ html, body {
   margin: 0 0 12px;
 }
 
-.live-price-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  border-radius: 14px;
-  border: var(--border-w) solid var(--ink);
-  background: var(--yellow);
-  transition: opacity .2s ease, transform .2s ease;
-}
-.live-price-card.hidden { display: none; }
-.live-price-card.found { background: var(--mint); }
-.live-price-label {
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  opacity: 0.75;
-  flex-shrink: 0;
-}
-.live-price-value {
-  font-size: 13px;
-  font-weight: 800;
-  text-align: right;
-}
-
 /* ---------- scan-match confirmation ---------- */
 .scan-match-cover {
   width: 96px;
   height: 128px;
   border-radius: 12px;
   border: var(--border-w) solid var(--ink);
-  object-fit: cover;
+  object-fit: contain;
   margin: 0 auto 14px;
   display: block;
 }
@@ -904,11 +1022,13 @@ html, body {
   padding: 6px 0 14px;
 }
 .scan-zoom-label {
-  font-size: 12px;
-  font-weight: 800;
-  opacity: 0.6;
-  white-space: nowrap;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: block;
+  opacity: 0.75;
 }
+.scan-zoom-label svg { width: 100%; height: 100%; display: block; }
 .scan-zoom-wrap input[type="range"] {
   flex: 1;
   -webkit-appearance: none;
@@ -931,12 +1051,16 @@ html, body {
   flex: 0 0 auto;
   width: 40px;
   height: 40px;
+  padding: 8px;
   border-radius: 12px;
   border: 2px solid var(--ink);
   background: #fff;
-  font-size: 16px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.torch-btn svg { width: 100%; height: 100%; display: block; }
 .torch-btn.on { background: var(--yellow); }
 
 /* ---------- utility ---------- */

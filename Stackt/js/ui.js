@@ -5,8 +5,11 @@
 // ============================================
 
 import { bounceTap, popIn, staggerIn } from "./animations.js";
+import { ICONS } from "./icons.js";
 
-const ICONS = { book: "📖", lp: "💿", music: "🎧", photo: "📷" };
+/** Emoji fallback used by the generic item card's swatch (module-specific
+ *  screens like Books draw their own richer card). */
+const SWATCH_EMOJI = { book: "📖", lp: "💿", music: "🎧", photo: "📷" };
 
 const STATUS_LABEL = {
   "to-read": "To Read",
@@ -27,7 +30,7 @@ export function createItemCard(item, onTap) {
 
   card.innerHTML = `
     <div class="item-swatch" style="background:${item.color || "#eee"}">
-      ${ICONS[item.type] || "✦"}
+      ${SWATCH_EMOJI[item.type] || "✦"}
     </div>
     <div class="item-body">
       <p class="item-title">${escapeHtml(item.title)}</p>
@@ -59,7 +62,7 @@ export function renderCardGrid(container, items, onTap, emptyMessage = "Nothing 
     container.appendChild(grid);
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = `<div class="empty-state-emoji">🗂️</div><p>${emptyMessage}</p>`;
+    empty.innerHTML = `<div class="empty-state-icon">${ICONS.empty}</div><p>${emptyMessage}</p>`;
     container.appendChild(empty);
     return;
   }
@@ -89,10 +92,21 @@ export function openModal(buildContent, onClose = null) {
 
   const sheet = document.createElement("div");
   sheet.className = "modal-sheet";
-  buildContent(sheet);
 
+  // Attach to the document BEFORE filling in the content. Anything that needs to
+  // find its own element by id — the barcode scanner's container, most notably —
+  // fails outright if the sheet is still detached when buildContent runs.
   backdrop.appendChild(sheet);
   root.appendChild(backdrop);
+
+  buildContent(sheet);
+}
+
+/** True while a modal sheet is on screen — used so the back gesture dismisses
+ * the modal first instead of navigating away behind it. */
+export function isModalOpen() {
+  const root = document.getElementById("modalRoot");
+  return !!(root && root.childElementCount > 0);
 }
 
 export function closeModal() {
