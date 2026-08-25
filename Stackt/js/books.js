@@ -255,7 +255,10 @@ function buildBookCard(book, onTap) {
     img.onerror = () => {
       swatch.classList.remove("shimmer");
     };
-    img.src = coverUrl(book.isbn, "S");
+    // Request Open Library's largest cover size even for the small card thumbnail —
+    // a browser shrinking a big image down looks sharp; stretching the "S" size up to
+    // fit a retina-density 52px box is what was causing the blurry/soft covers.
+    img.src = coverUrl(book.isbn, "L");
   }
 
   return card;
@@ -329,20 +332,38 @@ function priceLinksHtml(book) {
   const kino = book.isbn
     ? `https://singapore.kinokuniya.com/bw/${encodeURIComponent(book.isbn)}`
     : `https://www.google.com/search?q=site:singapore.kinokuniya.com+${q}`;
-  const blackwells = `https://www.google.com/search?q=site:blackwells.co.uk+${q}`;
+  // Blackwell's product URLs are /bookshop/product/{any-slug}/{isbn} — the slug text is
+  // cosmetic/SEO-only, the server resolves purely off the trailing ISBN. Confirmed by
+  // fetching the pattern with a throwaway slug and a real ISBN and getting the right book back.
+  const blackwells = book.isbn
+    ? `https://blackwells.co.uk/bookshop/product/book/${encodeURIComponent(book.isbn)}`
+    : `https://www.google.com/search?q=site:blackwells.co.uk+${q}`;
   return `
     <div class="price-links">
       <a class="price-link" href="${kino}" target="_blank" rel="noopener">Check Kinokuniya</a>
       <a class="price-link" href="${blackwells}" target="_blank" rel="noopener">Check Blackwell's</a>
     </div>
-    <p class="google-price-note" id="googlePriceNote"></p>
   `;
 }
+
+// Google Books' API is one of the few price sources that actually allows a client-side
+// fetch (Kinokuniya/Blackwell's don't, and browsers block reading their pages directly).
+// This runs automatically, no tap required — but coverage is inconsistent, so the card
+// just disappears rather than show an empty/broken state when no price is listed.
 async function wirePriceNote(sheet, book) {
-  const note = sheet.querySelector("#googlePriceNote");
-  if (!note || !book.isbn) return;
+  const card = sheet.querySelector("#livePriceCard");
+  const valueEl = sheet.querySelector("#livePriceValue");
+  if (!card || !valueEl || !book.isbn) {
+    if (card) card.classList.add("hidden");
+    return;
+  }
   const price = await lookupGoogleBooksPrice(book.isbn);
-  if (price) note.textContent = `Google Books lists this around ${price.currency} ${price.amount}`;
+  if (price) {
+    valueEl.textContent = `${price.currency} ${price.amount} on Google Books`;
+    card.classList.add("found");
+  } else {
+    card.classList.add("hidden");
+  }
 }
 
 // ---------- detail modal: view mode + edit mode ----------
@@ -401,7 +422,12 @@ function viewModeHtml(book, opts) {
         <button class="add-copy-btn" id="addCopyBtn" type="button">+ Add another copy</button>
       </div>
     ` : `
-      <div class="status-pill status-to-read" style="margin-bottom:10px;">Wishlist${book.price != null ? ` · $${Number(book.price).toFixed(2)}` : ""}</div>
+      <div class="status-pill status-to-read" style="margin-bottom:6px;">Wishlist${book.price != null ? ` · $${Number(book.price).toFixed(2)}` : ""}</div>
+      ${book.price != null && book.priceCheckedDate ? `<p class="price-checked-note">You checked this price on ${book.priceCheckedDate}</p>` : ""}
+      <div class="live-price-card" id="livePriceCard">
+        <span class="live-price-label">🔎 Live check</span>
+        <span class="live-price-value" id="livePriceValue">Checking Google Books for a live price…</span>
+      </div>
       ${priceLinksHtml(book)}
       <button class="btn btn-secondary" id="gotCopyBtn" type="button" style="margin-top:14px;">I got a copy — mark as owned</button>
     `}
@@ -545,7 +571,13 @@ function wireEditMode(sheet, book, store, container) {
       isbn: sheet.querySelector("#f-isbn").value.trim() || null,
     };
     const priceInput = sheet.querySelector("#f-price");
-    if (priceInput) patch.price = parseFloat(priceInput.value) || null;
+    if (priceInput) {
+      const parsed = parseFloat(priceInput.value);
+      patch.price = isNaN(parsed) ? null : parsed;
+      // Stamp when you last touched the price so the wishlist view can show its age
+      // instead of implying it's live — it's only as fresh as your last manual check.
+      patch.priceCheckedDate = patch.price != null ? today() : null;
+    }
 
     store.updateItem(book.id, patch);
     closeModal();

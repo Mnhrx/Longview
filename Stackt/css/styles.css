@@ -840,10 +840,40 @@ html, body {
   transition: transform .15s var(--spring);
 }
 .price-link:active { transform: scale(0.95); }
-.google-price-note {
+
+.price-checked-note {
   font-size: 12px;
-  opacity: 0.6;
-  margin-top: 8px;
+  opacity: 0.55;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.live-price-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  border: var(--border-w) solid var(--ink);
+  background: var(--yellow);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.live-price-card.hidden { display: none; }
+.live-price-card.found { background: var(--mint); }
+.live-price-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+.live-price-value {
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
 }
 
 /* ---------- scan-match confirmation ---------- */
