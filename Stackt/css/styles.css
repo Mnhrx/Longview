@@ -342,52 +342,24 @@ html, body {
 .home-tile[data-tone="dark"] .home-tile-sub { opacity: 0.8; }
 
 /* ---------- view transition ----------
-   Directional slide: going deeper (home -> a module) the new screen comes in
-   from the right; coming back it comes in from the left, and the old screen
-   leaves the opposite way. Reads as real navigation, and matches the direction
-   of an iOS edge-swipe-back. */
+   Content-container animation only. The View Transitions API was tried and
+   removed: its whole-page snapshot flickers badly in Safari with a sticky
+   header and 100dvh, and doubles up with iOS's own swipe-back animation. */
 
-/* fallback path (no View Transitions API) */
-.view-enter-fwd  { animation: slideInRight .3s var(--spring) both; }
-.view-enter-back { animation: slideInLeft  .3s var(--spring) both; }
+.view-enter-fwd  { animation: slideInRight .26s var(--spring) both; }
+.view-enter-back { animation: slideInLeft  .26s var(--spring) both; }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(28px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-28px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translate3d(-24px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-
-/* View Transitions API path */
-:root[data-nav="forward"]::view-transition-old(root) {
-  animation: navOutLeft .26s ease-in both;
-}
-:root[data-nav="forward"]::view-transition-new(root) {
-  animation: navInRight .32s var(--spring) both;
-}
-:root[data-nav="back"]::view-transition-old(root) {
-  animation: navOutRight .26s ease-in both;
-}
-:root[data-nav="back"]::view-transition-new(root) {
-  animation: navInLeft .32s var(--spring) both;
-}
-
-@keyframes navOutLeft  { to   { opacity: 0; transform: translateX(-22px); } }
-@keyframes navInRight  { from { opacity: 0; transform: translateX(30px); } }
-@keyframes navOutRight { to   { opacity: 0; transform: translateX(22px); } }
-@keyframes navInLeft   { from { opacity: 0; transform: translateX(-30px); } }
-
-/* no direction set (first paint) — plain fade, nothing to slide from */
-::view-transition-old(root) { animation: fadeOutPlain .2s ease-in both; }
-::view-transition-new(root) { animation: fadeInPlain .28s var(--spring) both; }
-@keyframes fadeOutPlain { to { opacity: 0; } }
-@keyframes fadeInPlain { from { opacity: 0; transform: scale(1.01); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .view-enter-fwd, .view-enter-back { animation: fadeInPlain .2s ease both; }
-  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .01s; }
+  .view-enter-fwd, .view-enter-back { animation: none; }
 }
 
 /* ---------- modal ---------- */
@@ -467,6 +439,13 @@ html, body {
   font-size: 11px;
   font-weight: 600;
   opacity: 0.6;
+}
+
+.wishlist-total {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--purple);
+  margin: 0 0 14px;
 }
 
 .scan-match-note {
@@ -572,12 +551,14 @@ html, body {
 }
 .mode-btn {
   flex: 1;
-  padding: 9px;
+  min-width: 0;
+  padding: 9px 4px;
   border-radius: 12px;
   border: var(--border-w) solid var(--ink);
   background: #fff;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12.5px;
+  white-space: nowrap;
   cursor: pointer;
   transition: transform .15s var(--spring);
 }
@@ -637,14 +618,52 @@ html, body {
   opacity: 0.55;
   margin-bottom: 8px;
 }
+/* Flex column with a real gap — children used to space themselves with
+   margins, so anything inserted between them (the shelf-date block) collided
+   with the action buttons below it. */
 .copy-row {
   border: var(--border-w) solid var(--ink);
   border-radius: 14px;
   padding: 12px 14px;
   margin-bottom: 10px;
   background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.copy-status { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.copy-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.copy-status { font-size: 13px; font-weight: 700; margin: 0; flex: 1; min-width: 0; }
+
+.mini-edit {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 9px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, transform .15s var(--spring);
+}
+.mini-edit:active { transform: scale(0.92); }
+.mini-edit.open { background: var(--yellow); }
+.mini-edit .btn-icon { width: 100%; height: 100%; }
+
+.copy-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0 2px;
+  border-top: 2px dashed rgba(26,26,46,0.2);
+}
+.copy-dates[hidden] { display: none; }
 .copy-status.on-shelf { color: var(--mint); }
 .copy-status.on-loan { color: var(--pink); }
 .copy-actions { display: flex; gap: 8px; flex-wrap: wrap; }

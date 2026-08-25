@@ -9,7 +9,7 @@ import homeModule from "./home.js";
 import booksModule from "./books.js";
 import { makePlaceholder } from "./placeholder.js";
 import { bounceTap } from "./animations.js";
-import { closeTopLayer } from "./ui.js";
+import { syncLayersTo, layerDepth } from "./ui.js";
 
 router.register("home", homeModule);
 router.register("books", booksModule);
@@ -27,19 +27,21 @@ async function boot() {
   // No custom gesture handling to fight Safari over.
   router.onNavigate = (view, opts = {}) => {
     if (opts.fromPopState) return; // already a history event, don't re-push
-    const state = { view };
+    const state = { view, depth: 0 };
     if (opts.replace) history.replaceState(state, "", `#${view}`);
     else history.pushState(state, "", `#${view}`);
   };
 
   window.addEventListener("popstate", (e) => {
-    // Overlays are layers of their own: back peels off the topmost one
-    // (cover lightbox, then modal sheet) before it changes screens.
-    if (closeTopLayer()) {
-      // re-push so the screen itself stays put after the layer closes
-      history.pushState({ view: router.current }, "", `#${router.current}`);
-      return;
+    // Every open layer owns a history entry, so the entry we've just landed on
+    // tells us exactly how many should still be showing. Close down to that —
+    // no interception, no re-pushing, nothing that can fight the gesture.
+    const targetDepth = (e.state && e.state.depth) || 0;
+    if (layerDepth() > targetDepth) {
+      syncLayersTo(targetDepth);
+      return; // a layer absorbed this back; the screen itself doesn't change
     }
+
     const view = (e.state && e.state.view) || viewFromHash() || "home";
     router.navigate(view, { fromPopState: true, direction: "back" });
   });

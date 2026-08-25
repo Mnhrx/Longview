@@ -71,6 +71,65 @@ export function renderCardGrid(container, items, onTap, emptyMessage = "Nothing 
   container.appendChild(grid);
 }
 
+// ============================================
+// Layer stack — modals and the cover lightbox are "layers" stacked over the
+// current screen. Each open layer owns ONE browser history entry, so the back
+// gesture pops it the way the platform expects.
+//
+// Why this matters: the previous approach let back navigate away and then
+// tried to undo it with pushState. That survives a programmatic history.back()
+// but loses against a real iOS edge-swipe, which the browser has already
+// committed to — leaving the URL on one screen and the DOM on another.
+// ============================================
+
+let layers = []; // [{ kind, teardown }] innermost last
+
+/** Number of layers currently open — mirrored into history state as `depth`. */
+export function layerDepth() {
+  return layers.length;
+}
+
+/** Registers a layer and gives it a history entry so back can pop it. */
+function pushLayer(kind, teardown) {
+  layers.push({ kind, teardown });
+  const view = (history.state && history.state.view) || "";
+  history.pushState({ view, depth: layers.length }, "", location.hash || "");
+}
+
+/** Tears down the innermost layer WITHOUT touching history. Called by the
+ *  popstate handler once the browser has already popped the entry. */
+export function popLayer() {
+  const layer = layers.pop();
+  if (!layer) return false;
+  try { layer.teardown(); } catch (e) { console.warn(e); }
+  return true;
+}
+
+/** Syncs the visible layers down to `depth` — used on popstate. */
+export function syncLayersTo(depth) {
+  let closed = false;
+  while (layers.length > depth) {
+    popLayer();
+    closed = true;
+  }
+  return closed;
+}
+
+/** User-initiated close (X button, backdrop tap, Save). Goes through history
+ *  so the stack never drifts out of sync with what's on screen. */
+export function dismissLayer() {
+  if (layers.length) history.back();
+}
+
+/** Drops every layer with no history involvement — for a hard screen change. */
+export function clearAllLayers() {
+  while (layers.length) popLayer();
+}
+
+export function isModalOpen() {
+  return layers.some((l) => l.kind === "modal");
+}
+
 let currentOnClose = null;
 
 /**
@@ -79,6 +138,21 @@ let currentOnClose = null;
  * use it for cleanup like stopping a camera stream.
  */
 export function openModal(buildContent, onClose = null) {
+  // Reopening while a modal is already up replaces it in place rather than
+  // stacking a second history entry.
+  if (isModalOpen()) {
+    const sheet = document.querySelector("#modalRoot .modal-sheet");
+    if (sheet) {
+      if (currentOnClose) {
+        try { currentOnClose(); } catch (e) { console.warn(e); }
+      }
+      currentOnClose = onClose;
+      sheet.innerHTML = "";
+      buildContent(sheet);
+      return;
+    }
+  }
+
   const root = document.getElementById("modalRoot");
   root.innerHTML = "";
   currentOnClose = onClose;
@@ -86,7 +160,7 @@ export function openModal(buildContent, onClose = null) {
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) closeModal();
+    if (e.target === backdrop) dismissLayer();
   });
 
   const sheet = document.createElement("div");
@@ -98,51 +172,42 @@ export function openModal(buildContent, onClose = null) {
   backdrop.appendChild(sheet);
   root.appendChild(backdrop);
 
+  pushLayer("modal", () => {
+    if (currentOnClose) {
+      try { currentOnClose(); } catch (e) { console.warn(e); }
+      currentOnClose = null;
+    }
+    root.innerHTML = "";
+  });
+
   buildContent(sheet);
 }
 
-/** True while a modal sheet is on screen — used so the back gesture dismisses
- * the modal first instead of navigating away behind it. */
-export function isModalOpen() {
-  const root = document.getElementById("modalRoot");
-  return !!(root && root.childElementCount > 0);
+/** Swaps a modal's contents without tearing the sheet down — no reopen
+ *  animation, no history churn. This is what keeps the sheet from "jumping"
+ *  every time you tap a status button. */
+export function updateModal(buildContent) {
+  const sheet = document.querySelector("#modalRoot .modal-sheet");
+  if (!sheet) return false;
+  sheet.innerHTML = "";
+  buildContent(sheet);
+  return true;
 }
 
-/**
- * Dismiss the topmost visible layer, innermost first: cover lightbox, then
- * modal sheet. Returns true if something was closed, so the caller knows the
- * back gesture was consumed here rather than being a screen change.
- *
- * Every full-screen overlay MUST be closable through here — an overlay the
- * back gesture doesn't know about survives navigation and silently blocks
- * every tap on the screen underneath it.
- */
-export function closeTopLayer() {
-  const lightbox = document.querySelector(".lightbox-backdrop");
-  if (lightbox) {
-    lightbox.remove();
-    return true;
-  }
-  if (isModalOpen()) {
-    closeModal();
-    return true;
-  }
-  return false;
+/** Opens a full-screen overlay as its own layer. `build(el)` fills it in. */
+export function openOverlay(className, build) {
+  const el = document.createElement("div");
+  el.className = className;
+  document.body.appendChild(el);
+  pushLayer("overlay", () => el.remove());
+  build(el);
+  return el;
 }
 
-/** Belt-and-braces sweep on screen change: nothing should outlive a navigation. */
-export function clearAllLayers() {
-  document.querySelectorAll(".lightbox-backdrop").forEach((el) => el.remove());
-  if (isModalOpen()) closeModal();
-}
-
+/** Programmatic teardown of the modal only (no history move) — used when a
+ *  flow replaces one sheet with another, e.g. scan match -> detail. */
 export function closeModal() {
-  if (currentOnClose) {
-    try { currentOnClose(); } catch (e) { console.warn(e); }
-    currentOnClose = null;
-  }
-  const root = document.getElementById("modalRoot");
-  root.innerHTML = "";
+  dismissLayer();
 }
 
 export function escapeHtml(str) {

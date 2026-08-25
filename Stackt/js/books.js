@@ -4,7 +4,7 @@
 // barcode scanner with a view/edit split on the detail screen.
 // ============================================
 
-import { openModal, closeModal, escapeHtml } from "./ui.js";
+import { openModal, updateModal, closeModal, dismissLayer, openOverlay, escapeHtml } from "./ui.js";
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl } from "./barcode.js";
@@ -21,7 +21,7 @@ const FILTERS = [
 const STATUS_LABELS = { "to-read": "To Read", reading: "Reading", read: "Read" };
 
 let activeFilter = "all";
-let viewMode = "list"; // 'list' | 'authors'
+let viewMode = "library"; // 'library' | 'wishlist' | 'authors'
 let authorFilter = null;
 let searchQuery = "";
 
@@ -78,8 +78,17 @@ function readingSpanText(book) {
   return null;
 }
 
+/** Books you actually own — one or more physical copies. */
+function ownedBooks(store) {
+  return store.itemsByType("book").filter(isOwned);
+}
+/** Books you want but don't have yet — no copies recorded. */
+function wishlistBooks(store) {
+  return store.itemsByType("book").filter((b) => !isOwned(b));
+}
+
 function getBooks(store) {
-  let books = store.itemsByType("book");
+  let books = ownedBooks(store);
   if (authorFilter) books = books.filter((b) => (b.creator || "Unknown") === authorFilter);
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
@@ -102,7 +111,9 @@ function render(container, store) {
 
   const title = document.createElement("p");
   title.className = "view-title";
-  title.textContent = authorFilter ? `Books by ${authorFilter}` : "Books";
+  title.textContent = authorFilter
+    ? `Books by ${authorFilter}`
+    : viewMode === "wishlist" ? "Wishlist" : "Books";
   wrap.appendChild(title);
 
   if (authorFilter) {
@@ -128,7 +139,8 @@ function render(container, store) {
     const modeToggle = document.createElement("div");
     modeToggle.className = "mode-toggle";
     modeToggle.innerHTML = `
-      <button class="mode-btn ${viewMode === "list" ? "active" : ""}" data-mode="list" type="button">All Books</button>
+      <button class="mode-btn ${viewMode === "library" ? "active" : ""}" data-mode="library" type="button">Library</button>
+      <button class="mode-btn ${viewMode === "wishlist" ? "active" : ""}" data-mode="wishlist" type="button">Wishlist</button>
       <button class="mode-btn ${viewMode === "authors" ? "active" : ""}" data-mode="authors" type="button">By Author</button>
     `;
     wrap.appendChild(modeToggle);
@@ -167,6 +179,11 @@ function renderBody(bodyHolder, store, container) {
     return;
   }
 
+  if (viewMode === "wishlist" && !authorFilter) {
+    renderWishlist(bodyHolder, store, container);
+    return;
+  }
+
   const filterRow = document.createElement("div");
   filterRow.className = "filter-row";
   FILTERS.forEach((f) => {
@@ -185,6 +202,41 @@ function renderBody(bodyHolder, store, container) {
   const listHolder = document.createElement("div");
   bodyHolder.appendChild(listHolder);
   renderBookGrid(listHolder, getBooks(store), (book) => openDetail(book, store, container));
+}
+
+/** Wishlist gets its own screen: no reading-status chips (you haven't got it
+ *  yet), and price is the thing worth surfacing. */
+function renderWishlist(bodyHolder, store, container) {
+  let books = wishlistBooks(store);
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    books = books.filter(
+      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+    );
+  }
+
+  if (books.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML = `<div class="empty-state-icon">${ICONS.empty}</div><p>Nothing on the wishlist yet — add a book and pick "Add to Wishlist"</p>`;
+    bodyHolder.appendChild(empty);
+    return;
+  }
+
+  const priced = books.filter((b) => b.price != null);
+  if (priced.length) {
+    const total = priced.reduce((sum, b) => sum + Number(b.price), 0);
+    const summary = document.createElement("p");
+    summary.className = "wishlist-total";
+    summary.textContent =
+      `${books.length} book${books.length === 1 ? "" : "s"} · $${total.toFixed(2)} for the ${priced.length} you've priced`;
+    bodyHolder.appendChild(summary);
+  }
+
+  const grid = document.createElement("div");
+  grid.className = "card-grid";
+  books.forEach((book) => grid.appendChild(buildBookCard(book, (b) => openDetail(b, store, container))));
+  bodyHolder.appendChild(grid);
 }
 
 function renderAuthorList(bodyHolder, store, container) {
@@ -332,38 +384,38 @@ function wireCover(sheet, book) {
 // cover source) only reliably has front covers, so this is front-only —
 // the caption says so rather than pretending a back cover exists.
 function openCoverLightbox(book) {
-  const overlay = document.createElement("div");
-  overlay.className = "lightbox-backdrop";
-  overlay.innerHTML = `
-    <button class="lightbox-close" type="button" aria-label="Close">✕</button>
-    <div class="lightbox-content">
-      <div class="lightbox-cover-wrap">
-        <img class="lightbox-img" id="lightboxImg" alt="${escapeHtml(book.title)} cover">
-        <div class="lightbox-fallback shimmer" id="lightboxFallback" style="background:${book.color || "#eee"}">${ICONS.books}</div>
+  // Registered as a real layer so it owns a history entry — the back gesture
+  // pops it like any other screen instead of leaving it stranded on top.
+  openOverlay("lightbox-backdrop", (overlay) => {
+    overlay.innerHTML = `
+      <button class="lightbox-close" type="button" aria-label="Close">✕</button>
+      <div class="lightbox-content">
+        <div class="lightbox-cover-wrap">
+          <img class="lightbox-img" id="lightboxImg" alt="${escapeHtml(book.title)} cover">
+          <div class="lightbox-fallback shimmer" id="lightboxFallback" style="background:${book.color || "#eee"}">${ICONS.books}</div>
+        </div>
+        <p class="lightbox-caption" id="lightboxCaption">Front cover</p>
       </div>
-      <p class="lightbox-caption" id="lightboxCaption">Front cover</p>
-    </div>
-  `;
-  document.body.appendChild(overlay);
+    `;
 
-  const close = () => overlay.remove();
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
-  overlay.querySelector(".lightbox-close").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) dismissLayer();
+    });
+    overlay.querySelector(".lightbox-close").addEventListener("click", () => dismissLayer());
 
-  const img = overlay.querySelector("#lightboxImg");
-  const fallback = overlay.querySelector("#lightboxFallback");
-  const caption = overlay.querySelector("#lightboxCaption");
-  img.addEventListener("load", () => {
-    img.classList.add("loaded");
-    fallback.classList.add("fade-out");
+    const img = overlay.querySelector("#lightboxImg");
+    const fallback = overlay.querySelector("#lightboxFallback");
+    const caption = overlay.querySelector("#lightboxCaption");
+    img.addEventListener("load", () => {
+      img.classList.add("loaded");
+      fallback.classList.add("fade-out");
+    });
+    img.addEventListener("error", () => {
+      fallback.classList.remove("shimmer");
+      caption.textContent = "No cover image found for this edition";
+    });
+    img.src = coverUrl(book.isbn, "L");
   });
-  img.addEventListener("error", () => {
-    fallback.classList.remove("shimmer");
-    caption.textContent = "No cover image found for this edition";
-  });
-  img.src = coverUrl(book.isbn, "L");
 }
 
 function priceLinksHtml(book) {
@@ -389,26 +441,33 @@ function priceLinksHtml(book) {
 // ---------- detail modal: view mode + edit mode ----------
 
 function openDetail(book, store, container, opts = {}) {
-  let mode = "view";
+  openModal((sheet) => paintDetail(sheet, book, store, container, opts));
+}
 
-  openModal((sheet) => {
-    function draw() {
-      sheet.innerHTML = mode === "view" ? viewModeHtml(book, opts) : editModeHtml(book);
+/** Redraws the detail into an already-open sheet. Returns false if none is up. */
+function drawDetailInto(book, store, container, opts = {}) {
+  return updateModal((sheet) => paintDetail(sheet, book, store, container, opts));
+}
 
-      const editBtn = sheet.querySelector("#toggleEditBtn");
-      if (editBtn) {
-        editBtn.addEventListener("click", () => {
-          mode = mode === "view" ? "edit" : "view";
-          draw();
-        });
-      }
+function paintDetail(sheet, book, store, container, opts = {}) {
+  let mode = opts.mode === "edit" ? "edit" : "view";
 
-      if (mode === "view") wireViewMode(sheet, book, store, container, opts);
-      else wireEditMode(sheet, book, store, container);
+  function draw() {
+    sheet.innerHTML = mode === "view" ? viewModeHtml(book, opts) : editModeHtml(book);
+
+    const editBtn = sheet.querySelector("#toggleEditBtn");
+    if (editBtn) {
+      editBtn.addEventListener("click", () => {
+        mode = mode === "view" ? "edit" : "view";
+        draw();
+      });
     }
 
-    draw();
-  });
+    if (mode === "view") wireViewMode(sheet, book, store, container, opts);
+    else wireEditMode(sheet, book, store, container);
+  }
+
+  draw();
 }
 
 function viewModeHtml(book, opts) {
@@ -542,7 +601,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       if (newStatus === "reading" && wasRead) patch.finishedDate = null;
 
       store.updateItem(book.id, patch);
-      reopenDetail(store, container, book.id);
+      refreshDetail(store, container, book.id);
       if (!wasRead && newStatus === "read") {
         confettiBurst(window.innerWidth / 2, window.innerHeight / 2);
       }
@@ -560,7 +619,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
         startedDate: startedInput.value || null,
         finishedDate: finishedInput.value || null,
       });
-      reopenDetail(store, container, book.id);
+      refreshDetail(store, container, book.id);
     });
   });
 
@@ -569,7 +628,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     gotCopyBtn.addEventListener("click", () => {
       const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
       store.updateItem(book.id, { copies: [...(book.copies || []), newCopy], price: null });
-      reopenDetail(store, container, book.id);
+      refreshDetail(store, container, book.id);
     });
   }
 
@@ -578,7 +637,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     addCopyBtn.addEventListener("click", () => {
       const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
       store.updateItem(book.id, { copies: [...(book.copies || []), newCopy] });
-      reopenDetail(store, container, book.id);
+      refreshDetail(store, container, book.id);
     });
   }
 
@@ -594,6 +653,16 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     const confirmBtn = row.querySelector(".confirm-lend");
 
     if (lendBtn) lendBtn.addEventListener("click", () => inlineForm.classList.toggle("open"));
+
+    // Dates stay read-only until you ask to change them.
+    const miniEdit = row.querySelector(".mini-edit");
+    const dateBlock = row.querySelector(".copy-dates");
+    if (miniEdit && dateBlock) {
+      miniEdit.addEventListener("click", () => {
+        dateBlock.hidden = !dateBlock.hidden;
+        miniEdit.classList.toggle("open", !dateBlock.hidden);
+      });
+    }
 
     // Arrived here from "Lend it to someone" on the scan screen — open the
     // form for that copy and put the cursor in the borrower field.
@@ -617,7 +686,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
           cc.id === c.id ? { ...cc, currentLoan: { lentTo, lentDate, dueDate } } : cc
         );
         store.updateItem(book.id, { copies: updatedCopies });
-        reopenDetail(store, container, book.id);
+        refreshDetail(store, container, book.id);
       });
     }
 
@@ -643,7 +712,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
             : cc
         );
         store.updateItem(book.id, { copies: updatedCopies });
-        reopenDetail(store, container, book.id);
+        refreshDetail(store, container, book.id);
       });
     });
 
@@ -656,7 +725,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
           cc.id === c.id ? { ...cc, acquiredDate: acquiredInput.value || null } : cc
         );
         store.updateItem(book.id, { copies: updatedCopies });
-        reopenDetail(store, container, book.id);
+        refreshDetail(store, container, book.id);
       });
     }
 
@@ -676,7 +745,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
             return { ...cc, history: hist };
           });
           store.updateItem(book.id, { copies: updatedCopies });
-          reopenDetail(store, container, book.id);
+          refreshDetail(store, container, book.id);
         });
       });
     });
@@ -689,7 +758,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
           return { ...cc, currentLoan: null, history: [...(cc.history || []), historyEntry] };
         });
         store.updateItem(book.id, { copies: updatedCopies });
-        reopenDetail(store, container, book.id);
+        refreshDetail(store, container, book.id);
       });
     }
 
@@ -697,7 +766,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       removeBtn.addEventListener("click", () => {
         const updatedCopies = copies.filter((cc) => cc.id !== c.id);
         store.updateItem(book.id, { copies: updatedCopies });
-        reopenDetail(store, container, book.id);
+        refreshDetail(store, container, book.id);
       });
     }
   });
@@ -736,11 +805,33 @@ function wireEditMode(sheet, book, store, container) {
   });
 }
 
-function reopenDetail(store, container, bookId) {
-  closeModal();
-  render(container, store); // keep the list behind the modal in sync too
+/**
+ * Refreshes an open book sheet after a data change.
+ *
+ * Redraws the sheet's contents in place rather than closing and reopening it —
+ * a teardown replayed the slide-up animation on every status tap, which is what
+ * looked like the sheet jumping. Also keeps the list behind it in sync, without
+ * re-animating it.
+ */
+function refreshDetail(store, container, bookId, opts = {}) {
   const fresh = store.get().items.find((it) => it.id === bookId);
-  if (fresh) openDetail(fresh, store, container);
+  if (!fresh) {
+    dismissLayer();
+    render(container, store);
+    return;
+  }
+  renderQuiet(container, store);
+  if (!drawDetailInto(fresh, store, container, opts)) {
+    openDetail(fresh, store, container, opts);
+  }
+}
+
+/** Re-renders the list behind the sheet without the entrance animation. */
+function renderQuiet(container, store) {
+  const view = document.getElementById("view");
+  const prevScroll = view ? view.scrollTop : 0;
+  render(container, store);
+  if (view) view.scrollTop = prevScroll;
 }
 
 function buildCopyRow(copy) {
@@ -751,21 +842,24 @@ function buildCopyRow(copy) {
 
   return `
     <div class="copy-row" data-copy-id="${copy.id}">
-      <div class="copy-status ${onLoan ? "on-loan" : "on-shelf"}">
-        ${onLoan
-          ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}${loan.dueDate ? ` · due ${fmtDate(loan.dueDate)}` : ""}`
-          : `On your shelf since ${fmtDate(copy.acquiredDate)}`}
+      <div class="copy-line">
+        <div class="copy-status ${onLoan ? "on-loan" : "on-shelf"}">
+          ${onLoan
+            ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}${loan.dueDate ? ` · due ${fmtDate(loan.dueDate)}` : ""}`
+            : `On your shelf since ${fmtDate(copy.acquiredDate)}`}
+        </div>
+        <button class="mini-edit" type="button" aria-label="Edit dates"><span class="btn-icon">${ICONS.edit}</span></button>
       </div>
 
-      <div class="date-pair" style="margin-top:8px;">
-        <label class="date-field">
-          <span>Added to shelf</span>
-          <input type="date" class="copy-acquired" value="${copy.acquiredDate || ""}">
-        </label>
-      </div>
-
-      ${onLoan ? `
-        <div class="loan-edit">
+      <!-- Dates read as plain information until you tap the pencil. -->
+      <div class="copy-dates" hidden>
+        <div class="date-pair">
+          <label class="date-field">
+            <span>Added to shelf</span>
+            <input type="date" class="copy-acquired" value="${copy.acquiredDate || ""}">
+          </label>
+        </div>
+        ${onLoan ? `
           <label class="date-field">
             <span>Borrower</span>
             <input type="text" class="loan-who" value="${escapeHtml(loan.lentTo || "")}">
@@ -780,8 +874,8 @@ function buildCopyRow(copy) {
               <input type="date" class="loan-due" value="${loan.dueDate || ""}">
             </label>
           </div>
-        </div>
-      ` : ""}
+        ` : ""}
+      </div>
 
       <div class="copy-actions">
         ${onLoan
@@ -841,13 +935,23 @@ function openScanMatch(book, store, container) {
   openModal((sheet) => {
     const copies = book.copies || [];
     const shelfCopy = copies.find((c) => !c.currentLoan) || null;
+    // A wishlist entry is still a record, so a plain ISBN match would claim you
+    // already own a book you've only bookmarked. Split the two cases.
+    const onWishlist = copies.length === 0;
+
     sheet.innerHTML = `
-      <h2 style="text-align:center;">Found it!</h2>
+      <h2 style="text-align:center;">${onWishlist ? "On your wishlist" : "Found it!"}</h2>
       ${coverBlockHtml(book)}
       <p class="scan-match-title">${escapeHtml(book.title)}</p>
-      <p class="scan-match-sub">${escapeHtml(book.creator || "")} · ${copies.length} cop${copies.length === 1 ? "y" : "ies"} in your library</p>
+      <p class="scan-match-sub">${escapeHtml(book.creator || "")}${
+        onWishlist
+          ? (book.price != null ? ` · you noted $${Number(book.price).toFixed(2)}` : " · not in your library yet")
+          : ` · ${copies.length} cop${copies.length === 1 ? "y" : "ies"} in your library`
+      }</p>
       <div class="btn-row" style="flex-direction:column;">
-        <button class="btn btn-primary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>
+        ${onWishlist
+          ? `<button class="btn btn-primary" id="gotItBtn" type="button">I bought it — move to Library</button>`
+          : `<button class="btn btn-primary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>`}
         ${shelfCopy ? `<button class="btn btn-secondary" id="lendMatchBtn" type="button">Lend It to Someone</button>` : ""}
         <button class="btn btn-secondary" id="viewDetailsBtn" type="button">View Details</button>
       </div>
@@ -855,23 +959,35 @@ function openScanMatch(book, store, container) {
     `;
     wireCover(sheet, book);
 
-    sheet.querySelector("#addCopyMatchBtn").addEventListener("click", () => {
-      const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
-      store.updateItem(book.id, { copies: [...copies, newCopy] });
-      reopenDetail(store, container, book.id);
-    });
+    const addCopyBtn = sheet.querySelector("#addCopyMatchBtn");
+    if (addCopyBtn) {
+      addCopyBtn.addEventListener("click", () => {
+        const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
+        store.updateItem(book.id, { copies: [...copies, newCopy] });
+        refreshDetail(store, container, book.id);
+      });
+    }
+
+    const gotItBtn = sheet.querySelector("#gotItBtn");
+    if (gotItBtn) {
+      gotItBtn.addEventListener("click", () => {
+        const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
+        store.updateItem(book.id, { copies: [newCopy], price: null, priceCheckedDate: null });
+        refreshDetail(store, container, book.id);
+      });
+    }
 
     // Scanning a book you own is often the moment you're handing it to someone —
     // jump straight into the lend form for the first copy still on the shelf.
     const lendBtn = sheet.querySelector("#lendMatchBtn");
     if (lendBtn) {
       lendBtn.addEventListener("click", () => {
-        closeModal();
+        // openModal swaps the sheet in place; closing first would pop the layer
+        // out from under the screen we're about to draw.
         openDetail(book, store, container, { openLendFor: shelfCopy.id });
       });
     }
     sheet.querySelector("#viewDetailsBtn").addEventListener("click", () => {
-      closeModal();
       openDetail(book, store, container);
     });
   });
@@ -1125,7 +1241,8 @@ function openScanModal(store, container) {
 }
 
 async function handleScannedIsbn(isbn, store, container) {
-  closeModal();
+  // No closeModal here: the scanner sheet is replaced in place by whichever
+  // screen comes next, which keeps the single layer (and its history entry).
   const existing = store.findByIsbn("book", isbn);
   if (existing) {
     openScanMatch(existing, store, container);

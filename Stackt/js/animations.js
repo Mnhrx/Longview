@@ -71,22 +71,21 @@ export function confettiBurst(x, y, count = 18) {
  * `direction` is "forward" (going deeper) or "back" (returning) — the screen
  * slides in from the right going forward and from the left coming back, which
  * reads as real navigation rather than a generic cross-fade. */
-export function transitionSwap(renderFn, direction = "forward") {
-  const root = document.documentElement;
-  root.dataset.nav = direction;
+export function transitionSwap(renderFn, direction = "forward", opts = {}) {
+  const view = document.getElementById("view");
 
-  if (document.startViewTransition) {
-    const t = document.startViewTransition(() => renderFn());
-    t.finished.finally(() => delete root.dataset.nav);
-  } else {
-    const view = document.getElementById("view");
-    const cls = direction === "back" ? "view-enter-back" : "view-enter-fwd";
-    view.classList.remove("view-enter-fwd", "view-enter-back");
-    renderFn();
-    void view.offsetWidth; // force reflow so the animation replays
-    view.classList.add(cls);
-    delete root.dataset.nav;
-  }
+  // Deliberately NOT using document.startViewTransition. It snapshots the whole
+  // page, which Safari handles badly alongside a sticky header and 100dvh — that
+  // was the flicker. Animating just the content container is predictable.
+  view.classList.remove("view-enter-fwd", "view-enter-back");
+  renderFn();
+
+  // A back-gesture is already being animated by iOS itself; adding our own on
+  // top is the double-animation that read as jitter.
+  if (opts.silent) return;
+
+  void view.offsetWidth; // force reflow so the animation replays
+  view.classList.add(direction === "back" ? "view-enter-back" : "view-enter-fwd");
 }
 
 export function nudge(el) {

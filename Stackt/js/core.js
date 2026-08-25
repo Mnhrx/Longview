@@ -128,11 +128,15 @@ export const router = {
     const direction = opts.direction || (view === "home" ? "back" : "forward");
     this.current = view;
 
-    transitionSwap(() => {
-      const container = document.getElementById("view");
-      container.innerHTML = "";
-      this.modules[view].render(container, store);
-    }, direction);
+    transitionSwap(
+      () => {
+        const container = document.getElementById("view");
+        container.innerHTML = "";
+        this.modules[view].render(container, store);
+      },
+      direction,
+      { silent: !!opts.fromPopState } // iOS animates its own swipe — don't double up
+    );
 
     if (this.onNavigate) this.onNavigate(view, opts);
 
