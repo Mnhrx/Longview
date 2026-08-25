@@ -659,7 +659,9 @@ function openAddForm(store, container, prefill = {}) {
   openModal((sheet) => {
     sheet.innerHTML = `
       <h2>Add a Book</h2>
-      ${prefill.isbn ? coverBlockHtml({ isbn: prefill.isbn, color: "#eee" }) : ""}
+      <div id="addCoverBlock" class="${prefill.isbn ? "" : "hidden"}">
+        ${coverBlockHtml({ isbn: prefill.isbn, color: "#eee" })}
+      </div>
       <div class="field">
         <label>Title</label>
         <input type="text" id="a-title" placeholder="Kafka on the Shore" value="${escapeHtml(prefill.title || "")}">
@@ -670,7 +672,8 @@ function openAddForm(store, container, prefill = {}) {
       </div>
       <div class="field">
         <label>ISBN (optional)</label>
-        <input type="text" id="a-isbn" placeholder="9780099448822" value="${escapeHtml(prefill.isbn || "")}">
+        <input type="text" id="a-isbn" placeholder="9780099448822" inputmode="numeric" value="${escapeHtml(prefill.isbn || "")}">
+        <p class="isbn-lookup-status" id="isbnLookupStatus"></p>
       </div>
       <div class="field">
         <label>Reading Status</label>
@@ -696,30 +699,79 @@ function openAddForm(store, container, prefill = {}) {
       </div>
     `;
 
-    if (prefill.isbn) wireCover(sheet, { isbn: prefill.isbn });
-
+    const coverBlock = sheet.querySelector("#addCoverBlock");
+    const isbnInput = sheet.querySelector("#a-isbn");
+    const isbnStatus = sheet.querySelector("#isbnLookupStatus");
+    const titleInput = sheet.querySelector("#a-title");
+    const creatorInput = sheet.querySelector("#a-creator");
+    const priceInput = sheet.querySelector("#a-price");
     const ownedSel = sheet.querySelector("#a-owned");
     const priceField = sheet.querySelector("#a-price-field");
+
+    if (prefill.isbn) wireCover(sheet, { isbn: prefill.isbn });
+
     ownedSel.addEventListener("change", () => {
       priceField.style.display = ownedSel.value === "no" ? "" : "none";
     });
 
+    // Auto-lookup: fires when you finish typing/pasting an ISBN and move on to the
+    // next field — same free Open Library + Google Books sources the scanner uses,
+    // just triggered by typing instead of the camera. Never overwrites anything
+    // you've already typed yourself.
+    let lastLookedUp = null;
+    isbnInput.addEventListener("blur", async () => {
+      const raw = isbnInput.value.trim().replace(/[^0-9Xx]/g, "");
+      if (!raw || (raw.length !== 10 && raw.length !== 13)) {
+        isbnStatus.textContent = raw ? "That doesn't look like a 10 or 13-digit ISBN." : "";
+        return;
+      }
+      if (raw === lastLookedUp) return; // already looked this one up
+      lastLookedUp = raw;
+
+      isbnStatus.textContent = "Looking up this ISBN…";
+      const meta = await lookupIsbn(raw);
+
+      if (meta) {
+        if (!titleInput.value.trim() && meta.title) titleInput.value = meta.title;
+        if (!creatorInput.value.trim() && meta.creator) creatorInput.value = meta.creator;
+        coverBlock.classList.remove("hidden");
+        coverBlock.innerHTML = coverBlockHtml({ isbn: raw, color: "#eee" });
+        wireCover(sheet, { isbn: raw });
+        isbnStatus.textContent = `Found: ${meta.title || "match"}${meta.creator ? " · " + meta.creator : ""}`;
+      } else {
+        isbnStatus.textContent = "No match found for that ISBN — fill in the details manually.";
+      }
+
+      // Only worth checking a price if this is going on the wishlist.
+      if (ownedSel.value === "no") {
+        const price = await lookupGoogleBooksPrice(raw);
+        if (price && !priceInput.value.trim()) {
+          priceInput.value = price.amount;
+          isbnStatus.textContent += ` · found a price: ${price.currency} ${price.amount}`;
+        }
+      }
+    });
+
     sheet.querySelector("#addSaveBtn").addEventListener("click", () => {
-      const titleInput = sheet.querySelector("#a-title");
       if (!titleInput.value.trim()) {
         nudge(titleInput);
         return;
       }
       const owned = ownedSel.value === "yes";
       const copies = owned ? [{ id: uid(), acquiredDate: today(), currentLoan: null, history: [] }] : [];
+      const price = owned ? null : (parseFloat(priceInput.value) || null);
+      // Whatever the source (auto-lookup or typed by hand), saving a price now means
+      // it's fresh as of today — same "checked on" convention as the edit screen.
+      const priceCheckedDate = price != null ? today() : null;
 
       store.addItem({
         type: "book",
         title: titleInput.value.trim(),
-        creator: sheet.querySelector("#a-creator").value.trim(),
-        isbn: sheet.querySelector("#a-isbn").value.trim() || null,
+        creator: creatorInput.value.trim(),
+        isbn: isbnInput.value.trim() || null,
         readingStatus: sheet.querySelector("#a-status").value,
-        price: owned ? null : parseFloat(sheet.querySelector("#a-price").value) || null,
+        price,
+        priceCheckedDate,
         color: randomColor(),
         copies,
       });
@@ -745,7 +797,7 @@ function openScanModal(store, container) {
           <button class="torch-btn hidden" id="torchBtn" type="button">🔦</button>
         </div>
       </div>
-      <p class="scan-hint" id="scanHint">Point your camera at the barcode on the back of the book.</p>
+      <p class="scan-hint" id="scanHint">Starting camera…</p>
       <button class="link-btn" id="manualEntryBtn" type="button">Enter ISBN manually instead</button>
     `;
 
@@ -804,6 +856,7 @@ function openScanModal(store, container) {
     })
       .then((ctrl) => {
         controller = ctrl;
+        hint.textContent = "Hold the barcode flat, well-lit, filling most of the frame — a little further back tends to focus better than very close up.";
 
         if (ctrl.zoom) {
           zoomWrap.classList.remove("hidden");

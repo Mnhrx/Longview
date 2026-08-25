@@ -34,24 +34,35 @@ export function isScanSupported() {
  * - zoom / torch are null when the device/browser doesn't expose them.
  */
 export async function startScanner(containerId, onDetect) {
-  const formats = [
-    window.Html5QrcodeSupportedFormats.EAN_13,
-    window.Html5QrcodeSupportedFormats.EAN_8,
-    window.Html5QrcodeSupportedFormats.UPC_A,
-    window.Html5QrcodeSupportedFormats.UPC_E,
-  ];
+  const formats = (typeof window.Html5QrcodeSupportedFormats !== "undefined")
+    ? [
+        window.Html5QrcodeSupportedFormats.EAN_13,
+        window.Html5QrcodeSupportedFormats.EAN_8,
+        window.Html5QrcodeSupportedFormats.UPC_A,
+        window.Html5QrcodeSupportedFormats.UPC_E,
+        window.Html5QrcodeSupportedFormats.CODE_128,
+        window.Html5QrcodeSupportedFormats.CODE_39,
+        window.Html5QrcodeSupportedFormats.CODE_93,
+        window.Html5QrcodeSupportedFormats.CODABAR,
+        window.Html5QrcodeSupportedFormats.ITF,
+        window.Html5QrcodeSupportedFormats.QR_CODE,
+      ]
+    : undefined;
 
-  const html5Qrcode = new window.Html5Qrcode(containerId, {
-    formatsToSupport: formats,
-    verbose: false,
-  });
+  const html5Qrcode = new window.Html5Qrcode(
+    containerId,
+    formats ? { formatsToSupport: formats, verbose: false } : undefined
+  );
   activeScanner = html5Qrcode;
 
   let detected = false;
 
+  // Config matches Longview's scanner exactly (proven working on iOS Safari):
+  // no qrbox — scanning the full camera frame avoids a cropped-region/video-sizing
+  // mismatch that's a known cause of html5-qrcode silently failing to start on iOS.
   await html5Qrcode.start(
     { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 280, height: 140 }, disableFlip: false },
+    { fps: 15, disableFlip: false },
     (decodedText) => {
       if (detected) return; // ignore extra frames after the first hit
       detected = true;
@@ -62,22 +73,27 @@ export async function startScanner(containerId, onDetect) {
     }
   );
 
+  // Zoom/torch: read/apply directly on the underlying MediaStreamTrack rather than
+  // through html5-qrcode's own capabilities wrapper — this is what Longview does,
+  // and it's the more broadly-supported path across browsers.
   let zoom = null;
   let torch = null;
   try {
-    const caps = html5Qrcode.getRunningTrackCameraCapabilities();
-    const zoomFeature = caps.zoomFeature();
-    if (zoomFeature.isSupported()) {
-      zoom = {
-        min: zoomFeature.min(),
-        max: zoomFeature.max(),
-        step: zoomFeature.step() || 0.1,
-        apply: (v) => zoomFeature.apply(v),
-      };
-    }
-    const torchFeature = caps.torchFeature();
-    if (torchFeature.isSupported()) {
-      torch = { apply: (on) => torchFeature.apply(on) };
+    const videoEl = document.querySelector(`#${containerId} video`);
+    const track = videoEl && videoEl.srcObject && videoEl.srcObject.getVideoTracks()[0];
+    if (track) {
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (caps.zoom) {
+        zoom = {
+          min: caps.zoom.min,
+          max: Math.min(caps.zoom.max, 8),
+          step: caps.zoom.step || 0.1,
+          apply: (v) => track.applyConstraints({ advanced: [{ zoom: v }] }),
+        };
+      }
+      if (caps.torch) {
+        torch = { apply: (on) => track.applyConstraints({ advanced: [{ torch: on }] }) };
+      }
     }
   } catch (e) {
     // capabilities API not available on this device/browser — no controls, scanning still works
