@@ -4,7 +4,7 @@
 // and move the same way, even though each module owns its own data.
 // ============================================
 
-import { bounceTap, popIn, staggerIn } from "./animations.js";
+import { bounceTap, popIn } from "./animations.js";
 import { ICONS } from "./icons.js";
 
 /** Emoji fallback used by the generic item card's swatch (module-specific
@@ -53,7 +53,7 @@ export function createItemCard(item, onTap) {
   return card;
 }
 
-/** Renders a grid of item cards into `container`, staggering their entrance. */
+/** Renders a grid of item cards into `container`. */
 export function renderCardGrid(container, items, onTap, emptyMessage = "Nothing here yet") {
   const grid = document.createElement("div");
   grid.className = "card-grid";
@@ -69,7 +69,6 @@ export function renderCardGrid(container, items, onTap, emptyMessage = "Nothing 
 
   items.forEach((item) => grid.appendChild(createItemCard(item, onTap)));
   container.appendChild(grid);
-  staggerIn(grid.querySelectorAll(".item-card"));
 }
 
 let currentOnClose = null;
@@ -107,6 +106,34 @@ export function openModal(buildContent, onClose = null) {
 export function isModalOpen() {
   const root = document.getElementById("modalRoot");
   return !!(root && root.childElementCount > 0);
+}
+
+/**
+ * Dismiss the topmost visible layer, innermost first: cover lightbox, then
+ * modal sheet. Returns true if something was closed, so the caller knows the
+ * back gesture was consumed here rather than being a screen change.
+ *
+ * Every full-screen overlay MUST be closable through here — an overlay the
+ * back gesture doesn't know about survives navigation and silently blocks
+ * every tap on the screen underneath it.
+ */
+export function closeTopLayer() {
+  const lightbox = document.querySelector(".lightbox-backdrop");
+  if (lightbox) {
+    lightbox.remove();
+    return true;
+  }
+  if (isModalOpen()) {
+    closeModal();
+    return true;
+  }
+  return false;
+}
+
+/** Belt-and-braces sweep on screen change: nothing should outlive a navigation. */
+export function clearAllLayers() {
+  document.querySelectorAll(".lightbox-backdrop").forEach((el) => el.remove());
+  if (isModalOpen()) closeModal();
 }
 
 export function closeModal() {

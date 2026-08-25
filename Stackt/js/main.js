@@ -9,7 +9,7 @@ import homeModule from "./home.js";
 import booksModule from "./books.js";
 import { makePlaceholder } from "./placeholder.js";
 import { bounceTap } from "./animations.js";
-import { closeModal, isModalOpen } from "./ui.js";
+import { closeTopLayer } from "./ui.js";
 
 router.register("home", homeModule);
 router.register("books", booksModule);
@@ -33,10 +33,10 @@ async function boot() {
   };
 
   window.addEventListener("popstate", (e) => {
-    // A modal counts as a layer of its own: back should dismiss it first.
-    if (isModalOpen()) {
-      closeModal();
-      // re-push so the screen itself stays put after the modal closes
+    // Overlays are layers of their own: back peels off the topmost one
+    // (cover lightbox, then modal sheet) before it changes screens.
+    if (closeTopLayer()) {
+      // re-push so the screen itself stays put after the layer closes
       history.pushState({ view: router.current }, "", `#${router.current}`);
       return;
     }

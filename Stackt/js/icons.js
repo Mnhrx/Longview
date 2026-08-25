@@ -17,8 +17,9 @@ export const ICONS = {
 
   finance: `<svg viewBox="0 0 48 48"><rect x="7" y="27" width="8" height="13" rx="2" ${S}/><rect x="20" y="18" width="8" height="22" rx="2" ${S}/><rect x="33" y="8" width="8" height="32" rx="2" ${S}/></svg>`,
 
-  // Camera / scan — a body with a lens, plus a small viewfinder bump.
-  camera: `<svg viewBox="0 0 48 48"><path d="M6 16h9l3-5h12l3 5h9a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V18a2 2 0 0 1 2-2z" ${S}/><circle cx="24" cy="27" r="8" fill="none" stroke="#1A1A2E" stroke-width="3"/><circle cx="24" cy="27" r="3" fill="#1A1A2E"/></svg>`,
+  // Scan — four viewfinder corners with a sweep line through the middle.
+  // Abstract and minimal: it says "scan", not "camera hardware".
+  camera: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17V10a3 3 0 0 1 3-3h7"/><path d="M31 7h7a3 3 0 0 1 3 3v7"/><path d="M41 31v7a3 3 0 0 1-3 3h-7"/><path d="M17 41h-7a3 3 0 0 1-3-3v-7"/><line x1="13" y1="24" x2="35" y2="24"/></svg>`,
 
   // Magnifier — used for zoom controls and the tap-to-enlarge cover badge.
   zoom: `<svg viewBox="0 0 48 48"><circle cx="21" cy="21" r="13" ${S}/><line x1="30" y1="30" x2="41" y2="41" stroke="#1A1A2E" stroke-width="4" stroke-linecap="round"/></svg>`,
@@ -28,6 +29,15 @@ export const ICONS = {
 
   // Empty-state marker — a stack of trays.
   empty: `<svg viewBox="0 0 48 48"><path d="M6 30l18-9 18 9-18 9-18-9z" ${S}/><path d="M6 20l18-9 18 9" fill="none" stroke="#1A1A2E" stroke-width="3" stroke-linejoin="round" opacity="0.45"/></svg>`,
+
+  // Edit — a nib/pencil reduced to two strokes.
+  edit: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M31 8.5a4.6 4.6 0 0 1 6.5 6.5L17 35.5 8 39l3.5-9L31 8.5z"/><line x1="28" y1="12" x2="36" y2="20"/></svg>`,
+
+  // View — an eye, for flipping back out of edit mode.
+  eye: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 24s7.5-12 21-12 21 12 21 12-7.5 12-21 12S3 24 3 24z"/><circle cx="24" cy="24" r="5.5"/></svg>`,
+
+  // Lend — an arrow handing something across.
+  lend: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="24" x2="38" y2="24"/><polyline points="28,14 38,24 28,34"/></svg>`,
 
   // Author / signature mark.
   author: `<svg viewBox="0 0 48 48"><path d="M8 34c6-2 10-8 14-15s7-11 10-11 4 4 1 9-9 11-14 15-8 5-11 2z" ${S}/><line x1="8" y1="40" x2="40" y2="40" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/></svg>`,

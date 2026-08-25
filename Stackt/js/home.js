@@ -6,7 +6,7 @@
 // ============================================
 
 import { router } from "./core.js";
-import { bounceTap, staggerIn } from "./animations.js";
+import { bounceTap } from "./animations.js";
 import { ICONS } from "./icons.js";
 
 const TILES = [
@@ -49,7 +49,6 @@ function render(container, store) {
   wrap.appendChild(grid);
   container.innerHTML = "";
   container.appendChild(wrap);
-  staggerIn(grid.querySelectorAll(".home-tile"), 60);
 }
 
 function subtitleFor(key, store) {

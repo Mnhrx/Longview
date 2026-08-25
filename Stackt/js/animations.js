@@ -29,12 +29,9 @@ export function popIn(el) {
   );
 }
 
-/** Stagger a NodeList/array of elements in on view render. */
-export function staggerIn(elements, delayStep = 45) {
-  [...elements].forEach((el, i) => {
-    el.style.animationDelay = `${i * delayStep}ms`;
-  });
-}
+/* staggerIn was removed: per-card entrance animations replayed on every
+   render and fought the page-level view transition, which is what read as
+   jitter. Screen changes are carried by the directional slide instead. */
 
 /** Small celebratory confetti burst from a point on screen (e.g. after
  * marking something "read" or hitting a savings goal). Cleans itself up. */

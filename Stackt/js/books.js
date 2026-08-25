@@ -5,7 +5,7 @@
 // ============================================
 
 import { openModal, closeModal, escapeHtml } from "./ui.js";
-import { confettiBurst, bounceTap, nudge, staggerIn } from "./animations.js";
+import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl } from "./barcode.js";
 import { ICONS } from "./icons.js";
@@ -27,6 +27,16 @@ let searchQuery = "";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Dates are stored as YYYY-MM-DD (sortable, unambiguous) but always shown
+ *  as DD/MM/YYYY. Note the tap-to-pick calendar itself is drawn by iOS and
+ *  follows the phone's region setting — a web page can't override that. */
+function fmtDate(iso) {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 function loanedCopies(book) {
   return (book.copies || []).filter((c) => c.currentLoan);
@@ -58,13 +68,13 @@ function daysLabel(n) {
 function readingSpanText(book) {
   const { startedDate, finishedDate } = book;
   if (startedDate && finishedDate) {
-    return `${startedDate} → ${finishedDate} · took ${daysLabel(daysBetween(startedDate, finishedDate))}`;
+    return `${fmtDate(startedDate)} → ${fmtDate(finishedDate)} · took ${daysLabel(daysBetween(startedDate, finishedDate))}`;
   }
   if (startedDate) {
     const running = daysBetween(startedDate, today());
-    return `Started ${startedDate}${running ? ` · ${daysLabel(running)} so far` : ""}`;
+    return `Started ${fmtDate(startedDate)}${running ? ` · ${daysLabel(running)} so far` : ""}`;
   }
-  if (finishedDate) return `Finished ${finishedDate}`;
+  if (finishedDate) return `Finished ${fmtDate(finishedDate)}`;
   return null;
 }
 
@@ -210,7 +220,6 @@ function renderAuthorList(bodyHolder, store, container) {
     grid.appendChild(btn);
   });
   bodyHolder.appendChild(grid);
-  staggerIn(grid.querySelectorAll(".author-btn"));
 }
 
 // ---------- cards ----------
@@ -227,7 +236,6 @@ function renderBookGrid(container, books, onTap) {
   grid.className = "card-grid";
   books.forEach((book) => grid.appendChild(buildBookCard(book, onTap)));
   container.appendChild(grid);
-  staggerIn(grid.querySelectorAll(".item-card"));
 }
 
 function buildBookCard(book, onTap) {
@@ -255,8 +263,8 @@ function buildBookCard(book, onTap) {
   }
 
   const swatchInner = book.isbn
-    ? `<span class="swatch-emoji">📖</span><img class="swatch-img" alt="">`
-    : `📖`;
+    ? `<span class="swatch-emoji">${ICONS.books}</span><img class="swatch-img" alt="">`
+    : ICONS.books;
 
   card.innerHTML = `
     <div class="item-swatch ${book.isbn ? "shimmer" : ""}" style="background:${book.color || "#eee"}">${swatchInner}</div>
@@ -301,7 +309,7 @@ function coverBlockHtml(book) {
   return `
     <div class="detail-cover-wrap">
       <img class="detail-cover" id="coverImg" alt="">
-      <div class="detail-cover-fallback ${book.isbn ? "shimmer" : ""}" id="coverFallback" style="background:${book.color || "#eee"}">📖</div>
+      <div class="detail-cover-fallback ${book.isbn ? "shimmer" : ""}" id="coverFallback" style="background:${book.color || "#eee"}">${ICONS.books}</div>
     </div>
   `;
 }
@@ -331,7 +339,7 @@ function openCoverLightbox(book) {
     <div class="lightbox-content">
       <div class="lightbox-cover-wrap">
         <img class="lightbox-img" id="lightboxImg" alt="${escapeHtml(book.title)} cover">
-        <div class="lightbox-fallback shimmer" id="lightboxFallback" style="background:${book.color || "#eee"}">📖</div>
+        <div class="lightbox-fallback shimmer" id="lightboxFallback" style="background:${book.color || "#eee"}">${ICONS.books}</div>
       </div>
       <p class="lightbox-caption" id="lightboxCaption">Front cover</p>
     </div>
@@ -395,7 +403,7 @@ function openDetail(book, store, container, opts = {}) {
         });
       }
 
-      if (mode === "view") wireViewMode(sheet, book, store, container);
+      if (mode === "view") wireViewMode(sheet, book, store, container, opts);
       else wireEditMode(sheet, book, store, container);
     }
 
@@ -408,10 +416,10 @@ function viewModeHtml(book, opts) {
   const owned = copies.length > 0;
 
   return `
-    ${opts.foundViaScan ? `<div class="found-banner"><span>📖 Already in your library</span></div>` : ""}
+    ${opts.foundViaScan ? `<div class="found-banner"><span>Already in your library</span></div>` : ""}
     <div class="detail-top-row">
       <h2>${escapeHtml(book.title)}</h2>
-      <button class="edit-toggle-btn" id="toggleEditBtn" type="button">✏️ Edit</button>
+      <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.edit}</span>Edit</button>
     </div>
     ${book.isbn ? `
       <div class="cover-tap-target" id="coverTapTarget">
@@ -437,7 +445,7 @@ function viewModeHtml(book, opts) {
       </div>
     ` : `
       <div class="status-pill status-to-read" style="margin-bottom:6px;">Wishlist${book.price != null ? ` · $${Number(book.price).toFixed(2)}` : ""}</div>
-      ${book.price != null && book.priceCheckedDate ? `<p class="price-checked-note">You checked this price on ${book.priceCheckedDate}</p>` : ""}
+      ${book.price != null && book.priceCheckedDate ? `<p class="price-checked-note">You checked this price on ${fmtDate(book.priceCheckedDate)}</p>` : ""}
       ${priceLinksHtml(book)}
       <button class="btn btn-secondary" id="gotCopyBtn" type="button" style="margin-top:14px;">I got a copy — mark as owned</button>
     `}
@@ -474,7 +482,7 @@ function editModeHtml(book) {
   return `
     <div class="detail-top-row">
       <h2>Edit Details</h2>
-      <button class="edit-toggle-btn" id="toggleEditBtn" type="button">👁️ View</button>
+      <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.eye}</span>View</button>
     </div>
     <div class="field">
       <label>Title</label>
@@ -503,7 +511,7 @@ function editModeHtml(book) {
   `;
 }
 
-function wireViewMode(sheet, book, store, container) {
+function wireViewMode(sheet, book, store, container, opts = {}) {
   wireCover(sheet, book);
 
   const coverTapTarget = sheet.querySelector("#coverTapTarget");
@@ -587,6 +595,15 @@ function wireViewMode(sheet, book, store, container) {
 
     if (lendBtn) lendBtn.addEventListener("click", () => inlineForm.classList.toggle("open"));
 
+    // Arrived here from "Lend it to someone" on the scan screen — open the
+    // form for that copy and put the cursor in the borrower field.
+    if (opts.openLendFor === c.id && inlineForm) {
+      inlineForm.classList.add("open");
+      const who = inlineForm.querySelector(".lend-to-input");
+      if (who) setTimeout(() => who.focus(), 250);
+      setTimeout(() => row.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+    }
+
     if (confirmBtn) {
       confirmBtn.addEventListener("click", () => {
         const lentTo = row.querySelector(".lend-to-input").value.trim();
@@ -629,6 +646,19 @@ function wireViewMode(sheet, book, store, container) {
         reopenDetail(store, container, book.id);
       });
     });
+
+    // When a copy actually joined your shelf is editable — a book bought
+    // years ago shouldn't be stamped with the day you happened to add it.
+    const acquiredInput = row.querySelector(".copy-acquired");
+    if (acquiredInput) {
+      acquiredInput.addEventListener("change", () => {
+        const updatedCopies = copies.map((cc) =>
+          cc.id === c.id ? { ...cc, acquiredDate: acquiredInput.value || null } : cc
+        );
+        store.updateItem(book.id, { copies: updatedCopies });
+        reopenDetail(store, container, book.id);
+      });
+    }
 
     // Past loans are editable too, so a return date can be corrected later.
     row.querySelectorAll(".loan-history-row").forEach((histRow) => {
@@ -723,8 +753,15 @@ function buildCopyRow(copy) {
     <div class="copy-row" data-copy-id="${copy.id}">
       <div class="copy-status ${onLoan ? "on-loan" : "on-shelf"}">
         ${onLoan
-          ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}${loan.dueDate ? ` · due ${loan.dueDate}` : ""}`
-          : `On your shelf since ${copy.acquiredDate}`}
+          ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}${loan.dueDate ? ` · due ${fmtDate(loan.dueDate)}` : ""}`
+          : `On your shelf since ${fmtDate(copy.acquiredDate)}`}
+      </div>
+
+      <div class="date-pair" style="margin-top:8px;">
+        <label class="date-field">
+          <span>Added to shelf</span>
+          <input type="date" class="copy-acquired" value="${copy.acquiredDate || ""}">
+        </label>
       </div>
 
       ${onLoan ? `
@@ -778,7 +815,7 @@ function buildCopyRow(copy) {
             return `
               <div class="loan-history-row" data-history-index="${i}">
                 <span class="loan-history-who">${escapeHtml(h.lentTo || "someone")}</span>
-                <span class="loan-history-span">${h.lentDate || "?"} → ${h.returnedDate || "?"}${span ? ` · ${daysLabel(span)}` : ""}</span>
+                <span class="loan-history-span">${fmtDate(h.lentDate) || "?"} → ${fmtDate(h.returnedDate) || "?"}${span ? ` · ${daysLabel(span)}` : ""}</span>
                 <div class="date-pair">
                   <label class="date-field">
                     <span>Lent</span>
@@ -803,6 +840,7 @@ function buildCopyRow(copy) {
 function openScanMatch(book, store, container) {
   openModal((sheet) => {
     const copies = book.copies || [];
+    const shelfCopy = copies.find((c) => !c.currentLoan) || null;
     sheet.innerHTML = `
       <h2 style="text-align:center;">Found it!</h2>
       ${coverBlockHtml(book)}
@@ -810,8 +848,10 @@ function openScanMatch(book, store, container) {
       <p class="scan-match-sub">${escapeHtml(book.creator || "")} · ${copies.length} cop${copies.length === 1 ? "y" : "ies"} in your library</p>
       <div class="btn-row" style="flex-direction:column;">
         <button class="btn btn-primary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>
+        ${shelfCopy ? `<button class="btn btn-secondary" id="lendMatchBtn" type="button">Lend It to Someone</button>` : ""}
         <button class="btn btn-secondary" id="viewDetailsBtn" type="button">View Details</button>
       </div>
+      ${!shelfCopy && copies.length ? `<p class="scan-match-note">Every copy is already lent out.</p>` : ""}
     `;
     wireCover(sheet, book);
 
@@ -820,6 +860,16 @@ function openScanMatch(book, store, container) {
       store.updateItem(book.id, { copies: [...copies, newCopy] });
       reopenDetail(store, container, book.id);
     });
+
+    // Scanning a book you own is often the moment you're handing it to someone —
+    // jump straight into the lend form for the first copy still on the shelf.
+    const lendBtn = sheet.querySelector("#lendMatchBtn");
+    if (lendBtn) {
+      lendBtn.addEventListener("click", () => {
+        closeModal();
+        openDetail(book, store, container, { openLendFor: shelfCopy.id });
+      });
+    }
     sheet.querySelector("#viewDetailsBtn").addEventListener("click", () => {
       closeModal();
       openDetail(book, store, container);
@@ -833,6 +883,18 @@ function openAddForm(store, container, prefill = {}) {
   openModal((sheet) => {
     sheet.innerHTML = `
       <h2>Add a Book</h2>
+
+      <div class="destination-row" id="destRow">
+        <button type="button" class="destination-btn active" data-dest="library">
+          <span class="destination-title">Add to Library</span>
+          <span class="destination-sub">I own a copy</span>
+        </button>
+        <button type="button" class="destination-btn" data-dest="wishlist">
+          <span class="destination-title">Add to Wishlist</span>
+          <span class="destination-sub">Want to buy it</span>
+        </button>
+      </div>
+
       <div id="addCoverBlock" class="${prefill.isbn ? "" : "hidden"}">
         ${coverBlockHtml({ isbn: prefill.isbn, color: "#eee" })}
       </div>
@@ -857,13 +919,6 @@ function openAddForm(store, container, prefill = {}) {
           <option value="read">Read</option>
         </select>
       </div>
-      <div class="field">
-        <label>Do you own a copy?</label>
-        <select id="a-owned">
-          <option value="yes">Yes, I own it</option>
-          <option value="no">No — on my wishlist</option>
-        </select>
-      </div>
       <div class="field" id="a-price-field" style="display:none">
         <label>Price ($)</label>
         <input type="number" step="0.01" id="a-price" placeholder="18.90">
@@ -879,13 +934,23 @@ function openAddForm(store, container, prefill = {}) {
     const titleInput = sheet.querySelector("#a-title");
     const creatorInput = sheet.querySelector("#a-creator");
     const priceInput = sheet.querySelector("#a-price");
-    const ownedSel = sheet.querySelector("#a-owned");
     const priceField = sheet.querySelector("#a-price-field");
+    const saveBtn = sheet.querySelector("#addSaveBtn");
 
     if (prefill.isbn) wireCover(sheet, { isbn: prefill.isbn });
 
-    ownedSel.addEventListener("change", () => {
-      priceField.style.display = ownedSel.value === "no" ? "" : "none";
+    // Where the book is headed is the first decision, so it's two plain
+    // buttons at the top rather than a dropdown buried in the form.
+    let destination = "library";
+    sheet.querySelectorAll(".destination-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        destination = btn.dataset.dest;
+        sheet.querySelectorAll(".destination-btn").forEach((b) =>
+          b.classList.toggle("active", b === btn)
+        );
+        priceField.style.display = destination === "wishlist" ? "" : "none";
+        saveBtn.textContent = destination === "wishlist" ? "Add to Wishlist" : "Add to Library";
+      });
     });
 
     // Auto-lookup: fires when you finish typing/pasting an ISBN and move on to the
@@ -917,7 +982,7 @@ function openAddForm(store, container, prefill = {}) {
       }
 
       // Only worth checking a price if this is going on the wishlist.
-      if (ownedSel.value === "no") {
+      if (destination === "wishlist") {
         const price = await lookupGoogleBooksPrice(raw);
         if (price && !priceInput.value.trim()) {
           priceInput.value = price.amount;
@@ -926,12 +991,12 @@ function openAddForm(store, container, prefill = {}) {
       }
     });
 
-    sheet.querySelector("#addSaveBtn").addEventListener("click", () => {
+    saveBtn.addEventListener("click", () => {
       if (!titleInput.value.trim()) {
         nudge(titleInput);
         return;
       }
-      const owned = ownedSel.value === "yes";
+      const owned = destination === "library";
       const copies = owned ? [{ id: uid(), acquiredDate: today(), currentLoan: null, history: [] }] : [];
       const price = owned ? null : (parseFloat(priceInput.value) || null);
       // Whatever the source (auto-lookup or typed by hand), saving a price now means

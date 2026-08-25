@@ -182,7 +182,6 @@ html, body {
   cursor: pointer;
   transform: translateY(0) rotate(0deg);
   transition: transform .2s var(--spring), box-shadow .2s var(--spring);
-  animation: cardIn .45s var(--spring) both;
   will-change: transform, opacity;
 }
 .item-card:active {
@@ -206,18 +205,22 @@ html, body {
 .swatch-emoji {
   position: relative;
   z-index: 1;
+  width: 26px;
+  height: 26px;
+  display: block;
+  opacity: 0.85;
   transition: opacity .2s ease;
 }
+.swatch-emoji svg { width: 100%; height: 100%; display: block; }
 .swatch-emoji.hidden { opacity: 0; }
 .swatch-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  /* contain, not cover — book covers vary in aspect ratio and `cover` was
-     shaving the edges off. Letterboxing against the tile color keeps the
-     whole cover visible. */
-  object-fit: contain;
+  /* `cover` fills the swatch edge to edge — no empty letterbox bars.
+     The uncropped cover is one tap away in the lightbox. */
+  object-fit: cover;
   opacity: 0;
   transition: opacity .35s ease;
 }
@@ -265,12 +268,6 @@ html, body {
   font-weight: 800;
   margin-top: 6px;
   color: var(--purple);
-}
-
-/* stagger children on view entry */
-@keyframes cardIn {
-  from { opacity: 0; transform: translateY(14px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* ---------- empty state ---------- */
@@ -326,7 +323,6 @@ html, body {
   box-shadow: var(--shadow-off) var(--shadow-off) 0 rgba(26,26,46,0.9);
   cursor: pointer;
   transition: transform .18s var(--spring), box-shadow .18s var(--spring);
-  animation: cardIn .4s var(--spring) both;
   will-change: transform, opacity;
   color: var(--ink);
 }
@@ -435,6 +431,52 @@ html, body {
   opacity: 0.55;
   margin-bottom: 6px;
 }
+/* ---------- add form: destination choice ---------- */
+.destination-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.destination-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  border: var(--border-w) solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: transform .15s var(--spring), background .15s, box-shadow .15s var(--spring);
+}
+.destination-btn:active { transform: scale(0.97); }
+.destination-btn.active {
+  background: var(--yellow);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.destination-title {
+  font-weight: 800;
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+.destination-sub {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.scan-match-note {
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.6;
+  font-weight: 600;
+  margin: 10px 0 0;
+}
+
 .isbn-lookup-status {
   font-size: 12px;
   font-weight: 700;
@@ -575,7 +617,6 @@ html, body {
   font-size: 15px;
   cursor: pointer;
   transition: transform .18s var(--spring), box-shadow .18s var(--spring);
-  animation: cardIn .4s var(--spring) both;
   will-change: transform, opacity;
 }
 .author-btn:active { transform: translate(3px,3px); box-shadow: 1px 1px 0 rgba(26,26,46,0.9); }
@@ -706,8 +747,19 @@ html, body {
   gap: 12px;
   margin-bottom: 4px;
 }
+.btn-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.btn-icon svg { width: 100%; height: 100%; display: block; }
+
 .edit-toggle-btn {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
   border-radius: 12px;
   border: var(--border-w) solid var(--ink);
@@ -734,7 +786,7 @@ html, body {
   height: 100%;
   border-radius: 18px;
   border: var(--border-w) solid var(--ink);
-  object-fit: contain; /* show the whole cover rather than cropping its edges */
+  object-fit: cover; /* fills the frame — tap it for the uncropped view */
   background: #eee;
   display: block;
   opacity: 0;
@@ -751,9 +803,9 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
   transition: opacity .3s ease;
 }
+.detail-cover-fallback svg { width: 64px; height: 64px; opacity: 0.85; }
 .detail-cover-fallback.fade-out { opacity: 0; }
 
 .cover-tap-target {
@@ -833,9 +885,9 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 64px;
   transition: opacity .3s ease;
 }
+.lightbox-fallback svg { width: 88px; height: 88px; opacity: 0.85; }
 .lightbox-fallback.fade-out { opacity: 0; }
 .lightbox-caption {
   color: #fff;
@@ -897,12 +949,15 @@ html, body {
   font-weight: 800;
 }
 
+/* Grid with a hard minimum, not flex: a native date input has a chunky
+   intrinsic width that flex can't shrink past, which is what pushed the two
+   fields into each other. Below ~300px they stack instead of colliding. */
 .date-pair {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 10px;
 }
 .date-field {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -917,6 +972,8 @@ html, body {
 }
 .date-field input {
   width: 100%;
+  min-width: 0; /* lets the input actually shrink inside its grid track */
+  max-width: 100%;
   padding: 9px 10px;
   border-radius: 10px;
   border: 2px solid var(--ink);
@@ -926,6 +983,17 @@ html, body {
   background: #fff;
   color: var(--ink);
   min-height: 38px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* iOS renders date inputs with its own inner padding that overflows the box */
+.date-field input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+.date-field input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
 /* ---------- loan editing ---------- */
@@ -1007,7 +1075,7 @@ html, body {
   height: 128px;
   border-radius: 12px;
   border: var(--border-w) solid var(--ink);
-  object-fit: contain;
+  object-fit: cover;
   margin: 0 auto 14px;
   display: block;
 }

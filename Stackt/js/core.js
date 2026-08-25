@@ -5,6 +5,7 @@
 // ============================================
 
 import { transitionSwap } from "./animations.js";
+import { clearAllLayers } from "./ui.js";
 
 const STORAGE_KEY = "stackt-state-v1";
 
@@ -117,6 +118,10 @@ export const router = {
       if (this.onNavigate) this.onNavigate(view, opts);
       return;
     }
+
+    // Nothing outlives a screen change — a stray overlay left floating would
+    // block every tap on the new screen.
+    clearAllLayers();
 
     // Home is the root, so anything leaving it goes "forward" and anything
     // returning to it goes "back" — that drives which way the screen slides.
