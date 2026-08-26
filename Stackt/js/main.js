@@ -43,16 +43,7 @@ async function boot() {
     }
 
     const view = (e.state && e.state.view) || viewFromHash() || "home";
-    const leavingModule = router.current && router.current !== "home" && view === "home";
-    const accent = leavingModule
-      ? getComputedStyle(document.getElementById("app")).getPropertyValue("--accent").trim()
-      : null;
-    router.navigate(view, {
-      fromPopState: true,
-      direction: "back",
-      fromModule: leavingModule,     // triggers the reverse zoom toward the tile
-      zoomColor: accent || undefined,
-    });
+    router.navigate(view, { fromPopState: true, direction: "back" });
   });
 
   document.getElementById("homeBtn").addEventListener("click", () => {
@@ -90,6 +81,7 @@ function hideSplash() {
   const splash = document.getElementById("splash");
   window.__stacktSplashUp = false;
   if (!splash) {
+    document.documentElement.classList.remove("splash-up");
     startMenuIntro();
     return;
   }
@@ -106,6 +98,7 @@ function hideSplash() {
     if (finished) return;
     finished = true;
     splash.remove();
+    document.documentElement.classList.remove("splash-up");
     startMenuIntro();
   }
 }

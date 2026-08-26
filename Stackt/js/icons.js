@@ -39,6 +39,9 @@ export const ICONS = {
   // Lend — an arrow handing something across.
   lend: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="24" x2="38" y2="24"/><polyline points="28,14 38,24 28,34"/></svg>`,
 
+  // Lens — a bare aperture. Used where "photo" is meant rather than "scan".
+  lens: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5"><circle cx="24" cy="24" r="15"/><circle cx="24" cy="24" r="6"/></svg>`,
+
   // Close — two strokes, matching the drawn-icon language.
   close: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="4.5" stroke-linecap="round"><line x1="12" y1="12" x2="36" y2="36"/><line x1="36" y1="12" x2="12" y2="36"/></svg>`,
 

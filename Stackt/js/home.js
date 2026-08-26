@@ -6,7 +6,7 @@
 // ============================================
 
 import { router } from "./core.js";
-import { bounceTap, rememberTileOrigin } from "./animations.js";
+import { bounceTap } from "./animations.js";
 import { ICONS } from "./icons.js";
 
 const TILES = [
@@ -41,12 +41,8 @@ function render(container, store) {
       <span class="home-tile-sub">${subtitleFor(tile.key, store)}</span>
     `;
     btn.addEventListener("click", () => {
-      // The module expands out of this exact tile, so capture where it is and
-      // what colour it is right now — the grid may have scrolled.
-      const rect = btn.getBoundingClientRect();
-      const color = getComputedStyle(btn).backgroundColor;
-      rememberTileOrigin({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
-      router.navigate(tile.key, { zoomFrom: rect, zoomColor: color });
+      bounceTap(btn);
+      router.navigate(tile.key);
     });
     grid.appendChild(btn);
   });

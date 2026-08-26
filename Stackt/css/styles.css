@@ -930,6 +930,41 @@ html, body {
   margin-top: 20px;
 }
 
+/* ---------- reading status toggle ----------
+   Same weight as the rest of the app: full border width, offset shadow when
+   active, and a tap target you can actually hit. */
+.status-toggle-row {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 18px;
+}
+.status-toggle-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 6px;
+  border-radius: 14px;
+  border: var(--border-w) solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13.5px;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: transform .15s var(--spring), background .15s, box-shadow .15s var(--spring);
+}
+.status-toggle-btn:active { transform: translate(2px, 2px); }
+.status-toggle-btn.active {
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.status-toggle-btn.active.to-read { background: var(--yellow); }
+.status-toggle-btn.active.reading { background: var(--blue); color: #fff; }
+.status-toggle-btn.active.read    { background: var(--mint); }
+.status-toggle-btn.active:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
 /* ---------- reading log / date fields ---------- */
 .reading-dates {
   border: 2px solid var(--ink);
@@ -1309,13 +1344,6 @@ html, body {
   margin: -2px 0 0;
 }
 
-/* The stand-in shape used by the app-open transition. */
-.zoom-veil {
-  position: fixed;
-  z-index: 90;
-  pointer-events: none;
-  will-change: left, top, width, height, opacity;
-}
 
 /* ---------- cover picker ---------- */
 .cover-picker-backdrop {

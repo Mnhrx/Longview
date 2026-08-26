@@ -427,7 +427,7 @@ function openCoverPicker(bookish, onPick) {
 
         <label class="cover-upload">
           <input type="file" id="cpFile" accept="image/*" hidden>
-          <span class="cover-upload-icon">${ICONS.camera}</span>
+          <span class="cover-upload-icon">${ICONS.lens}</span>
           <span>
             <strong>Use your own photo</strong>
             <small>Take one now or pick from your library</small>
@@ -1210,6 +1210,8 @@ function openScanMatch(book, store, container) {
     // A wishlist entry is still a record, so a plain ISBN match would claim you
     // already own a book you've only bookmarked. Split the two cases.
     const onWishlist = copies.length === 0;
+    // Scanning a book that's out on loan almost always means it just came back.
+    const loanedCopy = copies.find((c) => c.currentLoan) || null;
 
     sheet.innerHTML = `
       <h2 style="text-align:center;">${onWishlist ? "On your wishlist" : "Found it!"}</h2>
@@ -1221,12 +1223,16 @@ function openScanMatch(book, store, container) {
           : ` · ${copies.length} cop${copies.length === 1 ? "y" : "ies"} in your library`
       }</p>
       <div class="btn-row" style="flex-direction:column;">
-        ${onWishlist
-          ? `<button class="btn btn-primary" id="gotItBtn" type="button">I bought it — move to Library</button>`
-          : `<button class="btn btn-primary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>`}
+        ${loanedCopy
+          ? `<button class="btn btn-primary" id="returnMatchBtn" type="button">Mark returned — ${escapeHtml(loanedCopy.currentLoan.lentTo || "borrower")} gave it back</button>`
+          : onWishlist
+            ? `<button class="btn btn-primary" id="gotItBtn" type="button">I bought it — move to Library</button>`
+            : `<button class="btn btn-primary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>`}
+        ${loanedCopy && !onWishlist ? `<button class="btn btn-secondary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>` : ""}
         ${shelfCopy ? `<button class="btn btn-secondary" id="lendMatchBtn" type="button">Lend It to Someone</button>` : ""}
         <button class="btn btn-secondary" id="viewDetailsBtn" type="button">View Details</button>
       </div>
+      ${loanedCopy ? `<p class="scan-match-note">Dated today — change it in the book's details if it came back earlier.</p>` : ""}
       ${!shelfCopy && copies.length ? `<p class="scan-match-note">Every copy is already lent out.</p>` : ""}
     `;
     wireCover(sheet, book);
@@ -1237,6 +1243,14 @@ function openScanMatch(book, store, container) {
         const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
         store.updateItem(book.id, { copies: [...copies, newCopy] });
         refreshDetail(store, container, book.id);
+      });
+    }
+
+    // One tap closes the loan with today's date; the date stays editable after.
+    const returnMatchBtn = sheet.querySelector("#returnMatchBtn");
+    if (returnMatchBtn) {
+      returnMatchBtn.addEventListener("click", () => {
+        closeLoan(store, container, book, copies, loanedCopy.id, today());
       });
     }
 
@@ -1302,11 +1316,11 @@ function openAddForm(store, container, prefill = {}) {
       </div>
       <div class="field">
         <label>Reading Status</label>
-        <select id="a-status">
-          <option value="to-read">To Read</option>
-          <option value="reading">Reading</option>
-          <option value="read">Read</option>
-        </select>
+        <div class="status-toggle-row" id="a-status-row">
+          <button type="button" class="status-toggle-btn to-read active to-read" data-status="to-read">To Read</button>
+          <button type="button" class="status-toggle-btn reading" data-status="reading">Reading</button>
+          <button type="button" class="status-toggle-btn read" data-status="read">Read</button>
+        </div>
       </div>
       <div class="field" id="a-price-field" style="display:none">
         <label>Price ($)</label>
@@ -1327,6 +1341,20 @@ function openAddForm(store, container, prefill = {}) {
     const priceInput = sheet.querySelector("#a-price");
     const priceField = sheet.querySelector("#a-price-field");
     const saveBtn = sheet.querySelector("#addSaveBtn");
+
+    // Reading status as buttons rather than a dropdown, matching the
+    // Library/Wishlist choice above it.
+    let addStatus = "to-read";
+    sheet.querySelectorAll("#a-status-row .status-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        addStatus = btn.dataset.status;
+        sheet.querySelectorAll("#a-status-row .status-toggle-btn").forEach((b) => {
+          const on = b === btn;
+          b.classList.toggle("active", on);
+          ["to-read", "reading", "read"].forEach((k) => b.classList.toggle(k, b.dataset.status === k));
+        });
+      });
+    });
 
     if (prefill.isbn) wireCover(sheet, { isbn: prefill.isbn });
 
@@ -1425,7 +1453,7 @@ function openAddForm(store, container, prefill = {}) {
         isbn: isbnInput.value.trim() || null,
         customCover: pickedCover.customCover,
         coverId: pickedCover.coverId,
-        readingStatus: sheet.querySelector("#a-status").value,
+        readingStatus: addStatus,
         price,
         priceCheckedDate,
         color: randomColor(),

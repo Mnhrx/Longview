@@ -4,7 +4,7 @@
 // `router.navigate()`. Nothing else in the app touches localStorage directly.
 // ============================================
 
-import { transitionSwap, zoomOpen, zoomClose, getTileOrigin } from "./animations.js";
+import { transitionSwap } from "./animations.js";
 import { clearAllLayers } from "./ui.js";
 
 const STORAGE_KEY = "stackt-state-v1";
@@ -136,16 +136,8 @@ export const router = {
       applyChrome(view, isHome, this.modules[view]);
     };
 
-    // Home <-> module uses the iOS-style zoom: opening expands from the tapped
-    // tile, going back shrinks toward it. Everything else keeps the slide.
-    const origin = getTileOrigin();
-    if (!isHome && opts.zoomFrom) {
-      zoomOpen(opts.zoomFrom, opts.zoomColor, paint);
-    } else if (isHome && origin && opts.fromModule) {
-      zoomClose(origin, opts.zoomColor, paint);
-    } else {
-      transitionSwap(paint, direction, { silent: !!opts.fromPopState });
-    }
+    // Going home is carried by the menu's own zoom-out, so no slide on top of it.
+    transitionSwap(paint, direction, { silent: !!opts.fromPopState || isHome });
 
     if (this.onNavigate) this.onNavigate(view, opts);
   },
