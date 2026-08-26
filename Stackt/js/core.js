@@ -93,6 +93,42 @@ export const store = {
     return entry;
   },
 
+  /** Everything worth keeping, in a versioned envelope so a future build can
+   *  recognise and migrate an older backup. */
+  exportBundle() {
+    return {
+      app: "stackt",
+      formatVersion: 1,
+      exportedAt: new Date().toISOString(),
+      state: this.state,
+    };
+  },
+
+  /** Replaces everything from a backup. Throws with a readable message if the
+   *  file isn't one of ours, so the UI can say what's wrong. */
+  importBundle(bundle) {
+    if (!bundle || typeof bundle !== "object") throw new Error("That file isn't readable.");
+    if (bundle.app !== "stackt") throw new Error("That doesn't look like a Stackt backup.");
+    const incoming = bundle.state;
+    if (!incoming || !Array.isArray(incoming.items)) throw new Error("That backup is missing its library.");
+
+    this.state = {
+      items: incoming.items,
+      finance: incoming.finance || { balance: 0, spendingLog: [] },
+    };
+    this.save();
+    this.listeners.forEach((fn) => fn(this.state));
+    return this.state.items.length;
+  },
+
+  /** Back to a blank app. The seed deliberately does NOT run again — it only
+   *  fills a first launch, and re-seeding demo books here would be a surprise. */
+  resetAll() {
+    this.state = { items: [], finance: { balance: 0, spendingLog: [] } };
+    this.save();
+    this.listeners.forEach((fn) => fn(this.state));
+  },
+
   subscribe(fn) {
     this.listeners.push(fn);
     return () => {
@@ -159,6 +195,10 @@ function applyChrome(view, isHome, mod) {
   const supportsAdd = !isHome && mod.openAddForm && !mod.openAddForm.isPlaceholder;
   const addBtn = document.getElementById("addBtn");
   if (addBtn) addBtn.classList.toggle("hidden", !supportsAdd);
+
+  // Home has nothing to add, so it carries settings instead.
+  const settingsBtn = document.getElementById("settingsBtn");
+  if (settingsBtn) settingsBtn.classList.toggle("hidden", !isHome);
 
   const backArrow = document.getElementById("backArrow");
   if (backArrow) backArrow.classList.toggle("hidden", isHome);

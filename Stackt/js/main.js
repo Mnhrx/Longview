@@ -7,12 +7,15 @@
 import { store, router } from "./core.js";
 import homeModule, { startMenuIntro } from "./home.js";
 import booksModule from "./books.js";
+import settingsModule from "./settings.js";
 import { makePlaceholder } from "./placeholder.js";
 import { bounceTap } from "./animations.js";
+import { ICONS } from "./icons.js";
 import { syncLayersTo, layerDepth } from "./ui.js";
 
 router.register("home", homeModule);
 router.register("books", booksModule);
+router.register("settings", settingsModule);
 router.register("lps", makePlaceholder("lps", "LPs"));
 router.register("photos", makePlaceholder("photos", "Photos"));
 router.register("finance", makePlaceholder("finance", "Finance"));
@@ -55,6 +58,13 @@ async function boot() {
     if (router.current === "home") return;
     backViaButton = true;
     history.back(); // let the history stack drive it, same as a swipe
+  });
+
+  const settingsBtn = document.getElementById("settingsBtn");
+  settingsBtn.innerHTML = ICONS.settings;
+  settingsBtn.addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    router.navigate("settings");
   });
 
   document.getElementById("addBtn").addEventListener("click", (e) => {

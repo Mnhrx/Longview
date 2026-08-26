@@ -42,6 +42,9 @@ export const ICONS = {
   // Lens — a bare aperture. Used where "photo" is meant rather than "scan".
   lens: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5"><circle cx="24" cy="24" r="15"/><circle cx="24" cy="24" r="6"/></svg>`,
 
+  // Settings — sliders rather than a cog; simpler at small sizes.
+  settings: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round"><line x1="8" y1="15" x2="40" y2="15"/><line x1="8" y1="33" x2="40" y2="33"/><circle cx="19" cy="15" r="5" fill="#fff"/><circle cx="31" cy="33" r="5" fill="#fff"/></svg>`,
+
   // Close — two strokes, matching the drawn-icon language.
   close: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="4.5" stroke-linecap="round"><line x1="12" y1="12" x2="36" y2="36"/><line x1="36" y1="12" x2="12" y2="36"/></svg>`,
 
