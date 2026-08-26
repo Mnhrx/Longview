@@ -3,7 +3,7 @@
 // Bump CACHE_NAME whenever you deploy changes so old clients pick them up.
 // ============================================
 
-const CACHE_NAME = "stackt-v11";
+const CACHE_NAME = "stackt-v12";
 const ASSETS = [
   "./",
   "./index.html",
@@ -22,6 +22,7 @@ const ASSETS = [
   "./data/seed.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {

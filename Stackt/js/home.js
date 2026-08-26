@@ -19,6 +19,7 @@ const TILES = [
 
 function render(container, store) {
   const wrap = document.createElement("div");
+  wrap.className = "home-screen";
 
   const title = document.createElement("p");
   title.className = "view-title";
@@ -49,6 +50,10 @@ function render(container, store) {
   wrap.appendChild(grid);
   container.innerHTML = "";
   container.appendChild(wrap);
+
+  // Tiles settle in every time you land here — the effect only runs on this
+  // one screen and finishes in ~350ms, so it never gets in the way of a tap.
+  requestAnimationFrame(() => grid.classList.add("animate-in"));
 }
 
 function subtitleFor(key, store) {

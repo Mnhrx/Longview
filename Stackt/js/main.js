@@ -65,11 +65,34 @@ async function boot() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   }
+
+  hideSplash();
 }
+
+/** Dismisses the splash once the first screen is actually painted. Held for a
+ *  short minimum so it reads as intentional rather than a flash of pink. */
+function hideSplash() {
+  const splash = document.getElementById("splash");
+  if (!splash) return;
+  const MIN_MS = 550;
+  const elapsed = Date.now() - BOOT_STARTED;
+  const wait = Math.max(0, MIN_MS - elapsed);
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      splash.classList.add("done");
+      setTimeout(() => splash.remove(), 400);
+    });
+  }, wait);
+}
+
+const BOOT_STARTED = Date.now();
 
 function viewFromHash() {
   const raw = (location.hash || "").replace(/^#/, "");
   return router.modules[raw] ? raw : null;
 }
 
-boot();
+boot().catch((err) => {
+  console.error("Boot failed", err);
+  hideSplash(); // never leave the user staring at a splash that won't clear
+});

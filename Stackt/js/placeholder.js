@@ -15,6 +15,7 @@ export function makePlaceholder(iconKey, label) {
   return {
     render(container) {
       container.innerHTML = `
+        <p class="view-title">${label}</p>
         <div class="coming-soon">
           <span class="coming-soon-icon">${ICONS[iconKey] || ""}</span>
           <h2>${label}</h2>

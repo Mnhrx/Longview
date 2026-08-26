@@ -1,15 +1,31 @@
 {
-  "name": "Stackt — Books, LPs, Music & Photos",
+  "name": "Stackt \u2014 Books, LPs, Music & Photos",
   "short_name": "Stackt",
   "description": "Your personal library: books, LPs, music, photos, and the savings to afford what's on your list.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#FFF8F0",
+  "background_color": "#FF3B6B",
   "theme_color": "#FF3B6B",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

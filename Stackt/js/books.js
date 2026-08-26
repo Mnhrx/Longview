@@ -163,6 +163,7 @@ function render(container, store) {
       btn.addEventListener("click", () => {
         bounceTap(btn);
         viewMode = btn.dataset.mode;
+        activeFilter = "all"; // don't carry a hidden status filter across tabs
         render(container, store);
       });
     });
@@ -240,7 +241,17 @@ function renderWishlist(bodyHolder, store, container) {
 }
 
 function renderAuthorList(bodyHolder, store, container) {
-  const books = getBooks(store);
+  // Deliberately NOT getBooks(): the reading-status chips belong to the Library
+  // tab and aren't even on screen here, so letting them filter this list meant
+  // invisible state silently dropping authors. By Author = every author you own,
+  // whatever state their books are in. Wishlist stays out of it entirely.
+  let books = ownedBooks(store);
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    books = books.filter(
+      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+    );
+  }
   const counts = {};
   books.forEach((b) => {
     const name = b.creator || "Unknown";
@@ -312,6 +323,9 @@ function buildBookCard(book, onTap) {
   }
   if (!owned && book.price != null) {
     extraHtml += `<div class="price-tag">$${Number(book.price).toFixed(2)} · wishlist</div>`;
+  }
+  if (book.rating) {
+    extraHtml += `<div class="card-stars">${starsHtml(book.rating)}</div>`;
   }
 
   const swatchInner = book.isbn
@@ -495,6 +509,7 @@ function viewModeHtml(book, opts) {
     </div>
 
     ${readingDatesHtml(book)}
+    ${reviewHtml(book)}
 
     ${owned ? `
       <div class="copies-section">
@@ -513,6 +528,53 @@ function viewModeHtml(book, opts) {
 
 /** Reading-dates block: a summary line plus always-editable date inputs.
  *  Shown once a book is Reading or Read — a to-read book has nothing to date yet. */
+/** Renders a 1-5 star row. `interactive` makes each star a button. */
+function starsHtml(rating, interactive = false) {
+  const r = Number(rating) || 0;
+  const star = (filled) =>
+    `<svg viewBox="0 0 24 24" class="star ${filled ? "on" : ""}"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5-4.7-4.6 6.5-.95L12 2.6z"/></svg>`;
+  const items = [1, 2, 3, 4, 5].map((n) =>
+    interactive
+      ? `<button type="button" class="star-btn" data-rate="${n}" aria-label="${n} star${n === 1 ? "" : "s"}">${star(n <= r)}</button>`
+      : star(n <= r)
+  );
+  return `<span class="star-row">${items.join("")}</span>`;
+}
+
+/** Review + rating. Sits under the reading log, so it turns up once a book is
+ *  actually in play — a To Read book has nothing to review yet. */
+function reviewHtml(book) {
+  if (book.readingStatus !== "reading" && book.readingStatus !== "read") return "";
+  const hasReview = (book.review && book.review.trim()) || book.rating;
+
+  return `
+    <div class="review-block" id="reviewBlock">
+      <div class="review-head">
+        <span class="review-title">Your review</span>
+        <button class="mini-edit" id="reviewEditBtn" type="button" aria-label="Edit review"><span class="btn-icon">${ICONS.edit}</span></button>
+      </div>
+
+      <div class="review-read" id="reviewRead">
+        ${book.rating ? `<div class="review-stars">${starsHtml(book.rating)}<span class="review-score">${book.rating}/5</span></div>` : ""}
+        ${book.review && book.review.trim()
+          ? `<p class="review-text">${escapeHtml(book.review)}</p>`
+          : (book.rating ? "" : `<p class="review-empty">Not reviewed yet — tap the pencil to add one.</p>`)}
+        ${book.reviewDate && hasReview ? `<p class="review-date">Reviewed ${fmtDate(book.reviewDate)}</p>` : ""}
+      </div>
+
+      <div class="review-edit" id="reviewEdit" hidden>
+        <div class="review-rate-row">
+          <span class="review-rate-label">Rating</span>
+          ${starsHtml(book.rating, true)}
+          <button type="button" class="clear-rating" id="clearRating">Clear</button>
+        </div>
+        <textarea id="reviewInput" class="review-input" rows="4" placeholder="What did you make of it?">${escapeHtml(book.review || "")}</textarea>
+        <button class="btn btn-primary" id="saveReviewBtn" type="button">Save review</button>
+      </div>
+    </div>
+  `;
+}
+
 function readingDatesHtml(book) {
   if (book.readingStatus !== "reading" && book.readingStatus !== "read") return "";
   const span = readingSpanText(book);
@@ -622,6 +684,59 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       refreshDetail(store, container, book.id);
     });
   });
+
+  // ---- review + rating ----
+  const reviewEditBtn = sheet.querySelector("#reviewEditBtn");
+  const reviewRead = sheet.querySelector("#reviewRead");
+  const reviewEdit = sheet.querySelector("#reviewEdit");
+  if (reviewEditBtn && reviewRead && reviewEdit) {
+    // Local draft so tapping stars re-paints without writing to the store on
+    // every tap — the save button commits.
+    let draftRating = book.rating || 0;
+
+    const paintStars = () => {
+      reviewEdit.querySelectorAll(".star-btn").forEach((btn) => {
+        const on = Number(btn.dataset.rate) <= draftRating;
+        btn.querySelector(".star").classList.toggle("on", on);
+      });
+    };
+
+    reviewEditBtn.addEventListener("click", () => {
+      const opening = reviewEdit.hidden;
+      reviewEdit.hidden = !opening;
+      reviewRead.hidden = opening;
+      reviewEditBtn.classList.toggle("open", opening);
+      if (opening) paintStars();
+    });
+
+    reviewEdit.querySelectorAll(".star-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const n = Number(btn.dataset.rate);
+        draftRating = draftRating === n ? 0 : n; // tapping the current star clears it
+        paintStars();
+      });
+    });
+
+    const clearBtn = sheet.querySelector("#clearRating");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        draftRating = 0;
+        paintStars();
+      });
+    }
+
+    sheet.querySelector("#saveReviewBtn").addEventListener("click", () => {
+      const text = sheet.querySelector("#reviewInput").value.trim();
+      const had = !!(book.review && book.review.trim()) || !!book.rating;
+      const has = !!text || !!draftRating;
+      store.updateItem(book.id, {
+        rating: draftRating || null,
+        review: text || null,
+        reviewDate: has ? (book.reviewDate && had ? book.reviewDate : today()) : null,
+      });
+      refreshDetail(store, container, book.id);
+    });
+  }
 
   const gotCopyBtn = sheet.querySelector("#gotCopyBtn");
   if (gotCopyBtn) {

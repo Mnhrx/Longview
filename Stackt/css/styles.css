@@ -1152,3 +1152,162 @@ html, body {
 
 /* ---------- utility ---------- */
 .hidden { display: none !important; }
+
+/* ---------- review + star rating ---------- */
+.review-block {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.review-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+}
+.review-read { display: flex; flex-direction: column; gap: 7px; }
+.review-read[hidden], .review-edit[hidden] { display: none; }
+
+.review-stars { display: flex; align-items: center; gap: 8px; }
+.review-score { font-size: 12px; font-weight: 800; opacity: 0.55; }
+.review-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.review-empty, .review-date {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.5;
+  font-weight: 600;
+}
+
+.star-row { display: inline-flex; gap: 2px; }
+.star {
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.star.on { fill: var(--yellow); }
+
+.review-edit { display: flex; flex-direction: column; gap: 10px; }
+.review-rate-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.review-rate-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.5;
+}
+.star-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 0;
+}
+.star-btn .star { width: 28px; height: 28px; stroke-width: 1.4; }
+.star-btn:active .star { transform: scale(0.88); }
+.clear-rating {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  background: none;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 3px 8px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.review-input {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+}
+.card-stars { margin-top: 6px; }
+.card-stars .star { width: 14px; height: 14px; }
+
+/* ---------- per-module accent ----------
+   Each module carries its home-tile color through into its own screen, so
+   Books feels like the pink tile you tapped. Set as --accent on #app. */
+#app { --accent: var(--pink); }
+#app[data-module="books"]   { --accent: var(--pink); }
+#app[data-module="lps"]     { --accent: var(--purple); }
+#app[data-module="music"]   { --accent: var(--blue); }
+#app[data-module="photos"]  { --accent: var(--mint); }
+#app[data-module="finance"] { --accent: var(--yellow); }
+
+/* The section heading picks up the accent rather than being flat grey. */
+#app[data-module] .view-title {
+  color: var(--accent);
+  opacity: 1;
+  -webkit-text-fill-color: var(--accent);
+}
+#app[data-module] .mode-btn.active { background: var(--accent); }
+#app[data-module="books"] .mode-btn.active,
+#app[data-module="lps"] .mode-btn.active,
+#app[data-module="music"] .mode-btn.active { color: #fff; }
+#app[data-module] .filter-chip.active { background: var(--ink); color: #fff; }
+
+/* ---------- home: static pattern + tile entrance ---------- */
+.home-screen {
+  position: relative;
+}
+/* A faint grid of dots, painted once — no animation, no battery cost. */
+.home-screen::before {
+  content: "";
+  position: absolute;
+  inset: -20px -20px 0;
+  z-index: 0;
+  background-image: radial-gradient(circle at center, rgba(26,26,46,0.13) 1.6px, transparent 1.7px);
+  background-size: 22px 22px;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+.home-screen > * { position: relative; z-index: 1; }
+
+/* Tiles settle in from slightly oversized, staggered — the iOS unlock feel.
+   Kept to ~350ms total so it never delays a tap. */
+.home-grid.animate-in .home-tile {
+  animation: tileSettle .34s cubic-bezier(.2, .8, .3, 1) both;
+}
+.home-grid.animate-in .home-tile:nth-child(1) { animation-delay: 0ms; }
+.home-grid.animate-in .home-tile:nth-child(2) { animation-delay: 40ms; }
+.home-grid.animate-in .home-tile:nth-child(3) { animation-delay: 80ms; }
+.home-grid.animate-in .home-tile:nth-child(4) { animation-delay: 120ms; }
+.home-grid.animate-in .home-tile:nth-child(5) { animation-delay: 160ms; }
+
+@keyframes tileSettle {
+  from { opacity: 0; transform: scale(1.22); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-grid.animate-in .home-tile { animation: none; }
+}

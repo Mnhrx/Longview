@@ -144,6 +144,12 @@ export const router = {
     const mod = this.modules[view];
     const supportsAdd = !isHome && mod.openAddForm && !mod.openAddForm.isPlaceholder;
 
+    const app = document.getElementById("app");
+    if (app) {
+      if (isHome) app.removeAttribute("data-module");
+      else app.dataset.module = view;
+    }
+
     const addBtn = document.getElementById("addBtn");
     if (addBtn) addBtn.classList.toggle("hidden", !supportsAdd);
 
