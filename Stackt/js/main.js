@@ -5,7 +5,7 @@
 // ============================================
 
 import { store, router } from "./core.js";
-import homeModule from "./home.js";
+import homeModule, { startMenuIntro } from "./home.js";
 import booksModule from "./books.js";
 import { makePlaceholder } from "./placeholder.js";
 import { bounceTap } from "./animations.js";
@@ -43,7 +43,16 @@ async function boot() {
     }
 
     const view = (e.state && e.state.view) || viewFromHash() || "home";
-    router.navigate(view, { fromPopState: true, direction: "back" });
+    const leavingModule = router.current && router.current !== "home" && view === "home";
+    const accent = leavingModule
+      ? getComputedStyle(document.getElementById("app")).getPropertyValue("--accent").trim()
+      : null;
+    router.navigate(view, {
+      fromPopState: true,
+      direction: "back",
+      fromModule: leavingModule,     // triggers the reverse zoom toward the tile
+      zoomColor: accent || undefined,
+    });
   });
 
   document.getElementById("homeBtn").addEventListener("click", () => {
@@ -69,23 +78,40 @@ async function boot() {
   hideSplash();
 }
 
-/** Dismisses the splash once the first screen is actually painted. Held for a
- *  short minimum so it reads as intentional rather than a flash of pink. */
+/**
+ * Dismisses the splash, then plays the menu's zoom-out.
+ *
+ * The order matters: previously the menu rendered and animated *underneath*
+ * the splash, so by the time the splash faded the animation had already
+ * finished and you got a static menu. The intro is held back until the splash
+ * is actually out of the way.
+ */
 function hideSplash() {
   const splash = document.getElementById("splash");
-  if (!splash) return;
-  const MIN_MS = 550;
-  const elapsed = Date.now() - BOOT_STARTED;
-  const wait = Math.max(0, MIN_MS - elapsed);
+  window.__stacktSplashUp = false;
+  if (!splash) {
+    startMenuIntro();
+    return;
+  }
+  const MIN_MS = 500;
+  const wait = Math.max(0, MIN_MS - (Date.now() - BOOT_STARTED));
   setTimeout(() => {
-    requestAnimationFrame(() => {
-      splash.classList.add("done");
-      setTimeout(() => splash.remove(), 400);
-    });
+    splash.classList.add("done");
+    splash.addEventListener("transitionend", onGone, { once: true });
+    setTimeout(onGone, 420); // belt and braces if transitionend doesn't fire
   }, wait);
+
+  let finished = false;
+  function onGone() {
+    if (finished) return;
+    finished = true;
+    splash.remove();
+    startMenuIntro();
+  }
 }
 
 const BOOT_STARTED = Date.now();
+window.__stacktSplashUp = true; // home holds its intro while this is true
 
 function viewFromHash() {
   const raw = (location.hash || "").replace(/^#/, "");

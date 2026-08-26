@@ -7,7 +7,7 @@
 import { openModal, updateModal, closeModal, dismissLayer, openOverlay, escapeHtml } from "./ui.js";
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
-import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl } from "./barcode.js";
+import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl, coverIdUrl, findCoverOptions } from "./barcode.js";
 import { ICONS } from "./icons.js";
 
 const FILTERS = [
@@ -328,12 +328,12 @@ function buildBookCard(book, onTap) {
     extraHtml += `<div class="card-stars">${starsHtml(book.rating)}</div>`;
   }
 
-  const swatchInner = book.isbn
+  const swatchInner = hasCover(book)
     ? `<span class="swatch-emoji">${ICONS.books}</span><img class="swatch-img" alt="">`
     : ICONS.books;
 
   card.innerHTML = `
-    <div class="item-swatch ${book.isbn ? "shimmer" : ""}" style="background:${book.color || "#eee"}">${swatchInner}</div>
+    <div class="item-swatch ${hasCover(book) ? "shimmer" : ""}" style="background:${book.color || "#eee"}">${swatchInner}</div>
     <div class="item-body">
       <p class="item-title">${escapeHtml(book.title)}</p>
       <p class="item-creator">${escapeHtml(book.creator || "")}</p>
@@ -346,7 +346,7 @@ function buildBookCard(book, onTap) {
     onTap(book);
   });
 
-  if (book.isbn) {
+  if (hasCover(book)) {
     const swatch = card.querySelector(".item-swatch");
     const swatchImg = swatch.querySelector(".swatch-img");
     const swatchEmoji = swatch.querySelector(".swatch-emoji");
@@ -363,7 +363,7 @@ function buildBookCard(book, onTap) {
     // Request Open Library's largest cover size even for the small card thumbnail —
     // a browser shrinking a big image down looks sharp; stretching the "S" size up to
     // fit a retina-density 52px box is what was causing the blurry/soft covers.
-    img.src = coverUrl(book.isbn, "L");
+    img.src = bookCoverSrc(book, "L");
   }
 
   return card;
@@ -371,16 +371,144 @@ function buildBookCard(book, onTap) {
 
 // ---------- shared cover block (detail view, scan-match, add form) ----------
 
+/**
+ * Where a book's cover comes from, in priority order:
+ *   1. a photo you added yourself   2. a cover you picked from other editions
+ *   3. the ISBN's own cover         4. nothing (fall back to the icon)
+ */
+function bookCoverSrc(book, size = "L") {
+  if (!book) return null;
+  if (book.customCover) return book.customCover;
+  if (book.coverId) return coverIdUrl(book.coverId, size);
+  if (book.isbn) return coverUrl(book.isbn, size);
+  return null;
+}
+function hasCover(book) {
+  return !!(book && (book.customCover || book.coverId || book.isbn));
+}
+
+/** Shrinks a picked photo before storing it. Browser storage is ~5MB for the
+ *  whole app, and a full-size iPhone photo would eat most of that on its own. */
+function downscaleImage(file, maxEdge = 500, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read that file"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That file isn't an image we can read"));
+      img.onload = () => {
+        const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Cover picker. Opens as its own layer over whatever sheet you came from, so
+ * the back gesture closes just the picker. `onPick({customCover, coverId})`.
+ */
+function openCoverPicker(bookish, onPick) {
+  openOverlay("cover-picker-backdrop", (overlay) => {
+    overlay.innerHTML = `
+      <div class="cover-picker">
+        <div class="cover-picker-head">
+          <h2>Choose a cover</h2>
+          <button class="lightbox-close" id="cpClose" type="button" aria-label="Close"><span class="btn-icon">${ICONS.close}</span></button>
+        </div>
+
+        <label class="cover-upload">
+          <input type="file" id="cpFile" accept="image/*" hidden>
+          <span class="cover-upload-icon">${ICONS.camera}</span>
+          <span>
+            <strong>Use your own photo</strong>
+            <small>Take one now or pick from your library</small>
+          </span>
+        </label>
+
+        <p class="cover-picker-label" id="cpLabel">Other editions</p>
+        <div class="cover-options" id="cpOptions">
+          <p class="cover-picker-note">Looking for other covers…</p>
+        </div>
+      </div>
+    `;
+
+    overlay.querySelector("#cpClose").addEventListener("click", () => dismissLayer());
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) dismissLayer();
+    });
+
+    const fileInput = overlay.querySelector("#cpFile");
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const label = overlay.querySelector("#cpLabel");
+      label.textContent = "Processing your photo…";
+      try {
+        const dataUrl = await downscaleImage(file);
+        onPick({ customCover: dataUrl, coverId: null });
+        dismissLayer();
+      } catch (err) {
+        label.textContent = err.message || "Couldn't use that image.";
+      }
+    });
+
+    const grid = overlay.querySelector("#cpOptions");
+    findCoverOptions(bookish.title, bookish.creator).then((ids) => {
+      if (!ids.length) {
+        grid.innerHTML = `<p class="cover-picker-note">No other covers found for this title.</p>`;
+        return;
+      }
+      grid.innerHTML = "";
+      if (bookish.customCover || bookish.coverId) {
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.className = "cover-option reset";
+        reset.innerHTML = `<span>Use the default</span>`;
+        reset.addEventListener("click", () => {
+          onPick({ customCover: null, coverId: null });
+          dismissLayer();
+        });
+        grid.appendChild(reset);
+      }
+      ids.forEach((id) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cover-option";
+        const img = new Image();
+        img.alt = "";
+        img.addEventListener("load", () => btn.classList.add("loaded"));
+        img.addEventListener("error", () => btn.remove()); // drop dead thumbnails
+        img.src = coverIdUrl(id, "M");
+        btn.appendChild(img);
+        btn.addEventListener("click", () => {
+          onPick({ customCover: null, coverId: id });
+          dismissLayer();
+        });
+        grid.appendChild(btn);
+      });
+    });
+  });
+}
+
 function coverBlockHtml(book) {
   return `
     <div class="detail-cover-wrap">
       <img class="detail-cover" id="coverImg" alt="">
-      <div class="detail-cover-fallback ${book.isbn ? "shimmer" : ""}" id="coverFallback" style="background:${book.color || "#eee"}">${ICONS.books}</div>
+      <div class="detail-cover-fallback ${hasCover(book) ? "shimmer" : ""}" id="coverFallback" style="background:${book.color || "#eee"}">${ICONS.books}</div>
     </div>
   `;
 }
 function wireCover(sheet, book) {
-  if (!book.isbn) return;
+  if (!hasCover(book)) return;
   const img = sheet.querySelector("#coverImg");
   const fallback = sheet.querySelector("#coverFallback");
   if (!img || !fallback) return;
@@ -391,7 +519,7 @@ function wireCover(sheet, book) {
   img.addEventListener("error", () => {
     fallback.classList.remove("shimmer");
   });
-  img.src = coverUrl(book.isbn, "L");
+  img.src = bookCoverSrc(book, "L");
 }
 
 // Opens a fullscreen lightbox of the front cover. Open Library (our free
@@ -402,7 +530,7 @@ function openCoverLightbox(book) {
   // pops it like any other screen instead of leaving it stranded on top.
   openOverlay("lightbox-backdrop", (overlay) => {
     overlay.innerHTML = `
-      <button class="lightbox-close" type="button" aria-label="Close">✕</button>
+      <button class="lightbox-close" type="button" aria-label="Close"><span class="btn-icon">${ICONS.close}</span></button>
       <div class="lightbox-content">
         <div class="lightbox-cover-wrap">
           <img class="lightbox-img" id="lightboxImg" alt="${escapeHtml(book.title)} cover">
@@ -428,7 +556,7 @@ function openCoverLightbox(book) {
       fallback.classList.remove("shimmer");
       caption.textContent = "No cover image found for this edition";
     });
-    img.src = coverUrl(book.isbn, "L");
+    img.src = bookCoverSrc(book, "L");
   });
 }
 
@@ -494,7 +622,7 @@ function viewModeHtml(book, opts) {
       <h2>${escapeHtml(book.title)}</h2>
       <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.edit}</span>Edit</button>
     </div>
-    ${book.isbn ? `
+    ${hasCover(book) ? `
       <div class="cover-tap-target" id="coverTapTarget">
         ${coverBlockHtml(book)}
         <span class="cover-zoom-badge">${ICONS.zoom}</span>
@@ -616,6 +744,12 @@ function editModeHtml(book) {
     <div class="field">
       <label>ISBN</label>
       <input type="text" id="f-isbn" placeholder="9780099448822" value="${escapeHtml(book.isbn || "")}">
+    </div>
+    <div class="field">
+      <label>Cover</label>
+      <button class="btn btn-secondary" id="changeCoverBtn" type="button" style="margin-top:0;">
+        ${book.customCover ? "Change cover (using your photo)" : book.coverId ? "Change cover (using a picked edition)" : "Change cover"}
+      </button>
     </div>
     ${!owned ? `
       <div class="field">
@@ -796,21 +930,19 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
           return;
         }
         const lentDate = row.querySelector(".lend-start-input").value || today();
-        const dueDate = row.querySelector(".due-date-input").value || null;
         const updatedCopies = copies.map((cc) =>
-          cc.id === c.id ? { ...cc, currentLoan: { lentTo, lentDate, dueDate } } : cc
+          cc.id === c.id ? { ...cc, currentLoan: { lentTo, lentDate } } : cc
         );
         store.updateItem(book.id, { copies: updatedCopies });
         refreshDetail(store, container, book.id);
       });
     }
 
-    // An active loan's borrower and dates stay editable — fix a typo or a
+    // An active loan's borrower and start date stay editable — fix a typo or a
     // wrong start date without having to return and re-lend the copy.
     const loanWho = row.querySelector(".loan-who");
     const loanStart = row.querySelector(".loan-start");
-    const loanDue = row.querySelector(".loan-due");
-    [loanWho, loanStart, loanDue].forEach((input) => {
+    [loanWho, loanStart].forEach((input) => {
       if (!input) return;
       input.addEventListener("change", () => {
         const updatedCopies = copies.map((cc) =>
@@ -821,7 +953,6 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
                   ...cc.currentLoan,
                   lentTo: loanWho.value.trim() || cc.currentLoan.lentTo,
                   lentDate: loanStart.value || null,
-                  dueDate: loanDue.value || null,
                 },
               }
             : cc
@@ -830,6 +961,17 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
         refreshDetail(store, container, book.id);
       });
     });
+
+    // There's no deadline in this model, so a return date isn't a target —
+    // it's the record of the loan ending. Setting it closes the loan, which
+    // also lets you record a book that came back last week.
+    const loanReturned = row.querySelector(".loan-returned");
+    if (loanReturned) {
+      loanReturned.addEventListener("change", () => {
+        if (!loanReturned.value) return;
+        closeLoan(store, container, book, copies, c.id, loanReturned.value);
+      });
+    }
 
     // When a copy actually joined your shelf is editable — a book bought
     // years ago shouldn't be stamped with the day you happened to add it.
@@ -866,14 +1008,9 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     });
 
     if (returnBtn) {
+      // One tap = came back today. The date field above handles any other day.
       returnBtn.addEventListener("click", () => {
-        const updatedCopies = copies.map((cc) => {
-          if (cc.id !== c.id) return cc;
-          const historyEntry = { ...cc.currentLoan, returnedDate: today() };
-          return { ...cc, currentLoan: null, history: [...(cc.history || []), historyEntry] };
-        });
-        store.updateItem(book.id, { copies: updatedCopies });
-        refreshDetail(store, container, book.id);
+        closeLoan(store, container, book, copies, c.id, today());
       });
     }
 
@@ -888,6 +1025,16 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
 }
 
 function wireEditMode(sheet, book, store, container) {
+  const changeCoverBtn = sheet.querySelector("#changeCoverBtn");
+  if (changeCoverBtn) {
+    changeCoverBtn.addEventListener("click", () => {
+      openCoverPicker(book, (pick) => {
+        store.updateItem(book.id, pick);
+        refreshDetail(store, container, book.id, { mode: "edit" });
+      });
+    });
+  }
+
   sheet.querySelector("#saveBtn").addEventListener("click", () => {
     const titleInput = sheet.querySelector("#f-title");
     if (!titleInput.value.trim()) {
@@ -949,6 +1096,19 @@ function renderQuiet(container, store) {
   if (view) view.scrollTop = prevScroll;
 }
 
+/** Ends an active loan: moves it into history stamped with the date it
+ *  actually came back. Shared by the "Mark Returned" button and the
+ *  "Returned on" field so both paths behave identically. */
+function closeLoan(store, container, book, copies, copyId, returnedDate) {
+  const updatedCopies = copies.map((cc) => {
+    if (cc.id !== copyId || !cc.currentLoan) return cc;
+    const historyEntry = { ...cc.currentLoan, returnedDate };
+    return { ...cc, currentLoan: null, history: [...(cc.history || []), historyEntry] };
+  });
+  store.updateItem(book.id, { copies: updatedCopies });
+  refreshDetail(store, container, book.id);
+}
+
 function buildCopyRow(copy) {
   const onLoan = !!copy.currentLoan;
   const loan = copy.currentLoan;
@@ -960,7 +1120,7 @@ function buildCopyRow(copy) {
       <div class="copy-line">
         <div class="copy-status ${onLoan ? "on-loan" : "on-shelf"}">
           ${onLoan
-            ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}${loan.dueDate ? ` · due ${fmtDate(loan.dueDate)}` : ""}`
+            ? `→ Lent to ${escapeHtml(loan.lentTo)}${out ? ` · out ${daysLabel(out)}` : ""}`
             : `On your shelf since ${fmtDate(copy.acquiredDate)}`}
         </div>
         <button class="mini-edit" type="button" aria-label="Edit dates"><span class="btn-icon">${ICONS.edit}</span></button>
@@ -985,10 +1145,11 @@ function buildCopyRow(copy) {
               <input type="date" class="loan-start" value="${loan.lentDate || ""}">
             </label>
             <label class="date-field">
-              <span>Due</span>
-              <input type="date" class="loan-due" value="${loan.dueDate || ""}">
+              <span>Returned on</span>
+              <input type="date" class="loan-returned" value="">
             </label>
           </div>
+          <p class="field-hint">Lending to friends has no deadline — filling in a return date is what closes the loan.</p>
         ` : ""}
       </div>
 
@@ -1006,10 +1167,6 @@ function buildCopyRow(copy) {
             <label class="date-field">
               <span>Lent on</span>
               <input type="date" class="lend-start-input" value="${today()}">
-            </label>
-            <label class="date-field">
-              <span>Due</span>
-              <input type="date" class="due-date-input">
             </label>
           </div>
           <button class="btn btn-primary confirm-lend" type="button" style="margin-top:2px;">Confirm Loan</button>
@@ -1128,6 +1285,7 @@ function openAddForm(store, container, prefill = {}) {
 
       <div id="addCoverBlock" class="${prefill.isbn ? "" : "hidden"}">
         ${coverBlockHtml({ isbn: prefill.isbn, color: "#eee" })}
+        <button class="btn btn-secondary" id="addChangeCoverBtn" type="button" style="margin:-6px 0 16px;">Choose a different cover</button>
       </div>
       <div class="field">
         <label>Title</label>
@@ -1160,6 +1318,8 @@ function openAddForm(store, container, prefill = {}) {
     `;
 
     const coverBlock = sheet.querySelector("#addCoverBlock");
+    // Cover chosen in the picker before the book exists; applied on save.
+    let pickedCover = { customCover: null, coverId: null };
     const isbnInput = sheet.querySelector("#a-isbn");
     const isbnStatus = sheet.querySelector("#isbnLookupStatus");
     const titleInput = sheet.querySelector("#a-title");
@@ -1169,6 +1329,32 @@ function openAddForm(store, container, prefill = {}) {
     const saveBtn = sheet.querySelector("#addSaveBtn");
 
     if (prefill.isbn) wireCover(sheet, { isbn: prefill.isbn });
+
+    // Re-paints the add form's preview from whatever the current pick is.
+    function repaintAddCover(isbn) {
+      const shape = { isbn: isbn || null, ...pickedCover, color: "#eee" };
+      coverBlock.classList.toggle("hidden", !hasCover(shape));
+      coverBlock.innerHTML =
+        coverBlockHtml(shape) +
+        `<button class="btn btn-secondary" id="addChangeCoverBtn" type="button" style="margin:-6px 0 16px;">Choose a different cover</button>`;
+      wireCover(sheet, shape);
+      wireAddCoverBtn(isbn);
+    }
+
+    function wireAddCoverBtn(isbn) {
+      const btn = sheet.querySelector("#addChangeCoverBtn");
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        openCoverPicker(
+          { title: titleInput.value.trim(), creator: creatorInput.value.trim(), ...pickedCover },
+          (pick) => {
+            pickedCover = pick;
+            repaintAddCover(isbnInput.value.trim() || null);
+          }
+        );
+      });
+    }
+    wireAddCoverBtn(prefill.isbn || null);
 
     // Where the book is headed is the first decision, so it's two plain
     // buttons at the top rather than a dropdown buried in the form.
@@ -1204,9 +1390,7 @@ function openAddForm(store, container, prefill = {}) {
       if (meta) {
         if (!titleInput.value.trim() && meta.title) titleInput.value = meta.title;
         if (!creatorInput.value.trim() && meta.creator) creatorInput.value = meta.creator;
-        coverBlock.classList.remove("hidden");
-        coverBlock.innerHTML = coverBlockHtml({ isbn: raw, color: "#eee" });
-        wireCover(sheet, { isbn: raw });
+        repaintAddCover(raw);
         isbnStatus.textContent = `Found: ${meta.title || "match"}${meta.creator ? " · " + meta.creator : ""}`;
       } else {
         isbnStatus.textContent = "No match found for that ISBN — fill in the details manually.";
@@ -1239,6 +1423,8 @@ function openAddForm(store, container, prefill = {}) {
         title: titleInput.value.trim(),
         creator: creatorInput.value.trim(),
         isbn: isbnInput.value.trim() || null,
+        customCover: pickedCover.customCover,
+        coverId: pickedCover.coverId,
         readingStatus: sheet.querySelector("#a-status").value,
         price,
         priceCheckedDate,

@@ -101,3 +101,99 @@ export function nudge(el) {
     { duration: 340, easing: "cubic-bezier(.34,1.56,.64,1)" }
   );
 }
+
+
+// ============================================
+// iOS-style app-open transition.
+//
+// Tapping a tile expands a shape from that tile's exact position out to fill
+// the screen, and the module appears inside it. Going back reverses it toward
+// the same tile. A FLIP-style trick: we animate a stand-in element rather than
+// the real screens, so nothing has to re-layout mid-animation.
+// ============================================
+
+const OPEN_MS = 320;
+let lastTileRect = null; // where the module was opened from, for the way back
+
+export function rememberTileOrigin(rect) {
+  lastTileRect = rect;
+}
+export function getTileOrigin() {
+  return lastTileRect;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function makeVeil(rect, color, radius) {
+  const veil = document.createElement("div");
+  veil.className = "zoom-veil";
+  veil.style.background = color;
+  veil.style.left = rect.left + "px";
+  veil.style.top = rect.top + "px";
+  veil.style.width = rect.width + "px";
+  veil.style.height = rect.height + "px";
+  veil.style.borderRadius = radius;
+  document.body.appendChild(veil);
+  return veil;
+}
+
+/** Expands from `rect` to fullscreen, then runs `swap()` behind the veil and
+ *  fades it away to reveal the new screen. */
+export function zoomOpen(rect, color, swap) {
+  if (prefersReducedMotion() || !rect) {
+    swap();
+    return;
+  }
+  const veil = makeVeil(rect, color, "20px");
+  const full = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+
+  const anim = veil.animate(
+    [
+      { left: rect.left + "px", top: rect.top + "px", width: rect.width + "px", height: rect.height + "px", borderRadius: "20px" },
+      { left: full.left + "px", top: full.top + "px", width: full.width + "px", height: full.height + "px", borderRadius: "0px" },
+    ],
+    { duration: OPEN_MS, easing: "cubic-bezier(.32,.72,.28,1)", fill: "forwards" }
+  );
+
+  anim.onfinish = () => {
+    swap();
+    // One frame for the new screen to paint before the veil lifts.
+    requestAnimationFrame(() => {
+      const out = veil.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: 170,
+        easing: "ease-out",
+        fill: "forwards",
+      });
+      out.onfinish = () => veil.remove();
+    });
+  };
+}
+
+/** Reverse: covers the screen, runs `swap()` underneath, then shrinks back to
+ *  the tile the module was opened from. */
+export function zoomClose(rect, color, swap) {
+  if (prefersReducedMotion() || !rect) {
+    swap();
+    return;
+  }
+  const full = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  const veil = makeVeil(full, color, "0px");
+
+  requestAnimationFrame(() => {
+    swap(); // menu renders underneath while the veil still covers everything
+    requestAnimationFrame(() => {
+      const anim = veil.animate(
+        [
+          { left: full.left + "px", top: full.top + "px", width: full.width + "px", height: full.height + "px", borderRadius: "0px", opacity: 1 },
+          { left: rect.left + "px", top: rect.top + "px", width: rect.width + "px", height: rect.height + "px", borderRadius: "20px", opacity: 0 },
+        ],
+        { duration: OPEN_MS, easing: "cubic-bezier(.32,.72,.28,1)", fill: "forwards" }
+      );
+      anim.onfinish = () => veil.remove();
+    });
+  });
+}
+
+export { OPEN_MS };

@@ -155,8 +155,41 @@ export async function lookupGoogleBooksPrice(isbn) {
   }
 }
 
-/** Open Library's free cover image URL, built directly from an ISBN — no lookup call needed. */
+/** Open Library's free cover image URL, built directly from an ISBN — no lookup call needed.
+ *  Note: ISBN lookups are rate-limited (100 per IP per 5 min) and return 403 past
+ *  that; cover-ID lookups are exempt, which is why the picker prefers them. */
 export function coverUrl(isbn, size = "M") {
   if (!isbn) return null;
   return `https://covers.openlibrary.org/b/isbn/${isbn}-${size}.jpg?default=false`;
+}
+
+/** Cover by Open Library cover ID — not rate-limited, so preferred once known. */
+export function coverIdUrl(id, size = "M") {
+  if (!id) return null;
+  return `https://covers.openlibrary.org/b/id/${id}-${size}.jpg?default=false`;
+}
+
+/**
+ * Finds cover candidates for a title/author across Open Library editions.
+ * An ISBN identifies one printing, and its cover is sometimes wrong or missing —
+ * this surfaces the other editions' art so you can pick the one that matches
+ * the book in your hands. Returns an array of cover IDs, most relevant first.
+ */
+export async function findCoverOptions(title, creator) {
+  const q = [title, creator].filter(Boolean).join(" ").trim();
+  if (!q) return [];
+  try {
+    const res = await fetch(
+      `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&fields=title,author_name,cover_i&limit=20`
+    );
+    const data = await res.json();
+    const ids = [];
+    (data.docs || []).forEach((d) => {
+      if (d.cover_i && !ids.includes(d.cover_i)) ids.push(d.cover_i);
+    });
+    return ids.slice(0, 12);
+  } catch (err) {
+    console.warn("Cover search failed", err);
+    return [];
+  }
 }

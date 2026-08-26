@@ -4,7 +4,7 @@
 // `router.navigate()`. Nothing else in the app touches localStorage directly.
 // ============================================
 
-import { transitionSwap } from "./animations.js";
+import { transitionSwap, zoomOpen, zoomClose, getTileOrigin } from "./animations.js";
 import { clearAllLayers } from "./ui.js";
 
 const STORAGE_KEY = "stackt-state-v1";
@@ -128,32 +128,42 @@ export const router = {
     const direction = opts.direction || (view === "home" ? "back" : "forward");
     this.current = view;
 
-    transitionSwap(
-      () => {
-        const container = document.getElementById("view");
-        container.innerHTML = "";
-        this.modules[view].render(container, store);
-      },
-      direction,
-      { silent: !!opts.fromPopState } // iOS animates its own swipe — don't double up
-    );
-
-    if (this.onNavigate) this.onNavigate(view, opts);
-
     const isHome = view === "home";
-    const mod = this.modules[view];
-    const supportsAdd = !isHome && mod.openAddForm && !mod.openAddForm.isPlaceholder;
+    const paint = () => {
+      const container = document.getElementById("view");
+      container.innerHTML = "";
+      this.modules[view].render(container, store);
+      applyChrome(view, isHome, this.modules[view]);
+    };
 
-    const app = document.getElementById("app");
-    if (app) {
-      if (isHome) app.removeAttribute("data-module");
-      else app.dataset.module = view;
+    // Home <-> module uses the iOS-style zoom: opening expands from the tapped
+    // tile, going back shrinks toward it. Everything else keeps the slide.
+    const origin = getTileOrigin();
+    if (!isHome && opts.zoomFrom) {
+      zoomOpen(opts.zoomFrom, opts.zoomColor, paint);
+    } else if (isHome && origin && opts.fromModule) {
+      zoomClose(origin, opts.zoomColor, paint);
+    } else {
+      transitionSwap(paint, direction, { silent: !!opts.fromPopState });
     }
 
-    const addBtn = document.getElementById("addBtn");
-    if (addBtn) addBtn.classList.toggle("hidden", !supportsAdd);
-
-    const backArrow = document.getElementById("backArrow");
-    if (backArrow) backArrow.classList.toggle("hidden", isHome);
+    if (this.onNavigate) this.onNavigate(view, opts);
   },
 };
+
+/** Header + theming that follows the active screen. Runs inside the paint so
+ *  it lands on the same frame as the new content, not a frame later. */
+function applyChrome(view, isHome, mod) {
+  const app = document.getElementById("app");
+  if (app) {
+    if (isHome) app.removeAttribute("data-module");
+    else app.dataset.module = view;
+  }
+
+  const supportsAdd = !isHome && mod.openAddForm && !mod.openAddForm.isPlaceholder;
+  const addBtn = document.getElementById("addBtn");
+  if (addBtn) addBtn.classList.toggle("hidden", !supportsAdd);
+
+  const backArrow = document.getElementById("backArrow");
+  if (backArrow) backArrow.classList.toggle("hidden", isHome);
+}

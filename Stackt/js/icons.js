@@ -39,6 +39,9 @@ export const ICONS = {
   // Lend — an arrow handing something across.
   lend: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="24" x2="38" y2="24"/><polyline points="28,14 38,24 28,34"/></svg>`,
 
+  // Close — two strokes, matching the drawn-icon language.
+  close: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="4.5" stroke-linecap="round"><line x1="12" y1="12" x2="36" y2="36"/><line x1="36" y1="12" x2="12" y2="36"/></svg>`,
+
   // Author / signature mark.
   author: `<svg viewBox="0 0 48 48"><path d="M8 34c6-2 10-8 14-15s7-11 10-11 4 4 1 9-9 11-14 15-8 5-11 2z" ${S}/><line x1="8" y1="40" x2="40" y2="40" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/></svg>`,
 };

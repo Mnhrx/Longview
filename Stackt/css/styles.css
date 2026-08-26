@@ -849,47 +849,63 @@ html, body {
 }
 .cover-zoom-badge svg { width: 100%; height: 100%; display: block; }
 
-/* ---------- cover lightbox ---------- */
+/* ---------- cover lightbox ----------
+   Was a generic dark-translucent lightbox with a hairline circle and a text
+   glyph — the one screen ignoring the app's language. Now: solid ink ground,
+   the cover framed in cream with the signature hard offset shadow, and the
+   close control built like every other button. */
 .lightbox-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(26,26,46,0.94);
+  background: var(--ink);
   z-index: 80;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  animation: fadeIn .2s ease both;
+  padding: 28px 26px;
+  animation: fadeIn .18s ease both;
 }
 .lightbox-close {
   position: absolute;
   top: max(18px, env(safe-area-inset-top));
   right: 18px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: var(--border-w) solid #fff;
-  background: transparent;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 800;
+  width: 44px;
+  height: 44px;
+  padding: 11px;
+  border-radius: 14px;
+  border: var(--border-w) solid var(--bg);
+  background: var(--bg);
+  box-shadow: 4px 4px 0 var(--pink);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .15s var(--spring), box-shadow .15s var(--spring);
 }
+.lightbox-close:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--pink);
+}
+.lightbox-close .btn-icon { width: 100%; height: 100%; }
+
 .lightbox-content { max-width: 340px; width: 100%; text-align: center; }
 .lightbox-cover-wrap {
   position: relative;
   width: 100%;
   aspect-ratio: 3/4;
   margin: 0 auto;
+  border-radius: 18px;
+  border: var(--border-w) solid var(--bg);
+  box-shadow: 10px 10px 0 var(--pink);
+  overflow: hidden;
+  background: var(--ink);
 }
 .lightbox-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain; /* full cover, uncropped */
-  border-radius: 18px;
-  border: var(--border-w) solid #fff;
+  object-fit: contain;
   opacity: 0;
   transition: opacity .35s ease;
 }
@@ -897,10 +913,6 @@ html, body {
 .lightbox-fallback {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
-  border: var(--border-w) solid #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -909,38 +921,14 @@ html, body {
 .lightbox-fallback svg { width: 88px; height: 88px; opacity: 0.85; }
 .lightbox-fallback.fade-out { opacity: 0; }
 .lightbox-caption {
-  color: #fff;
-  opacity: 0.75;
-  font-size: 13px;
-  font-weight: 700;
-  margin-top: 14px;
-}
-.detail-author {
-  font-size: 14px;
-  opacity: 0.65;
-  margin: -8px 0 16px;
-}
-
-.status-toggle-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-.status-toggle-btn {
-  flex: 1;
-  padding: 10px 6px;
-  border-radius: 12px;
-  border: 2px solid var(--ink);
-  background: #fff;
+  color: var(--bg);
+  opacity: 0.62;
+  font-size: 11px;
   font-weight: 800;
-  font-size: 12px;
-  cursor: pointer;
-  transition: transform .15s var(--spring), background .15s;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-top: 20px;
 }
-.status-toggle-btn:active { transform: scale(0.94); }
-.status-toggle-btn.active.to-read { background: var(--yellow); }
-.status-toggle-btn.active.reading { background: var(--blue); color: #fff; }
-.status-toggle-btn.active.read { background: var(--mint); }
 
 /* ---------- reading log / date fields ---------- */
 .reading-dates {
@@ -1292,22 +1280,147 @@ html, body {
 }
 .home-screen > * { position: relative; z-index: 1; }
 
-/* Tiles settle in from slightly oversized, staggered — the iOS unlock feel.
-   Kept to ~350ms total so it never delays a tap. */
-.home-grid.animate-in .home-tile {
-  animation: tileSettle .34s cubic-bezier(.2, .8, .3, 1) both;
+/* The whole menu scales up from the centre of the screen as one piece — the
+   iOS "close the app" feel. One coordinated motion, so there's nothing for the
+   page transition to fight with. */
+.home-screen {
+  opacity: 0;
+  transform: scale(0.88);
+  transform-origin: 50% 42%;
 }
-.home-grid.animate-in .home-tile:nth-child(1) { animation-delay: 0ms; }
-.home-grid.animate-in .home-tile:nth-child(2) { animation-delay: 40ms; }
-.home-grid.animate-in .home-tile:nth-child(3) { animation-delay: 80ms; }
-.home-grid.animate-in .home-tile:nth-child(4) { animation-delay: 120ms; }
-.home-grid.animate-in .home-tile:nth-child(5) { animation-delay: 160ms; }
-
-@keyframes tileSettle {
-  from { opacity: 0; transform: scale(1.22); }
+.home-screen.intro {
+  animation: menuZoomOut .38s cubic-bezier(.22,.78,.3,1) forwards;
+}
+@keyframes menuZoomOut {
+  from { opacity: 0; transform: scale(0.88); }
   to   { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-grid.animate-in .home-tile { animation: none; }
+  .home-screen { opacity: 1; transform: none; }
+  .home-screen.intro { animation: none; }
+}
+
+.field-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.55;
+  font-weight: 600;
+  margin: -2px 0 0;
+}
+
+/* The stand-in shape used by the app-open transition. */
+.zoom-veil {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  will-change: left, top, width, height, opacity;
+}
+
+/* ---------- cover picker ---------- */
+.cover-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--ink);
+  z-index: 85;
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn .18s ease both;
+}
+.cover-picker {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: var(--border-w) solid var(--ink);
+  border-bottom: none;
+  border-radius: 28px 28px 0 0;
+  padding: 20px 20px max(24px, env(safe-area-inset-bottom));
+  animation: sheetUp .3s var(--spring) both;
+}
+.cover-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.cover-picker-head h2 { flex: 1; margin: 0; font-size: 20px; }
+.cover-picker-head .lightbox-close {
+  position: static;
+  border-color: var(--ink);
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--ink);
+  width: 38px;
+  height: 38px;
+  padding: 10px;
+}
+.cover-picker-head .lightbox-close:active { box-shadow: 1px 1px 0 var(--ink); }
+
+.cover-upload {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 16px;
+  background: var(--mint);
+  box-shadow: 4px 4px 0 var(--ink);
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+.cover-upload:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--ink); }
+.cover-upload-icon { width: 30px; height: 30px; flex-shrink: 0; }
+.cover-upload-icon svg { width: 100%; height: 100%; display: block; }
+.cover-upload strong { display: block; font-size: 14px; }
+.cover-upload small { display: block; font-size: 11.5px; opacity: 0.7; font-weight: 600; }
+
+.cover-picker-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+  margin: 0 0 10px;
+}
+.cover-picker-note { font-size: 13px; opacity: 0.6; margin: 0; }
+
+.cover-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 12px;
+}
+.cover-option {
+  position: relative;
+  aspect-ratio: 3/4;
+  padding: 0;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .15s var(--spring), box-shadow .15s var(--spring);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.cover-option:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--ink); }
+.cover-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+.cover-option.loaded img { opacity: 1; }
+.cover-option.reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--yellow);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 11.5px;
+  text-align: center;
+  padding: 8px;
+  color: var(--ink);
 }

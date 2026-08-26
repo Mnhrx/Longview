@@ -6,7 +6,7 @@
 // ============================================
 
 import { router } from "./core.js";
-import { bounceTap } from "./animations.js";
+import { bounceTap, rememberTileOrigin } from "./animations.js";
 import { ICONS } from "./icons.js";
 
 const TILES = [
@@ -41,8 +41,12 @@ function render(container, store) {
       <span class="home-tile-sub">${subtitleFor(tile.key, store)}</span>
     `;
     btn.addEventListener("click", () => {
-      bounceTap(btn);
-      router.navigate(tile.key);
+      // The module expands out of this exact tile, so capture where it is and
+      // what colour it is right now — the grid may have scrolled.
+      const rect = btn.getBoundingClientRect();
+      const color = getComputedStyle(btn).backgroundColor;
+      rememberTileOrigin({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+      router.navigate(tile.key, { zoomFrom: rect, zoomColor: color });
     });
     grid.appendChild(btn);
   });
@@ -51,9 +55,21 @@ function render(container, store) {
   container.innerHTML = "";
   container.appendChild(wrap);
 
-  // Tiles settle in every time you land here — the effect only runs on this
-  // one screen and finishes in ~350ms, so it never gets in the way of a tap.
-  requestAnimationFrame(() => grid.classList.add("animate-in"));
+  // The menu comes back as ONE piece scaling up from the centre of the screen,
+  // rather than five tiles popping separately — that separate-pops version is
+  // what read as jitter, especially layered under iOS's own swipe animation.
+  // Held back until `startMenuIntro()` so it can't run behind the splash.
+  wrap.dataset.introPending = "1";
+  if (!window.__stacktSplashUp) startMenuIntro();
+}
+
+/** Plays the menu's zoom-out. Called on render, or by main.js once the splash
+ *  has actually cleared — otherwise the animation finishes unseen underneath it. */
+export function startMenuIntro() {
+  const wrap = document.querySelector(".home-screen[data-intro-pending]");
+  if (!wrap) return;
+  delete wrap.dataset.introPending;
+  requestAnimationFrame(() => wrap.classList.add("intro"));
 }
 
 function subtitleFor(key, store) {
