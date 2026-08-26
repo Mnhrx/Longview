@@ -108,6 +108,16 @@ function wishlistBooks(store) {
   return store.itemsByType("book").filter((b) => shelfOf(b) === "wishlist");
 }
 
+/** Search matches the title, the sorting name AND the original-script name —
+ *  so typing either 村上春樹 or Murakami finds the same books. */
+function matchesQuery(book, q) {
+  return (
+    String(book.title || "").toLowerCase().includes(q) ||
+    String(book.creator || "").toLowerCase().includes(q) ||
+    String(book.creatorAlt || "").toLowerCase().includes(q)
+  );
+}
+
 function getBooks(store) {
   let books =
     shelf === "wishlist" ? wishlistBooks(store)
@@ -117,7 +127,7 @@ function getBooks(store) {
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     books = books.filter(
-      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+      (b) => matchesQuery(b, q)
     );
   }
   if (activeFilter !== "all") {
@@ -125,12 +135,133 @@ function getBooks(store) {
       ? books.filter(hasLoan)
       : books.filter((b) => b.readingStatus === activeFilter);
   }
-  return books;
+  return sortBooks(books);
+}
+
+// ---------- sorting ----------
+
+const SORTS = [
+  { key: "title", label: "Title A–Z", note: "Default" },
+  { key: "author", label: "Author A–Z" },
+  { key: "recent", label: "Recently added" },
+  { key: "added", label: "First added" },
+  { key: "oldest", label: "Oldest published" },
+  { key: "longest", label: "Longest to read" },
+];
+let sortBy = "title";
+
+// Locale-aware and case-insensitive, so "émile" files next to "Emile" and
+// "Book 2" comes before "Book 10".
+const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+
+/** Drops a leading article, so The Hobbit files under H the way a shelf would. */
+function titleSortKey(book) {
+  return String(book.title || "").replace(/^(the|a|an)\s+/i, "").trim();
+}
+
+function readingDays(book) {
+  return daysBetween(book.startedDate, book.finishedDate);
+}
+
+/**
+ * Sorts a list by the current choice. Books missing whatever the sort needs —
+ * no publication year, never finished — collect at the END in title order,
+ * rather than scattering through the middle where they look like mistakes.
+ */
+function sortBooks(list) {
+  const byTitle = (a, b) => collator.compare(titleSortKey(a), titleSortKey(b));
+
+  const nullsLast = (valueOf, compare) => (a, b) => {
+    const av = valueOf(a);
+    const bv = valueOf(b);
+    if (av == null && bv == null) return byTitle(a, b);
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return compare(av, bv) || byTitle(a, b);
+  };
+  const asc = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+  const desc = (x, y) => -asc(x, y);
+  const addedOf = (b) => b.addedDate || null;
+  const yearOf = (b) => {
+    const n = parseInt(b.year, 10);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const arr = [...list];
+  switch (sortBy) {
+    case "author":
+      return arr.sort(
+        (a, b) => collator.compare(a.creator || "￿", b.creator || "￿") || byTitle(a, b)
+      );
+    case "recent":
+      return arr.sort(nullsLast(addedOf, desc));
+    case "added":
+      return arr.sort(nullsLast(addedOf, asc));
+    case "oldest":
+      return arr.sort(nullsLast(yearOf, (x, y) => x - y));
+    case "longest":
+      return arr.sort(nullsLast(readingDays, (x, y) => y - x));
+    default:
+      return arr.sort(byTitle);
+  }
+}
+
+/** One line of context under the title explaining what the current sort is
+ *  ordering by — otherwise "Oldest published" looks identical to A–Z for any
+ *  book that happens to have no year. */
+function sortSubtitle(book) {
+  if (sortBy === "oldest" && book.year) return `Published ${book.year}`;
+  if (sortBy === "longest") {
+    const d = readingDays(book);
+    if (d != null) return `Took ${daysLabel(d)}`;
+  }
+  if ((sortBy === "recent" || sortBy === "added") && book.addedDate) {
+    return `Added ${fmtDate(book.addedDate)}`;
+  }
+  return "";
+}
+
+// ---------- edition grouping ----------
+
+/**
+ * Two rows are the same WORK when title and author match after case,
+ * punctuation, accents and a leading article are stripped.
+ *
+ * This is presentation only — the books themselves are untouched, so each
+ * edition keeps its own cover, ISBN, reading status, copies and loans, and
+ * every count in the app still counts editions individually.
+ */
+function workKey(book) {
+  const norm = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "") // strip accents left by NFKD
+      .replace(/[^\p{L}\p{N} ]+/gu, " ") // punctuation out, any script's letters in
+      .replace(/\s+/g, " ")
+      .trim();
+  return `${norm(titleSortKey(book))}|${norm(book.creator)}`;
+}
+
+/** [{ lead, editions }] — order preserved, so whatever sort ran still holds. */
+function groupEditions(list) {
+  const groups = new Map();
+  list.forEach((book) => {
+    const key = workKey(book);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(book);
+  });
+  return [...groups.values()].map((editions) => ({ lead: editions[0], editions }));
 }
 
 // ---------- main render ----------
 
-function render(container, store) {
+/** `opts` is only passed by the router, so its presence means "the module was
+ *  just opened from the menu" rather than an internal redraw. Entering always
+ *  starts alphabetical, as asked. */
+function render(container, store, opts) {
+  if (opts !== undefined) sortBy = "title";
+
   const wrap = document.createElement("div");
 
   const title = document.createElement("p");
@@ -156,10 +287,20 @@ function render(container, store) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search title or author..." value="${escapeHtml(searchQuery)}">
+    <button class="icon-btn ${sortBy !== "title" ? "on" : ""}" id="sortBtn" type="button" aria-label="Sort" >${ICONS.sort}</button>
     <button class="icon-btn ${groupByAuthor ? "on" : ""}" id="authorBtn" type="button" aria-label="Group by author" aria-pressed="${groupByAuthor}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
+
+  // Only worth naming the order when it isn't the default one.
+  if (sortBy !== "title" && !groupByAuthor) {
+    const note = document.createElement("p");
+    note.className = "sort-note";
+    const active = SORTS.find((s) => s.key === sortBy);
+    note.textContent = `Sorted by ${active ? active.label : sortBy}`;
+    wrap.appendChild(note);
+  }
 
   if (!authorFilter) {
     const modeToggle = document.createElement("div");
@@ -189,6 +330,11 @@ function render(container, store) {
     render(container, store);
   });
 
+  wrap.querySelector("#sortBtn").addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    openSortSheet(store, container);
+  });
+
   if (!authorFilter) {
     wrap.querySelectorAll(".mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -201,6 +347,35 @@ function render(container, store) {
   }
 
   renderBody(bodyHolder, store, container);
+}
+
+/** Sort picker. A sheet rather than more chips in the header — it's a choice you
+ *  make occasionally, and the header is already carrying three controls. */
+function openSortSheet(store, container) {
+  openModal((sheet) => {
+    sheet.innerHTML = `
+      <h2>Sort by</h2>
+      <div class="sort-list">
+        ${SORTS.map((s) => `
+          <button type="button" class="sort-option ${sortBy === s.key ? "active" : ""}" data-sort="${s.key}">
+            <span class="sort-option-label">${s.label}</span>
+            ${s.note ? `<span class="sort-option-note">${s.note}</span>` : ""}
+          </button>
+        `).join("")}
+      </div>
+      <p class="field-hint" style="margin-top:14px;">
+        Books with nothing to sort on — no publication year, never finished —
+        go to the end of the list rather than into the middle.
+      </p>
+    `;
+    sheet.querySelectorAll("[data-sort]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        sortBy = btn.dataset.sort;
+        dismissLayer();
+        render(container, store);
+      });
+    });
+  });
 }
 
 function renderBody(bodyHolder, store, container) {
@@ -278,7 +453,7 @@ function renderBorrowed(bodyHolder, store, container) {
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     books = books.filter(
-      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+      (b) => matchesQuery(b, q)
     );
   }
 
@@ -290,6 +465,7 @@ function renderBorrowed(bodyHolder, store, container) {
     return;
   }
 
+  books = sortBooks(books);
   const holding = books.filter(stillHolding);
   const given = books.filter((b) => !stillHolding(b));
 
@@ -299,10 +475,9 @@ function renderBorrowed(bodyHolder, store, container) {
     h.className = "shelf-section-title";
     h.textContent = `${label} (${list.length})`;
     bodyHolder.appendChild(h);
-    const grid = document.createElement("div");
-    grid.className = "card-grid";
-    list.forEach((bk) => grid.appendChild(buildBookCard(bk, (x) => openDetail(x, store, container))));
-    bodyHolder.appendChild(grid);
+    bodyHolder.appendChild(
+      buildGroupedGrid(list, (x) => openDetail(x, store, container))
+    );
   };
 
   section("Still have it", holding);
@@ -316,7 +491,7 @@ function renderWishlist(bodyHolder, store, container) {
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     books = books.filter(
-      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+      (b) => matchesQuery(b, q)
     );
   }
 
@@ -328,6 +503,8 @@ function renderWishlist(bodyHolder, store, container) {
     return;
   }
 
+  books = sortBooks(books);
+
   const priced = books.filter((b) => b.price != null);
   if (priced.length) {
     const total = priced.reduce((sum, b) => sum + Number(b.price), 0);
@@ -338,10 +515,9 @@ function renderWishlist(bodyHolder, store, container) {
     bodyHolder.appendChild(summary);
   }
 
-  const grid = document.createElement("div");
-  grid.className = "card-grid";
-  books.forEach((book) => grid.appendChild(buildBookCard(book, (b) => openDetail(b, store, container))));
-  bodyHolder.appendChild(grid);
+  bodyHolder.appendChild(
+    buildGroupedGrid(books, (b) => openDetail(b, store, container))
+  );
 }
 
 function renderAuthorList(bodyHolder, store, container) {
@@ -355,7 +531,7 @@ function renderAuthorList(bodyHolder, store, container) {
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     books = books.filter(
-      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+      (b) => matchesQuery(b, q)
     );
   }
   const counts = {};
@@ -384,6 +560,7 @@ function renderAuthorList(bodyHolder, store, container) {
     btn.addEventListener("click", () => {
       bounceTap(btn);
       authorFilter = name;
+      sortBy = "title"; // drilling into an author starts alphabetical too
       render(container, store);
     });
     grid.appendChild(btn);
@@ -401,13 +578,86 @@ function renderBookGrid(container, books, onTap) {
     container.appendChild(empty);
     return;
   }
-  const grid = document.createElement("div");
-  grid.className = "card-grid";
-  books.forEach((book) => grid.appendChild(buildBookCard(book, onTap)));
-  container.appendChild(grid);
+  container.appendChild(buildGroupedGrid(books, onTap));
 }
 
-function buildBookCard(book, onTap) {
+/** Same list, with editions of one work collapsed into a single row. */
+function buildGroupedGrid(books, onTap) {
+  const grid = document.createElement("div");
+  grid.className = "card-grid";
+  groupEditions(books).forEach(({ lead, editions }) => {
+    const tap =
+      editions.length > 1
+        ? () => openEditionChooser(editions, onTap)
+        : onTap;
+    grid.appendChild(buildBookCard(lead, tap, editions));
+  });
+  return grid;
+}
+
+/**
+ * Which printing did you mean? Only ever shown for a row that collapsed more
+ * than one edition — a single book still opens straight into its detail.
+ */
+function openEditionChooser(editions, onPick) {
+  openModal((sheet) => {
+    const work = editions[0];
+    sheet.innerHTML = `
+      <h2>${escapeHtml(work.title)}</h2>
+      <p class="field-hint" style="margin:-6px 0 16px;">
+        You have ${editions.length} editions of this. Which one?
+      </p>
+      <div class="edition-list">
+        ${editions.map((b, i) => {
+          const bits = [
+            b.year ? `Published ${escapeHtml(b.year)}` : "",
+            b.isbn ? `ISBN ${escapeHtml(b.isbn)}` : "",
+            (b.copies || []).length > 1 ? `${b.copies.length} copies` : "",
+            STATUS_LABELS[b.readingStatus] || "",
+          ].filter(Boolean).join(" · ");
+          return `
+            <button type="button" class="edition-row" data-idx="${i}">
+              <span class="edition-swatch" style="background:${b.color || "#eee"}">
+                <span class="swatch-emoji">${ICONS.books}</span>
+                ${hasCover(b) ? `<img class="swatch-img" alt="" data-src="${escapeHtml(bookCoverSrc(b, "M") || "")}">` : ""}
+              </span>
+              <span class="edition-meta">
+                <span class="edition-title">${escapeHtml(b.creator || "Unknown")}</span>
+                <span class="edition-sub">${bits || "No edition details"}</span>
+              </span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    `;
+
+    sheet.querySelectorAll(".edition-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        // Straight handoff — openModal swaps this sheet's content in place.
+        // Dismissing first would pop the layer out from under the detail sheet
+        // that's about to open, which is the bug that ate the lend sheet once.
+        onPick(editions[Number(row.dataset.idx)]);
+      });
+    });
+
+    // Same load-then-swap the cards use, so a dead cover leaves the icon.
+    sheet.querySelectorAll(".swatch-img[data-src]").forEach((el) => {
+      const src = el.dataset.src;
+      if (!src) return;
+      const probe = new Image();
+      probe.onload = () => {
+        el.src = src;
+        el.classList.add("loaded");
+        const emoji = el.parentElement.querySelector(".swatch-emoji");
+        if (emoji) emoji.classList.add("hidden");
+      };
+      probe.src = src;
+    });
+  });
+}
+
+/** `editions` is every book collapsed into this row — usually just [book]. */
+function buildBookCard(book, onTap, editions = [book]) {
   const card = document.createElement("div");
   card.className = "item-card";
   const owned = isOwned(book);
@@ -421,8 +671,19 @@ function buildBookCard(book, onTap) {
         ? `<span class="status-pill status-borrowed">${stillHolding(book) ? "Borrowed" : "Returned"}</span>`
         : `<span class="status-pill status-to-read">Wishlist</span>`;
 
+  // Two different things, deliberately worded differently: EDITIONS are separate
+  // printings of the same work collapsed into this row; COPIES are duplicates of
+  // one printing sitting on your shelf.
+  const editionCount = editions.length;
+  const grouped = editionCount > 1;
+
   let extraHtml = "";
-  if ((book.copies || []).length > 1) {
+  const sub = sortSubtitle(book);
+  if (sub) extraHtml += `<div class="lent-note">${escapeHtml(sub)}</div>`;
+  if (grouped) {
+    const copyTotal = editions.reduce((n, e) => n + (e.copies || []).length, 0);
+    extraHtml += `<div class="lent-note">${editionCount} editions${copyTotal > editionCount ? ` · ${copyTotal} copies` : ""}</div>`;
+  } else if ((book.copies || []).length > 1) {
     extraHtml += `<div class="lent-note">${book.copies.length} copies</div>`;
   }
   if (onLoan.length > 0) {
@@ -603,6 +864,15 @@ function openCoverPicker(bookish, onPick) {
 
     function load(query) {
       const mine = ++run;
+
+      // The picker is reachable before anything's been typed. Say so, rather
+      // than running an empty search and showing a bare "nothing found".
+      if (!query && !bookish.title && !bookish.creator) {
+        label.textContent = "Other editions";
+        grid.innerHTML = `<p class="cover-picker-note">Type a title in the box above to search for covers — or use your own photo.</p>`;
+        return;
+      }
+
       label.textContent = "Looking for covers…";
       showSkeletons();
       findCoverOptions(bookish.title, bookish.creator, query ? { free: query } : {}).then((ids) => {
@@ -790,6 +1060,11 @@ function viewModeHtml(book, opts) {
       </div>
     ` : coverBlockHtml(book)}
     <p class="detail-author">${escapeHtml(book.creator || "Unknown author")}</p>
+    ${book.creatorAlt || book.year ? `
+      <p class="detail-subline">
+        ${book.creatorAlt ? escapeHtml(book.creatorAlt) : ""}${book.creatorAlt && book.year ? " · " : ""}${book.year ? `Published ${escapeHtml(book.year)}` : ""}
+      </p>
+    ` : ""}
 
     <div class="status-toggle-row" id="statusToggleRow">
       ${["to-read", "reading", "read"].map((s) => `
@@ -977,6 +1252,20 @@ function editModeHtml(book) {
     <div class="field">
       <label>Author</label>
       <input type="text" id="f-creator" value="${escapeHtml(book.creator || "")}">
+      <p class="field-hint">This is the name the list sorts and groups by.</p>
+    </div>
+    <div class="field">
+      <label>Author, original script</label>
+      <input type="text" id="f-creator-alt" placeholder="村上春樹" value="${escapeHtml(book.creatorAlt || "")}">
+      <p class="field-hint">
+        Optional. Shown on the book and matched by search, but never used for
+        sorting — mixed scripts don't sort into an A–Z list.
+        ${book.creatorAlt ? `<button type="button" class="link-btn" id="swapNamesBtn" style="margin-top:4px;">Swap the two</button>` : ""}
+      </p>
+    </div>
+    <div class="field">
+      <label>Year published</label>
+      <input type="text" id="f-year" inputmode="numeric" placeholder="1987" value="${escapeHtml(book.year || "")}">
     </div>
     <div class="field">
       <label>ISBN</label>
@@ -1360,6 +1649,20 @@ function wireShelfSwitcher(sheet, item, store, container, kindLabel) {
 
 function wireEditMode(sheet, book, store, container) {
   wireShelfSwitcher(sheet, book, store, container, "book");
+
+  // If the lookup guessed wrong about which spelling should sort, one tap fixes
+  // it rather than retyping both names.
+  const swapBtn = sheet.querySelector("#swapNamesBtn");
+  if (swapBtn) {
+    swapBtn.addEventListener("click", () => {
+      const main = sheet.querySelector("#f-creator");
+      const alt = sheet.querySelector("#f-creator-alt");
+      const held = main.value;
+      main.value = alt.value;
+      alt.value = held;
+    });
+  }
+
   const changeCoverBtn = sheet.querySelector("#changeCoverBtn");
   if (changeCoverBtn) {
     changeCoverBtn.addEventListener("click", () => {
@@ -1379,6 +1682,8 @@ function wireEditMode(sheet, book, store, container) {
     const patch = {
       title: titleInput.value.trim(),
       creator: sheet.querySelector("#f-creator").value,
+      creatorAlt: sheet.querySelector("#f-creator-alt").value.trim() || null,
+      year: sheet.querySelector("#f-year").value.trim() || null,
       isbn: sheet.querySelector("#f-isbn").value.trim() || null,
     };
     const priceInput = sheet.querySelector("#f-price");
@@ -1683,6 +1988,15 @@ function openAddForm(store, container, prefill = {}) {
         <label>Author</label>
         <input type="text" id="a-creator" placeholder="Haruki Murakami" value="${escapeHtml(prefill.creator || "")}">
       </div>
+      <div class="field" id="a-alt-field" ${prefill.creatorAlt ? "" : 'style="display:none"'}>
+        <label>Author, original script</label>
+        <input type="text" id="a-creator-alt" placeholder="村上春樹" value="${escapeHtml(prefill.creatorAlt || "")}">
+        <p class="field-hint">Kept and searchable; the name above is what sorts.</p>
+      </div>
+      <div class="field">
+        <label>Year published (optional)</label>
+        <input type="text" id="a-year" inputmode="numeric" placeholder="1987" value="${escapeHtml(prefill.year || "")}">
+      </div>
       <div class="field">
         <label>ISBN (optional)</label>
         <input type="text" id="a-isbn" placeholder="9780099448822" inputmode="numeric" value="${escapeHtml(prefill.isbn || "")}">
@@ -1712,6 +2026,9 @@ function openAddForm(store, container, prefill = {}) {
     const isbnStatus = sheet.querySelector("#isbnLookupStatus");
     const titleInput = sheet.querySelector("#a-title");
     const creatorInput = sheet.querySelector("#a-creator");
+    const altInput = sheet.querySelector("#a-creator-alt");
+    const altField = sheet.querySelector("#a-alt-field");
+    const yearInput = sheet.querySelector("#a-year");
     const priceInput = sheet.querySelector("#a-price");
     const priceField = sheet.querySelector("#a-price-field");
     const borrowField = sheet.querySelector("#a-borrow-field");
@@ -1791,8 +2108,18 @@ function openAddForm(store, container, prefill = {}) {
       if (meta) {
         if (!titleInput.value.trim() && meta.title) titleInput.value = meta.title;
         if (!creatorInput.value.trim() && meta.creator) creatorInput.value = meta.creator;
+        if (!yearInput.value.trim() && meta.year) yearInput.value = meta.year;
+        // Only surfaces the second name field when the record actually has two
+        // spellings — no point showing an empty box for an English author.
+        if (meta.creatorAlt && !altInput.value.trim()) {
+          altInput.value = meta.creatorAlt;
+          altField.style.display = "";
+        }
         repaintAddCover(raw);
-        isbnStatus.textContent = `Found: ${meta.title || "match"}${meta.creator ? " · " + meta.creator : ""}`;
+        isbnStatus.textContent =
+          `Found: ${meta.title || "match"}${meta.creator ? " · " + meta.creator : ""}` +
+          `${meta.year ? " · " + meta.year : ""}` +
+          `${meta.creatorAlt ? ` (also ${meta.creatorAlt})` : ""}`;
       } else {
         isbnStatus.textContent = "No match found for that ISBN — fill in the details manually.";
       }
@@ -1831,6 +2158,8 @@ function openAddForm(store, container, prefill = {}) {
         type: "book",
         title: titleInput.value.trim(),
         creator: creatorInput.value.trim(),
+        creatorAlt: altInput.value.trim() || null,
+        year: yearInput.value.trim() || null,
         isbn: isbnInput.value.trim() || null,
         customCover: pickedCover.customCover,
         coverId: pickedCover.coverId,

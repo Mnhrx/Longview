@@ -270,6 +270,15 @@ function openArtPicker(recordish, onPick) {
 
     function load(free) {
       const mine = ++run;
+
+      // Reachable before anything's been typed — say so rather than running an
+      // empty search and reporting "nothing found".
+      if (!free && !recordish.title && !recordish.creator) {
+        label.textContent = "Sleeve art";
+        grid.innerHTML = `<p class="cover-picker-note">Type an album or artist in the box above to search — or photograph your copy.</p>`;
+        return;
+      }
+
       label.textContent = "Looking for sleeve art…";
       showSkeletons();
 

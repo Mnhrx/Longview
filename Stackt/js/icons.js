@@ -50,6 +50,9 @@ export const ICONS = {
 
   // Author / signature mark.
   author: `<svg viewBox="0 0 48 48"><path d="M8 34c6-2 10-8 14-15s7-11 10-11 4 4 1 9-9 11-14 15-8 5-11 2z" ${S}/><line x1="8" y1="40" x2="40" y2="40" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/></svg>`,
+
+  // Sort — three bars, longest first, with a down arrow. Reads as "ordered".
+  sort: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="13" x2="29" y2="13"/><line x1="7" y1="24" x2="23" y2="24"/><line x1="7" y1="35" x2="17" y2="35"/><path d="M37 12v24M31 30l6 6 6-6"/></svg>`,
 };
 
 /** Wraps an icon in a sized span. `size` is any CSS length. */

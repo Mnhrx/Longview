@@ -114,20 +114,80 @@ export async function startScanner(containerId, onDetect) {
 }
 
 /**
+ * Does this string use the Latin alphabet? Used to decide which spelling of an
+ * author's name to sort by — kanji and Cyrillic sort by code point, so mixing
+ * them into an A–Z list dumps them all in a clump at the end.
+ */
+export function isLatinName(s) {
+  if (!s) return true;
+  const letters = String(s).replace(/[^\p{L}]/gu, "");
+  if (!letters) return true;
+  return /^\p{Script=Latin}+$/u.test(letters);
+}
+
+/** Pulls a 4-digit year out of whatever Open Library put in publish_date. */
+function yearFrom(text) {
+  const m = String(text || "").match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
+  return m ? m[1] : "";
+}
+
+/** search.json carries two things the books API doesn't: a normalised first
+ *  publication year, and the author's alternative spellings. */
+async function lookupSearchMeta(isbn) {
+  try {
+    const res = await fetch(
+      `https://openlibrary.org/search.json?q=isbn:${encodeURIComponent(isbn)}` +
+      `&fields=first_publish_year,author_name,author_alternative_name&limit=1`
+    );
+    const data = await res.json();
+    return (data.docs || [])[0] || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
  * Looks up an ISBN against the Open Library API (free, no key required).
- * Returns { title, creator, isbn } or null if nothing was found.
+ * Returns { title, creator, creatorAlt, year, isbn } or null if nothing matched.
+ *
+ * `creator` is always the Latin spelling when one exists anywhere in the record,
+ * so the alphabetical sort and the author list behave; `creatorAlt` keeps the
+ * original script so nothing is thrown away.
  */
 export async function lookupIsbn(isbn) {
   try {
-    const res = await fetch(
-      `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`
-    );
-    const data = await res.json();
-    const entry = data[`ISBN:${isbn}`];
+    const [entry, meta] = await Promise.all([
+      fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`)
+        .then((r) => r.json())
+        .then((d) => d[`ISBN:${isbn}`] || null),
+      lookupSearchMeta(isbn),
+    ]);
     if (!entry) return null;
+
+    const primary = (entry.authors || []).map((a) => a.name).join(", ");
+    const alternatives = [
+      ...(meta && meta.author_name ? meta.author_name : []),
+      ...(meta && meta.author_alternative_name ? meta.author_alternative_name : []),
+    ];
+
+    let creator = primary;
+    let creatorAlt = "";
+    if (primary && !isLatinName(primary)) {
+      const latin = alternatives.find((n) => n && isLatinName(n));
+      if (latin) {
+        creator = latin;      // sortable
+        creatorAlt = primary; // original script, kept and shown
+      }
+    } else if (primary) {
+      const other = alternatives.find((n) => n && !isLatinName(n));
+      if (other) creatorAlt = other;
+    }
+
     return {
       title: entry.title || "",
-      creator: (entry.authors || []).map((a) => a.name).join(", "),
+      creator,
+      creatorAlt,
+      year: String((meta && meta.first_publish_year) || yearFrom(entry.publish_date) || ""),
       isbn,
     };
   } catch (err) {
@@ -187,41 +247,45 @@ async function searchCoverIds(q, limit) {
   return ids;
 }
 
+/**
+ * The picker's job is BREADTH — show as many plausible covers as possible and
+ * let the eye decide. An earlier version made the fielded query (title:"…" AND
+ * author:"…") the primary and only widened when it returned under six results;
+ * precision is the wrong goal here and it emptied the grid.
+ *
+ * So: the loose word search is the primary and always runs — that is what v19
+ * did, and it is the one behaviour known to fill the grid. The fielded query
+ * runs alongside it purely to reorder, its hits moving to the front. The result
+ * is always a superset of the loose search, never smaller.
+ */
 export async function findCoverOptions(title, creator, opts = {}) {
-  // A free-text search box in the picker overrides the book's own fields —
-  // that's the escape hatch for when the catalogued title isn't what's printed
-  // on the book.
-  if (opts.free) {
-    try {
-      return (await searchCoverIds(String(opts.free).trim(), 40)).slice(0, 24);
-    } catch (err) {
-      console.warn("Cover search failed", err);
-      return [];
-    }
-  }
-
-  const esc = (s) => String(s).replace(/["]/g, " ").trim();
-  const loose = [title, creator].filter(Boolean).join(" ").trim();
+  // The picker's search box overrides the book's own fields — the escape hatch
+  // for when the catalogued title isn't what's printed on the cover.
+  const free = opts.free ? String(opts.free).trim() : "";
+  const loose = free || [title, creator].filter(Boolean).join(" ").trim();
   if (!loose) return [];
 
-  // Naming the fields ranks the right book first; a bare word-bag search fills
-  // the grid with everything else the author ever wrote.
-  const strict = [
-    title ? `title:"${esc(title)}"` : "",
-    creator ? `author:"${esc(creator)}"` : "",
-  ].filter(Boolean).join(" AND ");
+  const esc = (s) => String(s).replace(/["]/g, " ").replace(/\s+/g, " ").trim();
+  const strict = free
+    ? ""
+    : [
+        title ? `title:"${esc(title)}"` : "",
+        creator ? `author:"${esc(creator)}"` : "",
+      ].filter(Boolean).join(" AND ");
 
-  try {
-    let ids = strict ? await searchCoverIds(strict, 40) : [];
-    // Exact-phrase matching misses subtitles, translations and typos, so fall
-    // back to loose words rather than showing an empty grid.
-    if (ids.length < 6) {
-      const extra = await searchCoverIds(loose, 40);
-      extra.forEach((id) => { if (!ids.includes(id)) ids.push(id); });
-    }
-    return ids.slice(0, 24);
-  } catch (err) {
-    console.warn("Cover search failed", err);
-    return [];
-  }
+  // Both go out at once; a failure on either side must not lose the other.
+  const [looseIds, strictIds] = await Promise.all([
+    searchCoverIds(loose, 40).catch((err) => {
+      console.warn("Cover search failed", err);
+      return [];
+    }),
+    strict
+      ? searchCoverIds(strict, 20).catch(() => [])
+      : Promise.resolve([]),
+  ]);
+
+  const ids = [];
+  strictIds.forEach((id) => { if (!ids.includes(id)) ids.push(id); });
+  looseIds.forEach((id) => { if (!ids.includes(id)) ids.push(id); });
+  return ids.slice(0, 24);
 }

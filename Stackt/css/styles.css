@@ -1371,6 +1371,9 @@ html, body {
   font-weight: 600;
   margin: -2px 0 0;
 }
+/* Under an input the -2px tuck looks right, but a button casts a 4px offset
+   shadow — the hint was landing on top of both the button and its shadow. */
+.btn + .field-hint { margin-top: 10px; }
 
 
 /* ---------- cover picker ---------- */
@@ -1470,9 +1473,13 @@ html, body {
 }
 .picker-search .btn {
   margin: 0;
-  flex-shrink: 0;
-  padding-left: 16px;
-  padding-right: 16px;
+  /* .btn is width:100% by default. Left alone here it kept that width and
+     squeezed the input down to ~30px while running off the right edge —
+     `width: auto` plus flex:0 0 auto makes it size to its own label instead. */
+  width: auto;
+  flex: 0 0 auto;
+  padding: 11px 18px;
+  font-size: 14px;
 }
 
 /* Placeholder tiles so the grid has its final shape while the network is out —
@@ -1609,7 +1616,13 @@ html, body {
 .card-grid + .shelf-section-title { margin-top: 26px; }
 
 .destination-row.three { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.destination-row.three .destination-btn { padding: 11px 9px; }
+/* Three narrow buttons read as a segmented control, so the labels belong in the
+   middle. (The two-up variant keeps its left-aligned title + subtitle stack.) */
+.destination-row.three .destination-btn {
+  padding: 11px 9px;
+  align-items: center;
+  text-align: center;
+}
 .destination-row.three .destination-title { font-size: 12.5px; }
 .destination-row.three .destination-sub { font-size: 10px; }
 
@@ -1765,3 +1778,105 @@ html, body {
 /* Defensive: any icon dropped straight into a swatch stays inset rather than
    growing to fill it and colliding with the border. */
 .item-swatch > svg { width: 26px; height: 26px; display: block; }
+
+/* ---------- sorting ---------- */
+
+/* Only rendered when the order isn't the default, so the header stays quiet
+   until you've actually changed something. */
+.sort-note {
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--purple);
+  margin: -4px 0 12px;
+}
+
+.sort-list { display: flex; flex-direction: column; gap: 10px; }
+.sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s var(--spring), background .15s;
+}
+.sort-option:active { transform: scale(0.97); }
+.sort-option.active { background: var(--yellow); box-shadow: 3px 3px 0 var(--ink); }
+.sort-option-note {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* ---------- edition chooser ---------- */
+
+.edition-list { display: flex; flex-direction: column; gap: 10px; }
+.edition-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform .15s var(--spring), box-shadow .15s var(--spring);
+}
+.edition-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.edition-swatch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: var(--border-w) solid var(--ink);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.edition-swatch .swatch-emoji { width: 22px; height: 22px; }
+.edition-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.edition-title {
+  font-weight: 800;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edition-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The original-script name and publication year, under the author on a detail
+   sheet. Quieter than the author line — it's context, not identity. */
+.detail-subline {
+  font-size: 12.5px;
+  font-weight: 600;
+  opacity: 0.6;
+  margin: -10px 0 14px;
+}
