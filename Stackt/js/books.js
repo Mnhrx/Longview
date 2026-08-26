@@ -21,7 +21,8 @@ const FILTERS = [
 const STATUS_LABELS = { "to-read": "To Read", reading: "Reading", read: "Read" };
 
 let activeFilter = "all";
-let viewMode = "library"; // 'library' | 'wishlist' | 'authors'
+let shelf = "library";     // 'library' | 'wishlist' | 'borrowed'
+let groupByAuthor = false; // a way of viewing a shelf, not a shelf itself
 let authorFilter = null;
 let searchQuery = "";
 
@@ -46,6 +47,26 @@ function hasLoan(book) {
 }
 function isOwned(book) {
   return (book.copies || []).length > 0;
+}
+
+/**
+ * Which shelf a book stands on, inferred rather than stored — so nothing in
+ * your existing data needs migrating.
+ *   owns a copy            -> library   (even if you once borrowed it)
+ *   has a borrow record    -> borrowed
+ *   neither                -> wishlist
+ */
+function shelfOf(book) {
+  if (isOwned(book)) return "library";
+  if (book.borrowed) return "borrowed";
+  return "wishlist";
+}
+function borrowedBooks(store) {
+  return store.itemsByType("book").filter((b) => shelfOf(b) === "borrowed");
+}
+/** Borrowed books still physically with you (not yet given back). */
+function stillHolding(book) {
+  return !!(book.borrowed && !book.borrowed.returnedDate);
 }
 
 /** Whole days between two YYYY-MM-DD strings, counting both ends
@@ -82,13 +103,16 @@ function readingSpanText(book) {
 function ownedBooks(store) {
   return store.itemsByType("book").filter(isOwned);
 }
-/** Books you want but don't have yet — no copies recorded. */
+/** Books you want but don't have yet — no copies, no borrow record. */
 function wishlistBooks(store) {
-  return store.itemsByType("book").filter((b) => !isOwned(b));
+  return store.itemsByType("book").filter((b) => shelfOf(b) === "wishlist");
 }
 
 function getBooks(store) {
-  let books = ownedBooks(store);
+  let books =
+    shelf === "wishlist" ? wishlistBooks(store)
+    : shelf === "borrowed" ? borrowedBooks(store)
+    : ownedBooks(store);
   if (authorFilter) books = books.filter((b) => (b.creator || "Unknown") === authorFilter);
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
@@ -111,9 +135,10 @@ function render(container, store) {
 
   const title = document.createElement("p");
   title.className = "view-title";
-  title.textContent = authorFilter
-    ? `Books by ${authorFilter}`
-    : viewMode === "wishlist" ? "Wishlist" : "Books";
+  // The tab says where you are; the heading says what you're looking at.
+  const SHELF_TABS = { library: "Library", wishlist: "Wishlist", borrowed: "Borrowed" };
+  const SHELF_TITLES = { library: "Books", wishlist: "Wishlist", borrowed: "Borrowed" };
+  title.textContent = authorFilter ? `Books by ${authorFilter}` : SHELF_TITLES[shelf];
   wrap.appendChild(title);
 
   if (authorFilter) {
@@ -131,6 +156,7 @@ function render(container, store) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search title or author..." value="${escapeHtml(searchQuery)}">
+    <button class="icon-btn ${groupByAuthor ? "on" : ""}" id="authorBtn" type="button" aria-label="Group by author" aria-pressed="${groupByAuthor}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
@@ -138,11 +164,9 @@ function render(container, store) {
   if (!authorFilter) {
     const modeToggle = document.createElement("div");
     modeToggle.className = "mode-toggle";
-    modeToggle.innerHTML = `
-      <button class="mode-btn ${viewMode === "library" ? "active" : ""}" data-mode="library" type="button">Library</button>
-      <button class="mode-btn ${viewMode === "wishlist" ? "active" : ""}" data-mode="wishlist" type="button">Wishlist</button>
-      <button class="mode-btn ${viewMode === "authors" ? "active" : ""}" data-mode="authors" type="button">By Author</button>
-    `;
+    modeToggle.innerHTML = ["library", "wishlist", "borrowed"]
+      .map((k) => `<button class="mode-btn ${shelf === k ? "active" : ""}" data-shelf="${k}" type="button">${SHELF_TABS[k]}</button>`)
+      .join("");
     wrap.appendChild(modeToggle);
   }
 
@@ -158,12 +182,19 @@ function render(container, store) {
   });
   wrap.querySelector("#scanBtn").addEventListener("click", () => openScanModal(store, container));
 
+  wrap.querySelector("#authorBtn").addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    groupByAuthor = !groupByAuthor;
+    authorFilter = null;
+    render(container, store);
+  });
+
   if (!authorFilter) {
     wrap.querySelectorAll(".mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         bounceTap(btn);
-        viewMode = btn.dataset.mode;
-        activeFilter = "all"; // don't carry a hidden status filter across tabs
+        shelf = btn.dataset.shelf;
+        activeFilter = "all"; // don't carry a hidden status filter across shelves
         render(container, store);
       });
     });
@@ -175,34 +206,107 @@ function render(container, store) {
 function renderBody(bodyHolder, store, container) {
   bodyHolder.innerHTML = "";
 
-  if (viewMode === "authors" && !authorFilter) {
+  // "By Author" groups whichever shelf you're on, rather than being a shelf.
+  if (groupByAuthor && !authorFilter) {
     renderAuthorList(bodyHolder, store, container);
     return;
   }
 
-  if (viewMode === "wishlist" && !authorFilter) {
+  if (shelf === "wishlist" && !authorFilter) {
     renderWishlist(bodyHolder, store, container);
     return;
   }
 
+  if (shelf === "borrowed" && !authorFilter) {
+    renderBorrowed(bodyHolder, store, container);
+    return;
+  }
+
+  renderFilterRow(bodyHolder, store, container);
+
+  const listHolder = document.createElement("div");
+  bodyHolder.appendChild(listHolder);
+  renderBookGrid(listHolder, getBooks(store), (book) => openDetail(book, store, container));
+}
+
+/**
+ * Status filter row. Deliberately lighter than the shelf tabs above it — those
+ * are navigation you use constantly, these are a filter you set occasionally,
+ * and drawing both at full weight is what made the screen feel cluttered.
+ * Filters with nothing behind them aren't rendered at all, so the row shrinks
+ * itself and never offers a tap that leads to an empty list.
+ */
+function renderFilterRow(bodyHolder, store, container) {
+  const pool = ownedBooks(store);
+  const countFor = (key) => {
+    if (key === "all") return pool.length;
+    if (key === "lent-out") return pool.filter(hasLoan).length;
+    return pool.filter((b) => b.readingStatus === key).length;
+  };
+
+  const live = FILTERS.filter((f) => f.key === "all" || countFor(f.key) > 0);
+  if (live.length <= 1) return; // nothing worth filtering
+
   const filterRow = document.createElement("div");
   filterRow.className = "filter-row";
-  FILTERS.forEach((f) => {
+
+  live.forEach((f) => {
+    // Lent Out describes where the object is, not how far through it you are —
+    // a divider keeps the three reading states reading as one group.
+    if (f.key === "lent-out") {
+      const sep = document.createElement("span");
+      sep.className = "filter-sep";
+      filterRow.appendChild(sep);
+    }
     const chip = document.createElement("button");
     chip.className = "filter-chip" + (activeFilter === f.key ? " active" : "");
-    chip.textContent = f.label;
+    chip.type = "button";
+    chip.innerHTML = `${f.label}<span class="chip-count">${countFor(f.key)}</span>`;
     chip.addEventListener("click", () => {
-      bounceTap(chip);
       activeFilter = f.key;
       renderBody(bodyHolder, store, container);
     });
     filterRow.appendChild(chip);
   });
-  bodyHolder.appendChild(filterRow);
 
-  const listHolder = document.createElement("div");
-  bodyHolder.appendChild(listHolder);
-  renderBookGrid(listHolder, getBooks(store), (book) => openDetail(book, store, container));
+  bodyHolder.appendChild(filterRow);
+}
+
+/** Borrowed shelf — the mirror of lending. Split by whether you still have it. */
+function renderBorrowed(bodyHolder, store, container) {
+  let books = borrowedBooks(store);
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    books = books.filter(
+      (b) => b.title.toLowerCase().includes(q) || (b.creator || "").toLowerCase().includes(q)
+    );
+  }
+
+  if (books.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML = `<div class="empty-state-icon">${ICONS.lend}</div><p>No borrowed books yet — add one and pick "Borrowed"</p>`;
+    bodyHolder.appendChild(empty);
+    return;
+  }
+
+  const holding = books.filter(stillHolding);
+  const given = books.filter((b) => !stillHolding(b));
+
+  const section = (label, list) => {
+    if (!list.length) return;
+    const h = document.createElement("p");
+    h.className = "shelf-section-title";
+    h.textContent = `${label} (${list.length})`;
+    bodyHolder.appendChild(h);
+    const grid = document.createElement("div");
+    grid.className = "card-grid";
+    list.forEach((bk) => grid.appendChild(buildBookCard(bk, (x) => openDetail(x, store, container))));
+    bodyHolder.appendChild(grid);
+  };
+
+  section("Still have it", holding);
+  section("Given back", given);
 }
 
 /** Wishlist gets its own screen: no reading-status chips (you haven't got it
@@ -219,7 +323,7 @@ function renderWishlist(bodyHolder, store, container) {
   if (books.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = `<div class="empty-state-icon">${ICONS.empty}</div><p>Nothing on the wishlist yet — add a book and pick "Add to Wishlist"</p>`;
+    empty.innerHTML = `<div class="empty-state-icon">${ICONS.empty}</div><p>Nothing on the wishlist yet — add a book and pick "Wishlist"</p>`;
     bodyHolder.appendChild(empty);
     return;
   }
@@ -241,11 +345,13 @@ function renderWishlist(bodyHolder, store, container) {
 }
 
 function renderAuthorList(bodyHolder, store, container) {
-  // Deliberately NOT getBooks(): the reading-status chips belong to the Library
-  // tab and aren't even on screen here, so letting them filter this list meant
-  // invisible state silently dropping authors. By Author = every author you own,
-  // whatever state their books are in. Wishlist stays out of it entirely.
-  let books = ownedBooks(store);
+  // Deliberately NOT getBooks(): the reading-status chips aren't on screen here,
+  // so letting them filter this list meant invisible state silently dropping
+  // authors. Groups whichever shelf you're currently on.
+  let books =
+    shelf === "wishlist" ? wishlistBooks(store)
+    : shelf === "borrowed" ? borrowedBooks(store)
+    : ownedBooks(store);
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     books = books.filter(
@@ -307,9 +413,13 @@ function buildBookCard(book, onTap) {
   const owned = isOwned(book);
   const onLoan = loanedCopies(book);
 
-  const pillHtml = owned
-    ? `<span class="status-pill status-${book.readingStatus}">${STATUS_LABELS[book.readingStatus] || book.readingStatus}</span>`
-    : `<span class="status-pill status-to-read">Wishlist</span>`;
+  const shelfKind = shelfOf(book);
+  const pillHtml =
+    shelfKind === "library"
+      ? `<span class="status-pill status-${book.readingStatus}">${STATUS_LABELS[book.readingStatus] || book.readingStatus}</span>`
+      : shelfKind === "borrowed"
+        ? `<span class="status-pill status-borrowed">${stillHolding(book) ? "Borrowed" : "Returned"}</span>`
+        : `<span class="status-pill status-to-read">Wishlist</span>`;
 
   let extraHtml = "";
   if ((book.copies || []).length > 1) {
@@ -323,6 +433,12 @@ function buildBookCard(book, onTap) {
   }
   if (!owned && book.price != null) {
     extraHtml += `<div class="price-tag">$${Number(book.price).toFixed(2)} · wishlist</div>`;
+  }
+  if (shelfKind === "borrowed" && book.borrowed) {
+    const who = escapeHtml(book.borrowed.from || "someone");
+    extraHtml += stillHolding(book)
+      ? `<div class="lent-note">← from ${who}</div>`
+      : `<div class="lent-note">was ${who}'s · returned ${fmtDate(book.borrowed.returnedDate)}</div>`;
   }
   if (book.rating) {
     extraHtml += `<div class="card-stars">${starsHtml(book.rating)}</div>`;
@@ -639,13 +755,15 @@ function viewModeHtml(book, opts) {
     ${readingDatesHtml(book)}
     ${reviewHtml(book)}
 
+    ${shelfOf(book) === "borrowed" ? borrowedBlockHtml(book) : ""}
+
     ${owned ? `
       <div class="copies-section">
         <p class="copies-heading">Your Copies (${copies.length})</p>
         ${copies.map((c) => buildCopyRow(c)).join("")}
         <button class="add-copy-btn" id="addCopyBtn" type="button">+ Add another copy</button>
       </div>
-    ` : `
+    ` : shelfOf(book) === "borrowed" ? "" : `
       <div class="status-pill status-to-read" style="margin-bottom:6px;">Wishlist${book.price != null ? ` · $${Number(book.price).toFixed(2)}` : ""}</div>
       ${book.price != null && book.priceCheckedDate ? `<p class="price-checked-note">You checked this price on ${fmtDate(book.priceCheckedDate)}</p>` : ""}
       ${priceLinksHtml(book)}
@@ -721,6 +839,55 @@ function readingDatesHtml(book) {
           <span>Finished</span>
           <input type="date" id="d-finished" value="${book.finishedDate || ""}">
         </label>
+      </div>
+    </div>
+  `;
+}
+
+/** Borrowed detail — the mirror of a lent-out copy. Reads as information
+ *  until you tap the pencil, same as everything else. */
+function borrowedBlockHtml(book) {
+  const b = book.borrowed || {};
+  const holding = stillHolding(book);
+  const span = holding ? daysBetween(b.borrowedDate, today()) : daysBetween(b.borrowedDate, b.returnedDate);
+
+  return `
+    <div class="copies-section">
+      <p class="copies-heading">Borrowed</p>
+      <div class="copy-row" id="borrowedRow">
+        <div class="copy-line">
+          <div class="copy-status ${holding ? "on-loan" : "on-shelf"}">
+            ${holding
+              ? `← From ${escapeHtml(b.from || "someone")}${span ? ` · ${daysLabel(span)} so far` : ""}`
+              : `Was ${escapeHtml(b.from || "someone")}'s · returned ${fmtDate(b.returnedDate)}${span ? ` · kept ${daysLabel(span)}` : ""}`}
+          </div>
+          <button class="mini-edit" id="borrowEditBtn" type="button" aria-label="Edit borrow details"><span class="btn-icon">${ICONS.edit}</span></button>
+        </div>
+
+        <div class="copy-dates" id="borrowDates" hidden>
+          <label class="date-field">
+            <span>Borrowed from</span>
+            <input type="text" id="b-from" value="${escapeHtml(b.from || "")}">
+          </label>
+          <div class="date-pair">
+            <label class="date-field">
+              <span>Borrowed on</span>
+              <input type="date" id="b-start" value="${b.borrowedDate || ""}">
+            </label>
+            <label class="date-field">
+              <span>Returned on</span>
+              <input type="date" id="b-returned" value="${b.returnedDate || ""}">
+            </label>
+          </div>
+          <p class="field-hint">Filling in a return date marks it as given back — clear it if you still have it.</p>
+        </div>
+
+        <div class="copy-actions">
+          ${holding
+            ? `<button class="return-trigger" id="giveBackBtn" type="button">Give It Back</button>`
+            : `<button class="lend-trigger" id="reborrowBtn" type="button">Borrowed It Again</button>`}
+          <button class="add-copy-btn" id="boughtItBtn" type="button" style="margin:0;">I own it now</button>
+        </div>
       </div>
     </div>
   `;
@@ -868,6 +1035,57 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
         review: text || null,
         reviewDate: has ? (book.reviewDate && had ? book.reviewDate : today()) : null,
       });
+      refreshDetail(store, container, book.id);
+    });
+  }
+
+  // ---- borrowed book controls ----
+  const borrowEditBtn = sheet.querySelector("#borrowEditBtn");
+  const borrowDates = sheet.querySelector("#borrowDates");
+  if (borrowEditBtn && borrowDates) {
+    borrowEditBtn.addEventListener("click", () => {
+      borrowDates.hidden = !borrowDates.hidden;
+      borrowEditBtn.classList.toggle("open", !borrowDates.hidden);
+    });
+    ["#b-from", "#b-start", "#b-returned"].forEach((sel) => {
+      const input = sheet.querySelector(sel);
+      if (!input) return;
+      input.addEventListener("change", () => {
+        store.updateItem(book.id, {
+          borrowed: {
+            ...book.borrowed,
+            from: sheet.querySelector("#b-from").value.trim() || null,
+            borrowedDate: sheet.querySelector("#b-start").value || null,
+            returnedDate: sheet.querySelector("#b-returned").value || null,
+          },
+        });
+        refreshDetail(store, container, book.id);
+      });
+    });
+  }
+
+  const giveBackBtn = sheet.querySelector("#giveBackBtn");
+  if (giveBackBtn) {
+    giveBackBtn.addEventListener("click", () => {
+      store.updateItem(book.id, { borrowed: { ...book.borrowed, returnedDate: today() } });
+      refreshDetail(store, container, book.id);
+    });
+  }
+
+  const reborrowBtn = sheet.querySelector("#reborrowBtn");
+  if (reborrowBtn) {
+    reborrowBtn.addEventListener("click", () => {
+      store.updateItem(book.id, { borrowed: { ...book.borrowed, borrowedDate: today(), returnedDate: null } });
+      refreshDetail(store, container, book.id);
+    });
+  }
+
+  // Borrowed it, loved it, bought your own — moves to Library, borrow record kept.
+  const boughtItBtn = sheet.querySelector("#boughtItBtn");
+  if (boughtItBtn) {
+    boughtItBtn.addEventListener("click", () => {
+      const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
+      store.updateItem(book.id, { copies: [newCopy] });
       refreshDetail(store, container, book.id);
     });
   }
@@ -1209,25 +1427,33 @@ function openScanMatch(book, store, container) {
     const shelfCopy = copies.find((c) => !c.currentLoan) || null;
     // A wishlist entry is still a record, so a plain ISBN match would claim you
     // already own a book you've only bookmarked. Split the two cases.
-    const onWishlist = copies.length === 0;
+    const kind = shelfOf(book);
+    const onWishlist = kind === "wishlist";
+    const isBorrowed = kind === "borrowed";
+    const holdingIt = isBorrowed && stillHolding(book);
     // Scanning a book that's out on loan almost always means it just came back.
     const loanedCopy = copies.find((c) => c.currentLoan) || null;
 
     sheet.innerHTML = `
-      <h2 style="text-align:center;">${onWishlist ? "On your wishlist" : "Found it!"}</h2>
+      <h2 style="text-align:center;">${isBorrowed ? "You borrowed this" : onWishlist ? "On your wishlist" : "Found it!"}</h2>
       ${coverBlockHtml(book)}
       <p class="scan-match-title">${escapeHtml(book.title)}</p>
       <p class="scan-match-sub">${escapeHtml(book.creator || "")}${
-        onWishlist
-          ? (book.price != null ? ` · you noted $${Number(book.price).toFixed(2)}` : " · not in your library yet")
-          : ` · ${copies.length} cop${copies.length === 1 ? "y" : "ies"} in your library`
+        isBorrowed
+          ? ` · borrowed from ${escapeHtml((book.borrowed && book.borrowed.from) || "someone")}`
+          : onWishlist
+            ? (book.price != null ? ` · you noted $${Number(book.price).toFixed(2)}` : " · not in your library yet")
+            : ` · ${copies.length} cop${copies.length === 1 ? "y" : "ies"} in your library`
       }</p>
       <div class="btn-row" style="flex-direction:column;">
-        ${loanedCopy
+        ${holdingIt
+          ? `<button class="btn btn-primary" id="giveBackMatchBtn" type="button">Give it back to ${escapeHtml((book.borrowed && book.borrowed.from) || "them")}</button>`
+          : loanedCopy
           ? `<button class="btn btn-primary" id="returnMatchBtn" type="button">Mark returned — ${escapeHtml(loanedCopy.currentLoan.lentTo || "borrower")} gave it back</button>`
           : onWishlist
             ? `<button class="btn btn-primary" id="gotItBtn" type="button">I bought it — move to Library</button>`
             : `<button class="btn btn-primary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>`}
+        ${isBorrowed ? `<button class="btn btn-secondary" id="boughtMatchBtn" type="button">I own it now</button>` : ""}
         ${loanedCopy && !onWishlist ? `<button class="btn btn-secondary" id="addCopyMatchBtn" type="button">+ Add Another Copy</button>` : ""}
         ${shelfCopy ? `<button class="btn btn-secondary" id="lendMatchBtn" type="button">Lend It to Someone</button>` : ""}
         <button class="btn btn-secondary" id="viewDetailsBtn" type="button">View Details</button>
@@ -1246,11 +1472,29 @@ function openScanMatch(book, store, container) {
       });
     }
 
+    // Scanning a book you borrowed is usually the moment you're handing it back.
+    const giveBackMatchBtn = sheet.querySelector("#giveBackMatchBtn");
+    if (giveBackMatchBtn) {
+      giveBackMatchBtn.addEventListener("click", () => {
+        store.updateItem(book.id, { borrowed: { ...book.borrowed, returnedDate: today() } });
+        refreshDetail(store, container, book.id);
+      });
+    }
+
     // One tap closes the loan with today's date; the date stays editable after.
     const returnMatchBtn = sheet.querySelector("#returnMatchBtn");
     if (returnMatchBtn) {
       returnMatchBtn.addEventListener("click", () => {
         closeLoan(store, container, book, copies, loanedCopy.id, today());
+      });
+    }
+
+    const boughtMatchBtn = sheet.querySelector("#boughtMatchBtn");
+    if (boughtMatchBtn) {
+      boughtMatchBtn.addEventListener("click", () => {
+        const newCopy = { id: uid(), acquiredDate: today(), currentLoan: null, history: [] };
+        store.updateItem(book.id, { copies: [newCopy] });
+        refreshDetail(store, container, book.id);
       });
     }
 
@@ -1286,15 +1530,24 @@ function openAddForm(store, container, prefill = {}) {
     sheet.innerHTML = `
       <h2>Add a Book</h2>
 
-      <div class="destination-row" id="destRow">
+      <div class="destination-row three" id="destRow">
         <button type="button" class="destination-btn active" data-dest="library">
-          <span class="destination-title">Add to Library</span>
-          <span class="destination-sub">I own a copy</span>
+          <span class="destination-title">Library</span>
+          <span class="destination-sub">I own it</span>
         </button>
         <button type="button" class="destination-btn" data-dest="wishlist">
-          <span class="destination-title">Add to Wishlist</span>
-          <span class="destination-sub">Want to buy it</span>
+          <span class="destination-title">Wishlist</span>
+          <span class="destination-sub">Want it</span>
         </button>
+        <button type="button" class="destination-btn" data-dest="borrowed">
+          <span class="destination-title">Borrowed</span>
+          <span class="destination-sub">Someone lent it</span>
+        </button>
+      </div>
+
+      <div class="field" id="a-borrow-field" style="display:none">
+        <label>Borrowed from</label>
+        <input type="text" id="a-borrow-from" placeholder="Who lent it to you?">
       </div>
 
       <div id="addCoverBlock" class="${prefill.isbn ? "" : "hidden"}">
@@ -1340,6 +1593,7 @@ function openAddForm(store, container, prefill = {}) {
     const creatorInput = sheet.querySelector("#a-creator");
     const priceInput = sheet.querySelector("#a-price");
     const priceField = sheet.querySelector("#a-price-field");
+    const borrowField = sheet.querySelector("#a-borrow-field");
     const saveBtn = sheet.querySelector("#addSaveBtn");
 
     // Reading status as buttons rather than a dropdown, matching the
@@ -1394,7 +1648,11 @@ function openAddForm(store, container, prefill = {}) {
           b.classList.toggle("active", b === btn)
         );
         priceField.style.display = destination === "wishlist" ? "" : "none";
-        saveBtn.textContent = destination === "wishlist" ? "Add to Wishlist" : "Add to Library";
+        borrowField.style.display = destination === "borrowed" ? "" : "none";
+        saveBtn.textContent =
+          destination === "wishlist" ? "Add to Wishlist"
+          : destination === "borrowed" ? "Add to Borrowed"
+          : "Add to Library";
       });
     });
 
@@ -1441,7 +1699,15 @@ function openAddForm(store, container, prefill = {}) {
       }
       const owned = destination === "library";
       const copies = owned ? [{ id: uid(), acquiredDate: today(), currentLoan: null, history: [] }] : [];
-      const price = owned ? null : (parseFloat(priceInput.value) || null);
+      const price = destination === "wishlist" ? (parseFloat(priceInput.value) || null) : null;
+      const borrowed =
+        destination === "borrowed"
+          ? {
+              from: sheet.querySelector("#a-borrow-from").value.trim() || null,
+              borrowedDate: today(),
+              returnedDate: null,
+            }
+          : null;
       // Whatever the source (auto-lookup or typed by hand), saving a price now means
       // it's fresh as of today — same "checked on" convention as the edit screen.
       const priceCheckedDate = price != null ? today() : null;
@@ -1458,6 +1724,7 @@ function openAddForm(store, container, prefill = {}) {
         priceCheckedDate,
         color: randomColor(),
         copies,
+        borrowed,
       });
       closeModal();
       render(container, store);

@@ -9,7 +9,7 @@ import { ICONS } from "./icons.js";
 
 /** Emoji fallback used by the generic item card's swatch (module-specific
  *  screens like Books draw their own richer card). */
-const SWATCH_EMOJI = { book: "📖", lp: "💿", music: "🎧", photo: "📷" };
+const SWATCH_EMOJI = { book: "📖", lp: "💿", photo: "📷" };
 
 const STATUS_LABEL = {
   "to-read": "To Read",

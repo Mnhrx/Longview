@@ -15,7 +15,7 @@ export function uid() {
 
 export const store = {
   state: {
-    items: [],           // books, lps, music, photos all live here (type: field)
+    items: [],           // books, lps, photos all live here (type: field)
     finance: {
       balance: 0,
       spendingLog: [],    // { id, date, amount, note, itemId }
@@ -132,7 +132,11 @@ export const router = {
     const paint = () => {
       const container = document.getElementById("view");
       container.innerHTML = "";
-      this.modules[view].render(container, store);
+      // A back *gesture* is already animated by iOS, which paints its own
+      // snapshot of the previous screen first. Replaying our animation on top
+      // is the "static, then re-animates" flash — so the menu sits still for
+      // gesture-backs and animates for taps and fresh loads.
+      this.modules[view].render(container, store, { animate: !opts.viaGesture });
       applyChrome(view, isHome, this.modules[view]);
     };
 

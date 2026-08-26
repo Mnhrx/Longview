@@ -14,7 +14,6 @@ import { syncLayersTo, layerDepth } from "./ui.js";
 router.register("home", homeModule);
 router.register("books", booksModule);
 router.register("lps", makePlaceholder("lps", "LPs"));
-router.register("music", makePlaceholder("music", "Music"));
 router.register("photos", makePlaceholder("photos", "Photos"));
 router.register("finance", makePlaceholder("finance", "Finance"));
 
@@ -32,6 +31,10 @@ async function boot() {
     else history.pushState(state, "", `#${view}`);
   };
 
+  // history.back() fires popstate identically whether it came from our own
+  // back button or an edge-swipe, so the button flags itself on the way out.
+  let backViaButton = false;
+
   window.addEventListener("popstate", (e) => {
     // Every open layer owns a history entry, so the entry we've just landed on
     // tells us exactly how many should still be showing. Close down to that —
@@ -43,11 +46,14 @@ async function boot() {
     }
 
     const view = (e.state && e.state.view) || viewFromHash() || "home";
-    router.navigate(view, { fromPopState: true, direction: "back" });
+    const viaGesture = !backViaButton;
+    backViaButton = false;
+    router.navigate(view, { fromPopState: true, direction: "back", viaGesture });
   });
 
   document.getElementById("homeBtn").addEventListener("click", () => {
     if (router.current === "home") return;
+    backViaButton = true;
     history.back(); // let the history stack drive it, same as a swipe
   });
 

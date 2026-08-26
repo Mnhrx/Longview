@@ -12,12 +12,11 @@ import { ICONS } from "./icons.js";
 const TILES = [
   { key: "books", label: "Books", bg: "var(--pink)", tone: "dark" },
   { key: "lps", label: "LPs", bg: "var(--purple)", tone: "dark" },
-  { key: "music", label: "Music", bg: "var(--blue)", tone: "dark" },
-  { key: "photos", label: "Photos", bg: "var(--mint)", tone: "light" },
-  { key: "finance", label: "Finance", bg: "var(--yellow)", tone: "light" },
+  { key: "photos", label: "Photos", bg: "var(--blue)", tone: "dark" },
+  { key: "finance", label: "Finance", bg: "var(--mint)", tone: "light" },
 ];
 
-function render(container, store) {
+function render(container, store, opts = {}) {
   const wrap = document.createElement("div");
   wrap.className = "home-screen";
 
@@ -55,6 +54,11 @@ function render(container, store) {
   // rather than five tiles popping separately — that separate-pops version is
   // what read as jitter, especially layered under iOS's own swipe animation.
   // Held back until `startMenuIntro()` so it can't run behind the splash.
+  if (opts.animate === false) {
+    // Land already settled — no intro to play.
+    wrap.classList.add("intro", "no-anim");
+    return;
+  }
   wrap.dataset.introPending = "1";
   if (!window.__stacktSplashUp) startMenuIntro();
 }
@@ -70,8 +74,20 @@ export function startMenuIntro() {
 
 function subtitleFor(key, store) {
   if (key === "books") {
-    const n = store.itemsByType("book").length;
-    return n === 0 ? "Tap to start" : `${n} book${n === 1 ? "" : "s"}`;
+    const books = store.itemsByType("book");
+    // Books physically with you: owned plus still-borrowed. Wishlist excluded —
+    // you don't have those. Borrowed is called out separately so the number is
+    // never ambiguous.
+    const owned = books.filter((b) => (b.copies || []).length > 0).length;
+    const borrowed = books.filter(
+      (b) => !(b.copies || []).length && b.borrowed && !b.borrowed.returnedDate
+    ).length;
+
+    if (!owned && !borrowed) return "Tap to start";
+    const main = `${owned} book${owned === 1 ? "" : "s"}`;
+    return borrowed
+      ? `${main} <span class="sub-accent">· ${borrowed} borrowed</span>`
+      : main;
   }
   return "Coming soon";
 }
