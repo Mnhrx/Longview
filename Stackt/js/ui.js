@@ -83,6 +83,31 @@ export function renderCardGrid(container, items, onTap, emptyMessage = "Nothing 
 // ============================================
 
 let layers = []; // [{ kind, teardown }] innermost last
+let lockedScrollTop = 0;
+
+/**
+ * Freezes the screen behind an overlay.
+ *
+ * A fixed backdrop stops the page *receiving* taps but doesn't stop it
+ * scrolling: a drag over the backdrop, or a flick that runs past the end of the
+ * sheet's own scroll, still moves the list underneath. Locking the scroller
+ * while any layer is open is what actually pins it.
+ */
+function lockBackgroundScroll() {
+  const view = document.getElementById("view");
+  if (!view) return;
+  lockedScrollTop = view.scrollTop;
+  view.classList.add("scroll-locked");
+  view.style.top = `-${lockedScrollTop}px`;
+}
+
+function unlockBackgroundScroll() {
+  const view = document.getElementById("view");
+  if (!view) return;
+  view.classList.remove("scroll-locked");
+  view.style.top = "";
+  view.scrollTop = lockedScrollTop; // put them back where they were
+}
 
 /** Number of layers currently open — mirrored into history state as `depth`. */
 export function layerDepth() {
@@ -91,6 +116,7 @@ export function layerDepth() {
 
 /** Registers a layer and gives it a history entry so back can pop it. */
 function pushLayer(kind, teardown) {
+  if (layers.length === 0) lockBackgroundScroll();
   layers.push({ kind, teardown });
   const view = (history.state && history.state.view) || "";
   history.pushState({ view, depth: layers.length }, "", location.hash || "");
@@ -102,6 +128,7 @@ export function popLayer() {
   const layer = layers.pop();
   if (!layer) return false;
   try { layer.teardown(); } catch (e) { console.warn(e); }
+  if (layers.length === 0) unlockBackgroundScroll();
   return true;
 }
 
@@ -124,6 +151,7 @@ export function dismissLayer() {
 /** Drops every layer with no history involvement — for a hard screen change. */
 export function clearAllLayers() {
   while (layers.length) popLayer();
+  unlockBackgroundScroll(); // belt and braces on a hard screen change
 }
 
 export function isModalOpen() {

@@ -1,4 +1,63 @@
 {
   "books": [
+    {
+      "id": "b1",
+      "type": "book",
+      "title": "Norwegian Wood",
+      "creator": "Haruki Murakami",
+      "isbn": "9780099448822",
+      "readingStatus": "read",
+      "price": null,
+      "notes": "",
+      "color": "#FF3B6B",
+      "addedDate": "2025-11-20",
+      "copies": [
+        {
+          "id": "c1",
+          "acquiredDate": "2025-11-20",
+          "currentLoan": null,
+          "history": []
+        },
+        {
+          "id": "c2",
+          "acquiredDate": "2025-12-01",
+          "currentLoan": { "lentTo": "Aiman", "lentDate": "2026-07-15", "dueDate": null },
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "b2",
+      "type": "book",
+      "title": "The Memory Police",
+      "creator": "Yoko Ogawa",
+      "isbn": "9781784705992",
+      "readingStatus": "reading",
+      "price": null,
+      "notes": "",
+      "color": "#3D5AFE",
+      "addedDate": "2026-06-02",
+      "copies": [
+        {
+          "id": "c3",
+          "acquiredDate": "2026-06-02",
+          "currentLoan": null,
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "b3",
+      "type": "book",
+      "title": "The Woman in the Dunes",
+      "creator": "Kobo Abe",
+      "isbn": "9780679733782",
+      "readingStatus": "to-read",
+      "price": 18.9,
+      "notes": "",
+      "color": "#FFC738",
+      "addedDate": "2026-08-01",
+      "copies": []
+    }
   ]
 }

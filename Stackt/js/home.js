@@ -89,6 +89,16 @@ function subtitleFor(key, store) {
       ? `${main} <span class="sub-accent">· ${borrowed} borrowed</span>`
       : main;
   }
+  if (key === "lps") {
+    const recs = store.itemsByType("lp");
+    const owned = recs.filter((r) => (r.copies || []).length > 0).length;
+    const borrowed = recs.filter(
+      (r) => !(r.copies || []).length && r.borrowed && !r.borrowed.returnedDate
+    ).length;
+    if (!owned && !borrowed) return "Tap to start";
+    const main = `${owned} record${owned === 1 ? "" : "s"}`;
+    return borrowed ? `${main} <span class="sub-accent">· ${borrowed} borrowed</span>` : main;
+  }
   return "Coming soon";
 }
 

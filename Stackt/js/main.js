@@ -7,6 +7,7 @@
 import { store, router } from "./core.js";
 import homeModule, { startMenuIntro } from "./home.js";
 import booksModule from "./books.js";
+import lpsModule from "./lps.js";
 import settingsModule from "./settings.js";
 import { makePlaceholder } from "./placeholder.js";
 import { bounceTap } from "./animations.js";
@@ -16,7 +17,7 @@ import { syncLayersTo, layerDepth } from "./ui.js";
 router.register("home", homeModule);
 router.register("books", booksModule);
 router.register("settings", settingsModule);
-router.register("lps", makePlaceholder("lps", "LPs"));
+router.register("lps", lpsModule);
 router.register("photos", makePlaceholder("photos", "Photos"));
 router.register("finance", makePlaceholder("finance", "Finance"));
 

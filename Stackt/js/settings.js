@@ -14,12 +14,18 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Same shelf rules as the modules use: copies means owned, a borrow record
+ *  means borrowed, neither means wishlist. */
+function tally(items) {
+  const owned = items.filter((i) => (i.copies || []).length > 0).length;
+  const borrowed = items.filter((i) => !(i.copies || []).length && i.borrowed).length;
+  return { total: items.length, owned, borrowed, wishlist: items.length - owned - borrowed };
+}
 function counts() {
-  const books = store.itemsByType("book");
-  const owned = books.filter((b) => (b.copies || []).length > 0).length;
-  const borrowed = books.filter((b) => !(b.copies || []).length && b.borrowed).length;
-  const wishlist = books.length - owned - borrowed;
-  return { total: books.length, owned, borrowed, wishlist };
+  return {
+    books: tally(store.itemsByType("book")),
+    records: tally(store.itemsByType("lp")),
+  };
 }
 
 /** Rough size of what's stored, so "how much am I carrying" is answerable. */
@@ -43,8 +49,12 @@ function render(container, flash = null) {
     <div class="settings-card">
       <p class="settings-heading">Your library</p>
       <p class="settings-stat">
-        <strong>${c.total}</strong> book${c.total === 1 ? "" : "s"} ·
-        ${c.owned} owned · ${c.borrowed} borrowed · ${c.wishlist} wishlist
+        <strong>${c.books.total}</strong> book${c.books.total === 1 ? "" : "s"} ·
+        ${c.books.owned} owned · ${c.books.borrowed} borrowed · ${c.books.wishlist} wishlist
+      </p>
+      <p class="settings-stat">
+        <strong>${c.records.total}</strong> record${c.records.total === 1 ? "" : "s"} ·
+        ${c.records.owned} owned · ${c.records.borrowed} borrowed · ${c.records.wishlist} wishlist
       </p>
       <p class="settings-note">Stored on this device · ${storedSize()}</p>
     </div>
@@ -52,8 +62,9 @@ function render(container, flash = null) {
     <div class="settings-card">
       <p class="settings-heading">Back up</p>
       <p class="settings-note">
-        Saves everything to a file you keep — books, copies, loans, reviews, dates.
-        Worth doing before you clear Safari data or move to a new phone.
+        Saves everything to a file you keep — books, records, copies, loans,
+        reviews, dates. Worth doing before you clear Safari data or move to a
+        new phone.
       </p>
       <button class="btn btn-primary" id="backupBtn" type="button">Back up my library</button>
       <p class="settings-status" id="backupStatus"></p>
@@ -81,8 +92,8 @@ function render(container, flash = null) {
     <div class="settings-card danger-card">
       <p class="settings-heading">Reset</p>
       <p class="settings-note">
-        Empties the app completely — every book, loan and review. This can't be
-        undone, and the sample books won't come back.
+        Empties the app completely — every book, record, loan and review. This
+        can't be undone, and the sample books won't come back.
       </p>
       <button class="btn btn-secondary danger-btn" id="resetBtn" type="button">Reset library</button>
       <p class="settings-status" id="resetStatus"></p>
@@ -183,7 +194,7 @@ function wireRestore(wrap, container) {
       // the confirmation across so it isn't wiped by the redraw.
       render(container, {
         selector: "#restoreStatus",
-        text: `Restored ${n} book${n === 1 ? "" : "s"}.`,
+        text: `Restored ${n} item${n === 1 ? "" : "s"}.`,
         kind: "good",
       });
     } catch (err) {

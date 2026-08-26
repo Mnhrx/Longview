@@ -1611,3 +1611,81 @@ html, body {
 }
 .danger-btn { border-color: var(--pink); color: var(--pink); }
 .danger-btn.armed { background: var(--pink); color: #fff; border-color: var(--pink); }
+
+/* Background scroll lock while an overlay is open. Fixing the scroller in
+   place (rather than just hiding overflow) is what stops iOS carrying the
+   drag through to the list underneath. */
+.view.scroll-locked {
+  position: fixed;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* And stop a flick inside the sheet chaining onward once it hits its end. */
+.modal-sheet,
+.cover-picker,
+.lightbox-backdrop {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: auto;
+}
+
+/* ---------- records ----------
+   Sleeves are square, not 3:4 like a book cover. */
+.detail-cover-wrap.sleeve,
+.lightbox-cover-wrap.sleeve { aspect-ratio: 1 / 1; max-height: none; }
+.cover-option.sleeve { aspect-ratio: 1 / 1; }
+.item-swatch.sleeve { border-radius: 10px; }
+
+.detail-meta {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.55;
+  margin: -10px 0 16px;
+}
+
+/* Condition, set per copy — an original press and a reissue differ. */
+.condition-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cond-btn {
+  flex: 1 1 0;
+  min-width: 44px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  border: 2px solid rgba(26,26,46,0.28);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform .15s var(--spring), background .15s, border-color .15s;
+}
+.cond-btn:active { transform: scale(0.94); }
+.cond-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.status-cond-mint      { background: var(--mint); }
+.status-cond-near-mint { background: var(--mint); opacity: 0.85; }
+.status-cond-vg-plus   { background: var(--yellow); }
+.status-cond-vg        { background: var(--yellow); opacity: 0.8; }
+.status-cond-good      { background: #E2E2E8; }
+
+.cover-option-cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 5px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.25;
+  background: rgba(26,26,46,0.82);
+  color: #fff;
+  text-align: left;
+}
