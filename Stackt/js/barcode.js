@@ -175,19 +175,51 @@ export function coverIdUrl(id, size = "M") {
  * this surfaces the other editions' art so you can pick the one that matches
  * the book in your hands. Returns an array of cover IDs, most relevant first.
  */
-export async function findCoverOptions(title, creator) {
-  const q = [title, creator].filter(Boolean).join(" ").trim();
-  if (!q) return [];
+async function searchCoverIds(q, limit) {
+  const res = await fetch(
+    `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&fields=title,author_name,cover_i&limit=${limit}`
+  );
+  const data = await res.json();
+  const ids = [];
+  (data.docs || []).forEach((d) => {
+    if (d.cover_i && !ids.includes(d.cover_i)) ids.push(d.cover_i);
+  });
+  return ids;
+}
+
+export async function findCoverOptions(title, creator, opts = {}) {
+  // A free-text search box in the picker overrides the book's own fields —
+  // that's the escape hatch for when the catalogued title isn't what's printed
+  // on the book.
+  if (opts.free) {
+    try {
+      return (await searchCoverIds(String(opts.free).trim(), 40)).slice(0, 24);
+    } catch (err) {
+      console.warn("Cover search failed", err);
+      return [];
+    }
+  }
+
+  const esc = (s) => String(s).replace(/["]/g, " ").trim();
+  const loose = [title, creator].filter(Boolean).join(" ").trim();
+  if (!loose) return [];
+
+  // Naming the fields ranks the right book first; a bare word-bag search fills
+  // the grid with everything else the author ever wrote.
+  const strict = [
+    title ? `title:"${esc(title)}"` : "",
+    creator ? `author:"${esc(creator)}"` : "",
+  ].filter(Boolean).join(" AND ");
+
   try {
-    const res = await fetch(
-      `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&fields=title,author_name,cover_i&limit=20`
-    );
-    const data = await res.json();
-    const ids = [];
-    (data.docs || []).forEach((d) => {
-      if (d.cover_i && !ids.includes(d.cover_i)) ids.push(d.cover_i);
-    });
-    return ids.slice(0, 12);
+    let ids = strict ? await searchCoverIds(strict, 40) : [];
+    // Exact-phrase matching misses subtitles, translations and typos, so fall
+    // back to loose words rather than showing an empty grid.
+    if (ids.length < 6) {
+      const extra = await searchCoverIds(loose, 40);
+      extra.forEach((id) => { if (!ids.includes(id)) ids.push(id); });
+    }
+    return ids.slice(0, 24);
   } catch (err) {
     console.warn("Cover search failed", err);
     return [];

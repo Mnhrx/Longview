@@ -444,9 +444,12 @@ function buildBookCard(book, onTap) {
     extraHtml += `<div class="card-stars">${starsHtml(book.rating)}</div>`;
   }
 
+  // Always wrapped: a bare <svg> here has no sizing rule and renders nearly
+  // edge-to-edge, so its stroke collides with the swatch border and reads as a
+  // doubled outline.
   const swatchInner = hasCover(book)
     ? `<span class="swatch-emoji">${ICONS.books}</span><img class="swatch-img" alt="">`
-    : ICONS.books;
+    : `<span class="swatch-emoji">${ICONS.books}</span>`;
 
   card.innerHTML = `
     <div class="item-swatch ${hasCover(book) ? "shimmer" : ""}" style="background:${book.color || "#eee"}">${swatchInner}</div>
@@ -550,10 +553,14 @@ function openCoverPicker(bookish, onPick) {
           </span>
         </label>
 
-        <p class="cover-picker-label" id="cpLabel">Other editions</p>
-        <div class="cover-options" id="cpOptions">
-          <p class="cover-picker-note">Looking for other covers…</p>
+        <div class="picker-search">
+          <input type="search" id="cpSearch" placeholder="Search covers by title or author"
+                 value="${escapeHtml([bookish.title, bookish.creator].filter(Boolean).join(" "))}">
+          <button class="btn btn-secondary" id="cpSearchBtn" type="button">Search</button>
         </div>
+
+        <p class="cover-picker-label" id="cpLabel">Other editions</p>
+        <div class="cover-options" id="cpOptions"></div>
       </div>
     `;
 
@@ -578,40 +585,78 @@ function openCoverPicker(bookish, onPick) {
     });
 
     const grid = overlay.querySelector("#cpOptions");
-    findCoverOptions(bookish.title, bookish.creator).then((ids) => {
-      if (!ids.length) {
-        grid.innerHTML = `<p class="cover-picker-note">No other covers found for this title.</p>`;
-        return;
-      }
+    const label = overlay.querySelector("#cpLabel");
+    const searchBox = overlay.querySelector("#cpSearch");
+    const searchBtn = overlay.querySelector("#cpSearchBtn");
+    let run = 0;
+
+    /** Grey boxes while the search is out, so the sheet has its final shape
+     *  immediately instead of jumping when results land. */
+    function showSkeletons(n = 8) {
       grid.innerHTML = "";
-      if (bookish.customCover || bookish.coverId) {
-        const reset = document.createElement("button");
-        reset.type = "button";
-        reset.className = "cover-option reset";
-        reset.innerHTML = `<span>Use the default</span>`;
-        reset.addEventListener("click", () => {
-          onPick({ customCover: null, coverId: null });
-          dismissLayer();
-        });
-        grid.appendChild(reset);
+      for (let i = 0; i < n; i++) {
+        const sk = document.createElement("div");
+        sk.className = "cover-option skeleton";
+        grid.appendChild(sk);
       }
-      ids.forEach((id) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "cover-option";
-        const img = new Image();
-        img.alt = "";
-        img.addEventListener("load", () => btn.classList.add("loaded"));
-        img.addEventListener("error", () => btn.remove()); // drop dead thumbnails
-        img.src = coverIdUrl(id, "M");
-        btn.appendChild(img);
-        btn.addEventListener("click", () => {
-          onPick({ customCover: null, coverId: id });
-          dismissLayer();
+    }
+
+    function load(query) {
+      const mine = ++run;
+      label.textContent = "Looking for covers…";
+      showSkeletons();
+      findCoverOptions(bookish.title, bookish.creator, query ? { free: query } : {}).then((ids) => {
+        if (mine !== run) return; // a newer search has already started
+        grid.innerHTML = "";
+        if (!ids.length) {
+          label.textContent = "Other editions";
+          grid.innerHTML = `<p class="cover-picker-note">Nothing found — try searching for just the title, or use your own photo.</p>`;
+          return;
+        }
+        label.textContent = query ? `Results for “${query}”` : "Other editions";
+
+        if (bookish.customCover || bookish.coverId) {
+          const reset = document.createElement("button");
+          reset.type = "button";
+          reset.className = "cover-option reset";
+          reset.innerHTML = `<span>Use the default</span>`;
+          reset.addEventListener("click", () => {
+            onPick({ customCover: null, coverId: null });
+            dismissLayer();
+          });
+          grid.appendChild(reset);
+        }
+
+        ids.forEach((id) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cover-option";
+          const img = new Image();
+          img.alt = "";
+          img.loading = "lazy";
+          img.addEventListener("load", () => btn.classList.add("loaded"));
+          img.addEventListener("error", () => btn.remove()); // drop dead thumbnails
+          img.src = coverIdUrl(id, "M");
+          btn.appendChild(img);
+          btn.addEventListener("click", () => {
+            onPick({ customCover: null, coverId: id });
+            dismissLayer();
+          });
+          grid.appendChild(btn);
         });
-        grid.appendChild(btn);
       });
+    }
+
+    searchBtn.addEventListener("click", () => load(searchBox.value.trim()));
+    searchBox.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchBox.blur();
+        load(searchBox.value.trim());
+      }
     });
+
+    load(null);
   });
 }
 
@@ -893,6 +938,31 @@ function borrowedBlockHtml(book) {
   `;
 }
 
+
+/** Lets you correct the shelf after the fact. Moving out of Library discards
+ *  copies (and their loan history), so that direction asks twice. */
+function shelfSwitcherHtml(item, kindLabel) {
+  const current = shelfOf(item);
+  const opts = [
+    { key: "library", label: kindLabel === "record" ? "Collection" : "Library" },
+    { key: "wishlist", label: "Wishlist" },
+    { key: "borrowed", label: "Borrowed" },
+  ];
+  return `
+    <div class="field">
+      <label>Shelf</label>
+      <div class="destination-row three" id="shelfSwitch">
+        ${opts.map((o) => `
+          <button type="button" class="destination-btn ${current === o.key ? "active" : ""}" data-shelf-to="${o.key}">
+            <span class="destination-title">${o.label}</span>
+          </button>
+        `).join("")}
+      </div>
+      <p class="settings-status" id="shelfWarn"></p>
+    </div>
+  `;
+}
+
 function editModeHtml(book) {
   const owned = isOwned(book);
   return `
@@ -912,6 +982,7 @@ function editModeHtml(book) {
       <label>ISBN</label>
       <input type="text" id="f-isbn" placeholder="9780099448822" value="${escapeHtml(book.isbn || "")}">
     </div>
+    ${shelfSwitcherHtml(book, "book")}
     <div class="field">
       <label>Cover</label>
       <button class="btn btn-secondary" id="changeCoverBtn" type="button" style="margin-top:0;">
@@ -1242,7 +1313,53 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
   });
 }
 
+
+/** Applies a shelf change, warning first when it would throw data away. */
+function wireShelfSwitcher(sheet, item, store, container, kindLabel) {
+  const row = sheet.querySelector("#shelfSwitch");
+  if (!row) return;
+  const warn = sheet.querySelector("#shelfWarn");
+  let armedFor = null;
+
+  row.querySelectorAll("[data-shelf-to]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const to = btn.dataset.shelfTo;
+      const from = shelfOf(item);
+      if (to === from) return;
+
+      const copies = item.copies || [];
+      const losesHistory =
+        from === "library" && copies.some((c) => c.currentLoan || (c.history || []).length);
+
+      if (losesHistory && armedFor !== to) {
+        armedFor = to;
+        warn.textContent = `This drops ${copies.length} cop${copies.length === 1 ? "y" : "ies"} and their loan history. Tap again to confirm.`;
+        warn.className = "settings-status bad";
+        return;
+      }
+
+      const patch = { copies: [], borrowed: null, price: null, priceCheckedDate: null };
+      if (to === "library") {
+        patch.copies = copies.length
+          ? copies
+          : [{ id: uid(), acquiredDate: today(), condition: null, currentLoan: null, history: [] }];
+        patch.borrowed = null;
+      } else if (to === "borrowed") {
+        // Keep any earlier borrow record rather than wiping who lent it to you.
+        patch.borrowed = item.borrowed || { from: null, borrowedDate: today(), returnedDate: null };
+      } else {
+        patch.price = item.price ?? null;
+        patch.priceCheckedDate = item.priceCheckedDate ?? null;
+      }
+
+      store.updateItem(item.id, patch);
+      refreshDetail(store, container, item.id, { mode: "edit" });
+    });
+  });
+}
+
 function wireEditMode(sheet, book, store, container) {
+  wireShelfSwitcher(sheet, book, store, container, "book");
   const changeCoverBtn = sheet.querySelector("#changeCoverBtn");
   if (changeCoverBtn) {
     changeCoverBtn.addEventListener("click", () => {
@@ -1550,9 +1667,13 @@ function openAddForm(store, container, prefill = {}) {
         <input type="text" id="a-borrow-from" placeholder="Who lent it to you?">
       </div>
 
-      <div id="addCoverBlock" class="${prefill.isbn ? "" : "hidden"}">
-        ${coverBlockHtml({ isbn: prefill.isbn, color: "#eee" })}
-        <button class="btn btn-secondary" id="addChangeCoverBtn" type="button" style="margin:-6px 0 16px;">Choose a different cover</button>
+      <div class="field">
+        <label>Cover</label>
+        <div id="addCoverBlock" class="${prefill.isbn ? "" : "hidden"}">
+          ${coverBlockHtml({ isbn: prefill.isbn, color: "#eee" })}
+        </div>
+        <button class="btn btn-secondary" id="addChangeCoverBtn" type="button" style="margin-top:0;">Choose a cover</button>
+        <p class="field-hint">Search other editions, or use your own photo.</p>
       </div>
       <div class="field">
         <label>Title</label>
@@ -1615,28 +1736,22 @@ function openAddForm(store, container, prefill = {}) {
     // Re-paints the add form's preview from whatever the current pick is.
     function repaintAddCover(isbn) {
       const shape = { isbn: isbn || null, ...pickedCover, color: "#eee" };
+      // Only the preview hides when there's nothing to show — the button stays
+      // put, so a hand-typed book can still be given a cover.
       coverBlock.classList.toggle("hidden", !hasCover(shape));
-      coverBlock.innerHTML =
-        coverBlockHtml(shape) +
-        `<button class="btn btn-secondary" id="addChangeCoverBtn" type="button" style="margin:-6px 0 16px;">Choose a different cover</button>`;
+      coverBlock.innerHTML = coverBlockHtml(shape);
       wireCover(sheet, shape);
-      wireAddCoverBtn(isbn);
     }
 
-    function wireAddCoverBtn(isbn) {
-      const btn = sheet.querySelector("#addChangeCoverBtn");
-      if (!btn) return;
-      btn.addEventListener("click", () => {
-        openCoverPicker(
-          { title: titleInput.value.trim(), creator: creatorInput.value.trim(), ...pickedCover },
-          (pick) => {
-            pickedCover = pick;
-            repaintAddCover(isbnInput.value.trim() || null);
-          }
-        );
-      });
-    }
-    wireAddCoverBtn(prefill.isbn || null);
+    sheet.querySelector("#addChangeCoverBtn").addEventListener("click", () => {
+      openCoverPicker(
+        { title: titleInput.value.trim(), creator: creatorInput.value.trim(), ...pickedCover },
+        (pick) => {
+          pickedCover = pick;
+          repaintAddCover(isbnInput.value.trim() || null);
+        }
+      );
+    });
 
     // Where the book is headed is the first decision, so it's two plain
     // buttons at the top rather than a dropdown buried in the form.

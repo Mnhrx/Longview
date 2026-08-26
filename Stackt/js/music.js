@@ -33,7 +33,27 @@ function toRelease(r) {
     year: (r.date || "").slice(0, 4) || "",
     edition: edition || format || "",
     barcode: r.barcode || null,
+    // The release *group* is the album as an idea — every pressing, reissue and
+    // remaster shares one. Art gets filed against the group far more often than
+    // against an individual pressing, so this is what makes most of "I can't
+    // find this album's cover" go away.
+    rgid: (r["release-group"] || {}).id || null,
+    country: r.country || null,
   };
+}
+
+/**
+ * Builds a Lucene query for MusicBrainz. A bare "coltrane blue train" is scored
+ * as loose words across every field, which buries the pressing you meant under
+ * compilations and singles. Naming the fields fixes the ranking.
+ */
+function buildQuery({ title, creator, free }) {
+  const esc = (s) => String(s).replace(/[+\-&|!(){}\[\]^"~*?:\\/]/g, " ").replace(/\s+/g, " ").trim();
+  if (free) return esc(free);
+  const parts = [];
+  if (title) parts.push(`release:"${esc(title)}"`);
+  if (creator) parts.push(`artist:"${esc(creator)}"`);
+  return parts.join(" AND ");
 }
 
 /** Looks up a release by the barcode on the sleeve. */
@@ -54,9 +74,14 @@ export async function lookupBarcode(barcode) {
   }
 }
 
-/** Free-text search, used when you know the album but not the barcode. */
-export async function searchReleases(query, limit = 12) {
-  const q = String(query || "").trim();
+/**
+ * Searches releases. Pass `{title, creator}` for a structured search, or
+ * `{free}` for whatever someone typed into the picker's search box.
+ * A plain string still works and is treated as free text.
+ */
+export async function searchReleases(spec, limit = 25) {
+  const shape = typeof spec === "string" ? { free: spec } : spec || {};
+  const q = buildQuery(shape);
   if (!q) return [];
   try {
     const res = await fetch(
@@ -71,13 +96,42 @@ export async function searchReleases(query, limit = 12) {
 }
 
 /**
- * Sleeve art for a release. Every pressing has its own MBID, so a reissue with
- * different artwork resolves to different art — which is the whole reason the
- * picker offers other releases of the same album.
+ * Turns raw releases into art candidates, best-odds first.
+ *
+ * One album can come back as thirty near-identical rows (every country's
+ * pressing of the same CD), and most of those have no art of their own. So:
+ * one candidate per release *group* first — that's the album's canonical
+ * artwork and almost always exists — then the distinct pressings after it,
+ * for when you want the specific sleeve in your hands rather than the album.
  */
-export function coverArtUrl(mbid, size = 500) {
-  if (!mbid) return null;
-  return `https://coverartarchive.org/release/${mbid}/front-${size}`;
+export function artCandidates(releases, max = 24) {
+  const out = [];
+  const seenGroup = new Set();
+  const seenRelease = new Set();
+
+  releases.forEach((r) => {
+    if (!r.rgid || seenGroup.has(r.rgid)) return;
+    seenGroup.add(r.rgid);
+    out.push({ ...r, artId: r.rgid, artKind: "release-group", edition: "Album art" });
+  });
+  releases.forEach((r) => {
+    if (!r.mbid || seenRelease.has(r.mbid)) return;
+    seenRelease.add(r.mbid);
+    out.push({ ...r, artId: r.mbid, artKind: "release" });
+  });
+
+  return out.slice(0, max);
+}
+
+/**
+ * Sleeve art. `kind` is "release" for one specific pressing or "release-group"
+ * for the album's canonical art. Cover Art Archive answers with a 307 to
+ * archive.org, so these images take a second hop before any bytes arrive —
+ * that redirect, not MusicBrainz, is why sleeves feel slower than book covers.
+ */
+export function coverArtUrl(id, size = 500, kind = "release") {
+  if (!id) return null;
+  return `https://coverartarchive.org/${kind}/${id}/front-${size}`;
 }
 
 /** Discogs is where vinyl prices actually live — linked out, not scraped. */

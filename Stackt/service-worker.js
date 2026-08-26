@@ -3,7 +3,7 @@
 // Bump CACHE_NAME whenever you deploy changes so old clients pick them up.
 // ============================================
 
-const CACHE_NAME = "stackt-v19";
+const CACHE_NAME = "stackt-v21";
 const ASSETS = [
   "./",
   "./index.html",

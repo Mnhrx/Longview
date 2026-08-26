@@ -16,7 +16,7 @@ import { openModal, updateModal, dismissLayer, openOverlay, escapeHtml } from ".
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner } from "./barcode.js";
-import { lookupBarcode, searchReleases, coverArtUrl, discogsUrl } from "./music.js";
+import { lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl } from "./music.js";
 import { ICONS } from "./icons.js";
 
 const CONDITIONS = [
@@ -126,12 +126,16 @@ function getRecords(store) {
 function recordCoverSrc(rec, size = 500) {
   if (!rec) return null;
   if (rec.customCover) return rec.customCover;
+  // A picked release-group is the album's canonical art; a picked release is
+  // one specific pressing. Both beat whatever the barcode scan happened to hit.
+  if (rec.coverRgid) return coverArtUrl(rec.coverRgid, size, "release-group");
   if (rec.coverMbid) return coverArtUrl(rec.coverMbid, size);
+  if (rec.rgid) return coverArtUrl(rec.rgid, size, "release-group");
   if (rec.mbid) return coverArtUrl(rec.mbid, size);
   return null;
 }
 function hasCover(rec) {
-  return !!(rec && (rec.customCover || rec.coverMbid || rec.mbid));
+  return !!(rec && (rec.customCover || rec.coverRgid || rec.coverMbid || rec.rgid || rec.mbid));
 }
 
 function downscaleImage(file, maxEdge = 500, quality = 0.75) {
@@ -220,10 +224,13 @@ function openArtPicker(recordish, onPick) {
             <small>Take one now or pick from your library</small>
           </span>
         </label>
-        <p class="cover-picker-label" id="apLabel">Other pressings</p>
-        <div class="cover-options" id="apOptions">
-          <p class="cover-picker-note">Looking for other pressings…</p>
+        <div class="picker-search">
+          <input type="search" id="apSearch" placeholder="Search by artist and album"
+                 value="${escapeHtml([recordish.creator, recordish.title].filter(Boolean).join(" "))}">
+          <button class="btn btn-secondary" id="apSearchBtn" type="button">Search</button>
         </div>
+        <p class="cover-picker-label" id="apLabel">Sleeve art</p>
+        <div class="cover-options" id="apOptions"></div>
       </div>
     `;
 
@@ -237,7 +244,7 @@ function openArtPicker(recordish, onPick) {
       if (!file) return;
       label.textContent = "Processing your photo…";
       try {
-        onPick({ customCover: await downscaleImage(file), coverMbid: null });
+        onPick({ customCover: await downscaleImage(file), coverMbid: null, coverRgid: null });
         dismissLayer();
       } catch (err) {
         label.textContent = err.message || "Couldn't use that image.";
@@ -245,48 +252,97 @@ function openArtPicker(recordish, onPick) {
     });
 
     const grid = overlay.querySelector("#apOptions");
-    const q = [recordish.creator, recordish.title].filter(Boolean).join(" ");
-    searchReleases(q, 12).then((releases) => {
-      const withArt = releases.filter((r) => r.mbid);
-      if (!withArt.length) {
-        grid.innerHTML = `<p class="cover-picker-note">No other pressings found for this record.</p>`;
-        return;
-      }
+    const searchBox = overlay.querySelector("#apSearch");
+    const searchBtn = overlay.querySelector("#apSearchBtn");
+    let run = 0;
+
+    /** Sleeves arrive slower than book covers — MusicBrainz first, then Cover
+     *  Art Archive redirecting out to archive.org. Grey boxes hold the shape so
+     *  the wait doesn't read as a broken screen. */
+    function showSkeletons(n = 8) {
       grid.innerHTML = "";
-      if (recordish.customCover || recordish.coverMbid) {
-        const reset = document.createElement("button");
-        reset.type = "button";
-        reset.className = "cover-option reset";
-        reset.innerHTML = `<span>Use the default</span>`;
-        reset.addEventListener("click", () => {
-          onPick({ customCover: null, coverMbid: null });
-          dismissLayer();
-        });
-        grid.appendChild(reset);
+      for (let i = 0; i < n; i++) {
+        const sk = document.createElement("div");
+        sk.className = "cover-option sleeve skeleton";
+        grid.appendChild(sk);
       }
-      withArt.forEach((r) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "cover-option sleeve";
-        const img = new Image();
-        img.alt = "";
-        img.addEventListener("load", () => btn.classList.add("loaded"));
-        img.addEventListener("error", () => btn.remove()); // Cover Art Archive 404s for pressings with no art
-        img.src = coverArtUrl(r.mbid, 250);
-        btn.appendChild(img);
-        if (r.year || r.edition) {
-          const cap = document.createElement("span");
-          cap.className = "cover-option-cap";
-          cap.textContent = [r.year, r.edition].filter(Boolean).join(" · ");
-          btn.appendChild(cap);
+    }
+
+    function load(free) {
+      const mine = ++run;
+      label.textContent = "Looking for sleeve art…";
+      showSkeletons();
+
+      const spec = free
+        ? { free }
+        : { title: recordish.title, creator: recordish.creator };
+
+      searchReleases(spec, 25).then((releases) => {
+        if (mine !== run) return;
+        const candidates = artCandidates(releases, 24);
+        grid.innerHTML = "";
+        if (!candidates.length) {
+          label.textContent = "Sleeve art";
+          grid.innerHTML = `<p class="cover-picker-note">Nothing found — try just the album name, or photograph your copy.</p>`;
+          return;
         }
-        btn.addEventListener("click", () => {
-          onPick({ customCover: null, coverMbid: r.mbid });
-          dismissLayer();
+        label.textContent = free ? `Results for “${free}”` : "Sleeve art";
+
+        if (recordish.customCover || recordish.coverMbid || recordish.coverRgid) {
+          const reset = document.createElement("button");
+          reset.type = "button";
+          reset.className = "cover-option reset";
+          reset.innerHTML = `<span>Use the default</span>`;
+          reset.addEventListener("click", () => {
+            onPick({ customCover: null, coverMbid: null, coverRgid: null });
+            dismissLayer();
+          });
+          grid.appendChild(reset);
+        }
+
+        candidates.forEach((r) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cover-option sleeve";
+          const img = new Image();
+          img.alt = "";
+          img.loading = "lazy";
+          img.addEventListener("load", () => btn.classList.add("loaded"));
+          img.addEventListener("error", () => btn.remove()); // no art filed for this one
+          img.src = coverArtUrl(r.artId, 250, r.artKind);
+          btn.appendChild(img);
+          const capText = r.artKind === "release-group"
+            ? [r.creator, "album art"].filter(Boolean).join(" · ")
+            : [r.year, r.edition, r.country].filter(Boolean).join(" · ");
+          if (capText) {
+            const cap = document.createElement("span");
+            cap.className = "cover-option-cap";
+            cap.textContent = capText;
+            btn.appendChild(cap);
+          }
+          btn.addEventListener("click", () => {
+            onPick(
+              r.artKind === "release-group"
+                ? { customCover: null, coverMbid: null, coverRgid: r.artId }
+                : { customCover: null, coverMbid: r.artId, coverRgid: null }
+            );
+            dismissLayer();
+          });
+          grid.appendChild(btn);
         });
-        grid.appendChild(btn);
       });
+    }
+
+    searchBtn.addEventListener("click", () => load(searchBox.value.trim()));
+    searchBox.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchBox.blur();
+        load(searchBox.value.trim());
+      }
     });
+
+    load(null);
   });
 }
 
@@ -473,9 +529,11 @@ function buildCard(rec, onTap) {
   }
   if (rec.rating) extra += `<div class="card-stars">${starsHtml(rec.rating)}</div>`;
 
+  // Always wrapped — see the note in books.js; the record icon's outer ring
+  // made the unsized version especially obvious.
   const inner = hasCover(rec)
     ? `<span class="swatch-emoji">${ICONS.lps}</span><img class="swatch-img" alt="">`
-    : ICONS.lps;
+    : `<span class="swatch-emoji">${ICONS.lps}</span>`;
 
   card.innerHTML = `
     <div class="item-swatch sleeve ${hasCover(rec) ? "shimmer" : ""}" style="background:${rec.color || "#eee"}">${inner}</div>
@@ -850,6 +908,31 @@ function borrowedBlockHtml(rec) {
   `;
 }
 
+
+/** Lets you correct the shelf after the fact. Moving out of Library discards
+ *  copies (and their loan history), so that direction asks twice. */
+function shelfSwitcherHtml(item, kindLabel) {
+  const current = shelfOf(item);
+  const opts = [
+    { key: "library", label: kindLabel === "record" ? "Collection" : "Library" },
+    { key: "wishlist", label: "Wishlist" },
+    { key: "borrowed", label: "Borrowed" },
+  ];
+  return `
+    <div class="field">
+      <label>Shelf</label>
+      <div class="destination-row three" id="shelfSwitch">
+        ${opts.map((o) => `
+          <button type="button" class="destination-btn ${current === o.key ? "active" : ""}" data-shelf-to="${o.key}">
+            <span class="destination-title">${o.label}</span>
+          </button>
+        `).join("")}
+      </div>
+      <p class="settings-status" id="shelfWarn"></p>
+    </div>
+  `;
+}
+
 function editHtml(rec) {
   const owned = isOwned(rec);
   return `
@@ -878,10 +961,11 @@ function editHtml(rec) {
       <label>Barcode</label>
       <input type="text" id="f-barcode" inputmode="numeric" value="${escapeHtml(rec.barcode || "")}">
     </div>
+    ${shelfSwitcherHtml(rec, "record")}
     <div class="field">
       <label>Sleeve art</label>
       <button class="btn btn-secondary" id="changeArtBtn" type="button" style="margin-top:0;">
-        ${rec.customCover ? "Change art (using your photo)" : rec.coverMbid ? "Change art (using a picked pressing)" : "Change art"}
+        ${rec.customCover ? "Change art (using your photo)" : (rec.coverMbid || rec.coverRgid) ? "Change art (using picked art)" : "Change art"}
       </button>
     </div>
     ${!owned ? `
@@ -1130,7 +1214,53 @@ function wireBorrowed(sheet, rec, store, container) {
   }
 }
 
+
+/** Applies a shelf change, warning first when it would throw data away. */
+function wireShelfSwitcher(sheet, item, store, container, kindLabel) {
+  const row = sheet.querySelector("#shelfSwitch");
+  if (!row) return;
+  const warn = sheet.querySelector("#shelfWarn");
+  let armedFor = null;
+
+  row.querySelectorAll("[data-shelf-to]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const to = btn.dataset.shelfTo;
+      const from = shelfOf(item);
+      if (to === from) return;
+
+      const copies = item.copies || [];
+      const losesHistory =
+        from === "library" && copies.some((c) => c.currentLoan || (c.history || []).length);
+
+      if (losesHistory && armedFor !== to) {
+        armedFor = to;
+        warn.textContent = `This drops ${copies.length} cop${copies.length === 1 ? "y" : "ies"} and their loan history. Tap again to confirm.`;
+        warn.className = "settings-status bad";
+        return;
+      }
+
+      const patch = { copies: [], borrowed: null, price: null, priceCheckedDate: null };
+      if (to === "library") {
+        patch.copies = copies.length
+          ? copies
+          : [{ id: uid(), acquiredDate: today(), condition: null, currentLoan: null, history: [] }];
+        patch.borrowed = null;
+      } else if (to === "borrowed") {
+        // Keep any earlier borrow record rather than wiping who lent it to you.
+        patch.borrowed = item.borrowed || { from: null, borrowedDate: today(), returnedDate: null };
+      } else {
+        patch.price = item.price ?? null;
+        patch.priceCheckedDate = item.priceCheckedDate ?? null;
+      }
+
+      store.updateItem(item.id, patch);
+      refreshDetail(store, container, item.id, { mode: "edit" });
+    });
+  });
+}
+
 function wireEdit(sheet, rec, store, container) {
+  wireShelfSwitcher(sheet, rec, store, container, "record");
   const artBtn = sheet.querySelector("#changeArtBtn");
   if (artBtn) {
     artBtn.addEventListener("click", () => {
@@ -1384,8 +1514,13 @@ function openAddForm(store, container, prefill = {}) {
         <input type="text" id="a-borrow-from" placeholder="Who lent it to you?">
       </div>
 
-      <div id="addArtBlock" class="${prefill.mbid ? "" : "hidden"}">
-        ${coverBlockHtml({ mbid: prefill.mbid, color: "#eee" })}
+      <div class="field">
+        <label>Sleeve art</label>
+        <div id="addArtPreview" class="${prefill.mbid || prefill.rgid ? "" : "hidden"}">
+          ${coverBlockHtml({ mbid: prefill.mbid, rgid: prefill.rgid, color: "#eee" })}
+        </div>
+        <button class="btn btn-secondary" id="addChooseArtBtn" type="button" style="margin-top:0;">Choose sleeve art</button>
+        <p class="field-hint">Search the archive, or photograph your own copy.</p>
       </div>
 
       <div class="field">
@@ -1418,7 +1553,7 @@ function openAddForm(store, container, prefill = {}) {
       </div>
     `;
 
-    const artBlock = sheet.querySelector("#addArtBlock");
+    const artBlock = sheet.querySelector("#addArtPreview");
     const titleInput = sheet.querySelector("#a-title");
     const creatorInput = sheet.querySelector("#a-creator");
     const yearInput = sheet.querySelector("#a-year");
@@ -1430,8 +1565,32 @@ function openAddForm(store, container, prefill = {}) {
     const borrowField = sheet.querySelector("#a-borrow-field");
     const saveBtn = sheet.querySelector("#addSaveBtn");
 
-    let picked = { customCover: null, coverMbid: prefill.mbid || null };
-    if (prefill.mbid) wireCover(sheet, { mbid: prefill.mbid });
+    let picked = {
+      customCover: null,
+      coverMbid: prefill.mbid || null,
+      coverRgid: prefill.rgid || null,
+    };
+    if (prefill.mbid || prefill.rgid) wireCover(sheet, { mbid: prefill.mbid, rgid: prefill.rgid });
+
+    // Repaints the little preview from whatever art is currently picked.
+    function repaintArt() {
+      const shape = { ...picked, color: "#eee" };
+      artBlock.classList.toggle("hidden", !hasCover(shape));
+      artBlock.innerHTML = coverBlockHtml(shape);
+      wireCover(sheet, shape);
+    }
+
+    // Always offered, whether or not a barcode was scanned — you can add a
+    // record by hand and still give it a sleeve.
+    sheet.querySelector("#addChooseArtBtn").addEventListener("click", () => {
+      openArtPicker(
+        { title: titleInput.value.trim(), creator: creatorInput.value.trim(), ...picked },
+        (pick) => {
+          picked = { ...picked, ...pick };
+          repaintArt();
+        }
+      );
+    });
 
     let destination = "library";
     sheet.querySelectorAll(".destination-btn").forEach((btn) => {
@@ -1468,11 +1627,11 @@ function openAddForm(store, container, prefill = {}) {
       if (!creatorInput.value.trim() && meta.creator) creatorInput.value = meta.creator;
       if (!yearInput.value.trim() && meta.year) yearInput.value = meta.year;
       if (!editionInput.value.trim() && meta.edition) editionInput.value = meta.edition;
-      if (meta.mbid) {
-        picked = { customCover: null, coverMbid: meta.mbid };
-        artBlock.classList.remove("hidden");
-        artBlock.innerHTML = coverBlockHtml({ mbid: meta.mbid, color: "#eee" });
-        wireCover(sheet, { mbid: meta.mbid });
+      if ((meta.mbid || meta.rgid) && !picked.customCover) {
+        // Prefer the album's canonical art over this one pressing's — far more
+        // releases have group art filed than have their own.
+        picked = { customCover: null, coverMbid: meta.mbid || null, coverRgid: meta.rgid || null };
+        repaintArt();
       }
       status.textContent = `Found: ${meta.title}${meta.creator ? " · " + meta.creator : ""}`;
     });
@@ -1492,6 +1651,7 @@ function openAddForm(store, container, prefill = {}) {
         barcode: barcodeInput.value.trim() || null,
         customCover: picked.customCover,
         coverMbid: picked.coverMbid,
+        coverRgid: picked.coverRgid,
         price,
         priceCheckedDate: price != null ? today() : null,
         color: randomColor(),

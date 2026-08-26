@@ -119,6 +119,10 @@ html, body {
 .view {
   flex: 1;
   overflow-y: auto;
+  /* Belt and braces: one over-wide element should never let the whole screen
+     pan sideways. Rows that scroll horizontally on purpose (.filter-row, the
+     author chips) carry their own overflow and still work inside this. */
+  overflow-x: hidden;
   padding: 4px 20px 40px;
   /* -webkit-overflow-scrolling: touch is intentionally omitted — combined with
      the animated, shadowed cards below it's a known trigger for a Safari
@@ -166,7 +170,12 @@ html, body {
 /* ---------- item card ---------- */
 .card-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  /* minmax(0, 1fr), NOT 1fr. A bare 1fr means minmax(auto, 1fr), and that auto
+     floor grows to the widest card's min-content — which, because .item-title
+     is nowrap, is the full untruncated title. One long album name was enough to
+     push every card ~200px off the right edge. Pinning the floor to 0 lets the
+     title ellipsize instead of dragging the row with it. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -261,6 +270,16 @@ html, body {
   margin-top: 6px;
   opacity: 0.75;
   font-weight: 600;
+  /* One line, like the title. A long edition string used to wrap and make that
+     one card taller than its neighbours; the full text is in the detail sheet. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-creator {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .price-tag {
@@ -515,6 +534,10 @@ html, body {
 }
 .search-input {
   flex: 1;
+  /* An <input> has an intrinsic width of ~20 characters, and a flex item's
+     default min-width:auto refuses to shrink below it — which pushed the scan
+     button off the right edge on a 320px phone. */
+  min-width: 0;
   padding: 11px 16px;
   border-radius: 14px;
   border: var(--border-w) solid var(--ink);
@@ -1419,6 +1442,55 @@ html, body {
 }
 .cover-picker-note { font-size: 13px; opacity: 0.6; margin: 0; }
 
+/* Escape hatch: when the catalogued title isn't what's printed on the thing in
+   your hands, type what is. */
+.picker-search {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.picker-search input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 11px 12px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  -webkit-appearance: none;
+}
+.picker-search input:focus {
+  outline: none;
+  box-shadow: 1px 1px 0 var(--ink);
+  transform: translate(2px, 2px);
+}
+.picker-search .btn {
+  margin: 0;
+  flex-shrink: 0;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Placeholder tiles so the grid has its final shape while the network is out —
+   the sheet settles once instead of jumping when results land. */
+.cover-option.skeleton {
+  background: linear-gradient(100deg, #ECECF2 30%, #F7F7FB 50%, #ECECF2 70%);
+  background-size: 300% 100%;
+  animation: skeleton-slide 1.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes skeleton-slide {
+  from { background-position: 150% 0; }
+  to   { background-position: -50% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cover-option.skeleton { animation: none; }
+}
+
 .cover-options {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
@@ -1689,3 +1761,7 @@ html, body {
   color: #fff;
   text-align: left;
 }
+
+/* Defensive: any icon dropped straight into a swatch stays inset rather than
+   growing to fill it and colliding with the border. */
+.item-swatch > svg { width: 26px; height: 26px; display: block; }
