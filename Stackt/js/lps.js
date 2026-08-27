@@ -12,12 +12,14 @@
 //     fields. "Blue Note · BST 84003" is how you'd say it out loud.
 // ============================================
 
-import { openModal, updateModal, dismissLayer, openOverlay, escapeHtml } from "./ui.js";
+import { openModal, updateModal, dismissLayer, openOverlay, escapeHtml, makeClearable, debounce, wireDateField } from "./ui.js";
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner } from "./barcode.js";
 import { lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl } from "./music.js";
 import { ICONS } from "./icons.js";
+import { createSorter, collator, yearValue, openSortSheet } from "./sorting.js";
+import { openShareSheet } from "./share.js";
 
 const CONDITIONS = [
   { key: "mint", label: "Mint", short: "M" },
@@ -118,8 +120,62 @@ function getRecords(store) {
       ? list.filter(hasLoan)
       : list.filter((r) => (r.copies || []).some((c) => c.condition === activeFilter));
   }
-  return list;
+  return sorter.sort(list);
 }
+
+// ---------- sorting ----------
+
+const SORT_CRITERIA = [
+  { key: "title", label: "Album", asc: "A–Z", desc: "Z–A", note: "Default" },
+  {
+    key: "creator", label: "Artist", asc: "A–Z", desc: "Z–A",
+    value: (r) => r.creator || null,
+    compare: (x, y) => collator.compare(x, y),
+  },
+  {
+    key: "added", label: "Date added", asc: "newest first", desc: "oldest first",
+    value: (r) => r.addedDate || null,
+    compare: (x, y) => (x < y ? 1 : x > y ? -1 : 0),
+    describe: (r) => (r.addedDate ? `Added ${fmtDate(r.addedDate)}` : ""),
+  },
+  {
+    key: "year", label: "Year", asc: "oldest first", desc: "newest first",
+    value: yearValue,
+    compare: (x, y) => x - y,
+    describe: (r) => (r.year ? `Released ${r.year}` : ""),
+  },
+  {
+    key: "rating", label: "Rating", asc: "highest first", desc: "lowest first",
+    value: (r) => r.rating || null,
+    compare: (x, y) => y - x,
+    describe: (r) => (r.rating ? `${r.rating}/5` : ""),
+  },
+  {
+    key: "condition", label: "Condition", asc: "best first", desc: "roughest first",
+    // CONDITIONS is already ordered mint -> good, so its index IS the grade.
+    value: (r) => {
+      const best = bestCondition(r);
+      if (!best) return null;
+      return CONDITIONS.findIndex((c) => c.key === best);
+    },
+    compare: (x, y) => x - y,
+    describe: (r) => {
+      const best = bestCondition(r);
+      return best ? CONDITION_LABELS[best] : "";
+    },
+  },
+];
+
+const sorter = createSorter(SORT_CRITERIA, "title");
+
+function openRecordSortSheet(store, container) {
+  openSortSheet(
+    sorter,
+    () => render(container, store),
+    "Records with nothing to sort on — no year, no condition, unrated — go to the end either way."
+  );
+}
+
 
 // ---------- covers ----------
 
@@ -253,6 +309,7 @@ function openArtPicker(recordish, onPick) {
 
     const grid = overlay.querySelector("#apOptions");
     const searchBox = overlay.querySelector("#apSearch");
+    makeClearable(searchBox, () => load(null));
     const searchBtn = overlay.querySelector("#apSearchBtn");
     let run = 0;
 
@@ -355,9 +412,93 @@ function openArtPicker(recordish, onPick) {
   });
 }
 
+// ---------- share ----------
+
+function recordShelfLabel(rec) {
+  const kind = shelfOf(rec);
+  if (kind === "wishlist") return "On my wishlist";
+  if (kind === "borrowed") return stillHolding(rec) ? "Borrowed" : "Returned";
+  const cond = bestCondition(rec);
+  return cond ? CONDITION_LABELS[cond] : "In my collection";
+}
+
+function shareCardsForRecord(rec) {
+  const cards = [
+    {
+      key: "item", label: "This record", sub: "Sleeve, rating, dates",
+      type: "item",
+      data: { item: rec, coverSrc: recordCoverSrc(rec, 500), kindLabel: recordShelfLabel(rec) },
+    },
+  ];
+  if (rec.review && rec.review.trim()) {
+    cards.push({
+      key: "review", label: "My notes", sub: "What you wrote",
+      type: "review",
+      data: { item: rec, coverSrc: recordCoverSrc(rec, 500) },
+    });
+  }
+  return cards;
+}
+
+function shareCardsForShelf(store) {
+  const list = getRecords(store);
+  const all = store.itemsByType("lp");
+  const owned = all.filter(isOwned);
+  const rated = owned.filter((r) => r.rating);
+
+  const shelfName =
+    shelf === "wishlist" ? "My wishlist"
+    : shelf === "borrowed" ? "Records I've borrowed"
+    : "My record collection";
+
+  const artistCounts = {};
+  owned.forEach((r) => {
+    const n = r.creator || "Unknown";
+    artistCounts[n] = (artistCounts[n] || 0) + 1;
+  });
+  const topArtist = Object.keys(artistCounts).sort((a, b) => artistCounts[b] - artistCounts[a])[0];
+
+  const years = owned.map(yearValue).filter((y) => y != null);
+  const oldest = years.length ? Math.min(...years) : null;
+
+  const stats = [
+    { value: owned.length, label: "records owned" },
+    ...(topArtist ? [{ value: artistCounts[topArtist], label: `by ${topArtist}`.slice(0, 42) }] : []),
+    ...(oldest ? [{ value: oldest, label: "oldest pressing" }] : []),
+    ...(rated.length
+      ? [{
+          value: (rated.reduce((n, r) => n + r.rating, 0) / rated.length).toFixed(1),
+          label: "average rating",
+        }]
+      : []),
+  ];
+
+  return [
+    {
+      key: "grid", label: "My shelf", sub: "A wall of sleeves",
+      type: "grid",
+      data: {
+        items: list,
+        coverSrcs: list.map((r) => recordCoverSrc(r, 500)),
+        title: shelfName,
+        subtitle: `${list.length} record${list.length === 1 ? "" : "s"}`,
+      },
+    },
+    {
+      key: "stats", label: "My numbers", sub: "No sleeves, just stats",
+      type: "stats",
+      data: { title: "My collection", stats, accent: "#8B5CF6" },
+    },
+  ];
+}
+
 // ---------- main render ----------
 
-function render(container, store) {
+/** `opts` is only passed by the router, so its presence means the module was
+ *  just opened from the menu rather than redrawn in place. */
+function render(container, store, opts) {
+  if (opts !== undefined) sorter.reset();
+
   const wrap = document.createElement("div");
 
   const SHELF_TABS = { library: "Collection", wishlist: "Wishlist", borrowed: "Borrowed" };
@@ -383,10 +524,19 @@ function render(container, store) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search album, artist or edition..." value="${escapeHtml(searchQuery)}">
+    <button class="icon-btn" id="shareBtn" type="button" aria-label="Share my collection">${ICONS.share}</button>
+    <button class="icon-btn ${sorter.isDefault ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
     <button class="icon-btn ${groupByArtist ? "on" : ""}" id="artistBtn" type="button" aria-label="Group by artist" aria-pressed="${groupByArtist}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
+
+  if (!sorter.isDefault && !groupByArtist) {
+    const note = document.createElement("p");
+    note.className = "sort-note";
+    note.textContent = `Sorted by ${sorter.label()}`;
+    wrap.appendChild(note);
+  }
 
   if (!artistFilter) {
     const modeToggle = document.createElement("div");
@@ -403,11 +553,26 @@ function render(container, store) {
   container.innerHTML = "";
   container.appendChild(wrap);
 
-  wrap.querySelector("#searchInput").addEventListener("input", (e) => {
+  // Rebuilding every card (and restarting every cover fetch) on each keystroke
+  // is what made typing feel sticky; the caret survived, but the main thread
+  // didn't. Debounced, so the list catches up once you pause.
+  const searchInput = wrap.querySelector("#searchInput");
+  const runSearch = debounce(() => renderBody(bodyHolder, store, container), 180);
+  searchInput.addEventListener("input", (e) => {
     searchQuery = e.target.value;
-    renderBody(bodyHolder, store, container);
+    runSearch();
   });
+  makeClearable(searchInput);
   wrap.querySelector("#scanBtn").addEventListener("click", () => openScanModal(store, container));
+  wrap.querySelector("#sortBtn").addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    openRecordSortSheet(store, container);
+  });
+
+  wrap.querySelector("#shareBtn").addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    openShareSheet(shareCardsForShelf(store), { filename: "stackt-records" });
+  });
   wrap.querySelector("#artistBtn").addEventListener("click", (e) => {
     bounceTap(e.currentTarget);
     groupByArtist = !groupByArtist;
@@ -518,6 +683,8 @@ function buildCard(rec, onTap) {
         : `<span class="status-pill status-to-read">Wishlist</span>`;
 
   let extra = "";
+  const sub = sorter.describe(rec);
+  if (sub) extra += `<div class="lent-note">${escapeHtml(sub)}</div>`;
   const meta = [rec.year, rec.edition].filter(Boolean).join(" · ");
   if (meta) extra += `<div class="lent-note">${escapeHtml(meta)}</div>`;
   if ((rec.copies || []).length > 1) extra += `<div class="lent-note">${rec.copies.length} copies</div>`;
@@ -607,6 +774,7 @@ function renderArtistList(bodyHolder, store, container) {
     btn.addEventListener("click", () => {
       bounceTap(btn);
       artistFilter = name;
+      sorter.reset(); // drilling into an artist starts alphabetical too
       render(container, store);
     });
     grid.appendChild(btn);
@@ -754,6 +922,7 @@ function viewHtml(rec, opts) {
     ${opts.foundViaScan ? `<div class="found-banner"><span>Already in your collection</span></div>` : ""}
     <div class="detail-top-row">
       <h2>${escapeHtml(rec.title)}</h2>
+      <button class="icon-btn detail-share" id="shareItemBtn" type="button" aria-label="Share this record">${ICONS.share}</button>
       <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.edit}</span>Edit</button>
     </div>
     ${hasCover(rec) ? `
@@ -997,6 +1166,16 @@ function editHtml(rec) {
 function wireView(sheet, rec, store, container, opts = {}) {
   wireCover(sheet, rec);
 
+  const shareItemBtn = sheet.querySelector("#shareItemBtn");
+  if (shareItemBtn) {
+    shareItemBtn.addEventListener("click", () => {
+      bounceTap(shareItemBtn);
+      openShareSheet(shareCardsForRecord(rec), {
+        filename: `stackt-${(rec.title || "record").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`,
+      });
+    });
+  }
+
   const tap = sheet.querySelector("#coverTapTarget");
   if (tap) tap.addEventListener("click", () => openSleeveLightbox(rec));
 
@@ -1057,9 +1236,9 @@ function wireCopies(sheet, rec, store, container, opts) {
     }
 
     const acquired = row.querySelector(".copy-acquired");
-    if (acquired) {
-      acquired.addEventListener("change", () => patchCopies((cc) => ({ ...cc, acquiredDate: acquired.value || null })));
-    }
+    wireDateField(acquired, () =>
+      patchCopies((cc) => ({ ...cc, acquiredDate: acquired.value || null }))
+    );
 
     const inlineForm = row.querySelector(".lend-inline-form");
     const lendBtn = row.querySelector(".lend-trigger");
@@ -1086,8 +1265,7 @@ function wireCopies(sheet, rec, store, container, opts) {
     const loanWho = row.querySelector(".loan-who");
     const loanStart = row.querySelector(".loan-start");
     [loanWho, loanStart].forEach((input) => {
-      if (!input) return;
-      input.addEventListener("change", () => {
+      wireDateField(input, () => {
         patchCopies((cc) => ({
           ...cc,
           currentLoan: {
@@ -1110,11 +1288,9 @@ function wireCopies(sheet, rec, store, container, opts) {
     };
 
     const loanReturned = row.querySelector(".loan-returned");
-    if (loanReturned) {
-      loanReturned.addEventListener("change", () => {
-        if (loanReturned.value) closeLoanWith(loanReturned.value);
-      });
-    }
+    wireDateField(loanReturned, () => {
+      if (loanReturned.value) closeLoanWith(loanReturned.value);
+    });
     const returnBtn = row.querySelector(".return-trigger");
     if (returnBtn && !returnBtn.id) returnBtn.addEventListener("click", () => closeLoanWith(today()));
 
@@ -1146,7 +1322,10 @@ function wireReview(sheet, rec, store, container) {
     edit.hidden = !opening;
     read.hidden = opening;
     editBtn.classList.toggle("open", opening);
-    if (opening) paint();
+    if (opening) {
+      paint();
+      makeClearable(edit.querySelector("#reviewInput"));
+    }
   });
 
   edit.querySelectorAll(".star-btn").forEach((b) => {
@@ -1183,8 +1362,7 @@ function wireBorrowed(sheet, rec, store, container) {
     });
     ["#b-from", "#b-start", "#b-returned"].forEach((sel) => {
       const input = sheet.querySelector(sel);
-      if (!input) return;
-      input.addEventListener("change", () => {
+      wireDateField(input, () => {
         store.updateItem(rec.id, {
           borrowed: {
             ...rec.borrowed,
@@ -1270,6 +1448,9 @@ function wireShelfSwitcher(sheet, item, store, container, kindLabel) {
 
 function wireEdit(sheet, rec, store, container) {
   wireShelfSwitcher(sheet, rec, store, container, "record");
+  ["#f-title", "#f-creator", "#f-edition"].forEach((sel) =>
+    makeClearable(sheet.querySelector(sel))
+  );
   const artBtn = sheet.querySelector("#changeArtBtn");
   if (artBtn) {
     artBtn.addEventListener("click", () => {
@@ -1565,6 +1746,7 @@ function openAddForm(store, container, prefill = {}) {
     const artBlock = sheet.querySelector("#addArtPreview");
     const titleInput = sheet.querySelector("#a-title");
     const creatorInput = sheet.querySelector("#a-creator");
+    [titleInput, creatorInput].forEach((el) => makeClearable(el));
     const yearInput = sheet.querySelector("#a-year");
     const editionInput = sheet.querySelector("#a-edition");
     const barcodeInput = sheet.querySelector("#a-barcode");

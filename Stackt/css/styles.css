@@ -210,6 +210,12 @@ html, body {
   font-size: 22px;
   position: relative;
   overflow: hidden;
+  /* Its own stacking + compositing context. The cards above are permanently
+     transformed and will-change'd, and WebKit intermittently gives up clipping
+     a rounded overflow:hidden box inside such a layer — which is what let the
+     swatch's background colour show through at the corners of a sleeve. */
+  isolation: isolate;
+  transform: translateZ(0);
 }
 .swatch-emoji {
   position: relative;
@@ -224,11 +230,15 @@ html, body {
 .swatch-emoji.hidden { opacity: 0; }
 .swatch-img {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  /* `cover` fills the swatch edge to edge — no empty letterbox bars.
-     The uncropped cover is one tap away in the lightbox. */
+  /* Deliberately over-filled by a pixel on each side, and rounding its OWN
+     corners rather than trusting the parent to clip them. Between them these
+     mean a corner that Safari clips at the wrong radius shows more artwork
+     instead of a wedge of the background colour. Cropping a hair more is fine —
+     the uncropped cover is one tap away in the lightbox. */
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  border-radius: inherit;
   object-fit: cover;
   opacity: 0;
   transition: opacity .35s ease;
@@ -487,7 +497,7 @@ html, body {
   padding: 12px 14px;
   border-radius: 14px;
   border: var(--border-w) solid var(--ink);
-  font-size: 15px;
+  font-size: 16px;
   font-family: inherit;
   background: #fff;
 }
@@ -541,7 +551,7 @@ html, body {
   padding: 11px 16px;
   border-radius: 14px;
   border: var(--border-w) solid var(--ink);
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   background: #fff;
 }
@@ -711,7 +721,7 @@ html, body {
   padding: 9px 12px;
   border-radius: 10px;
   border: 2px solid var(--ink);
-  font-size: 13px;
+  font-size: 16px;
   font-family: inherit;
 }
 .add-copy-btn {
@@ -1048,7 +1058,7 @@ html, body {
   padding: 9px 10px;
   border-radius: 10px;
   border: 2px solid var(--ink);
-  font-size: 13px;
+  font-size: 16px;
   font-family: inherit;
   font-weight: 700;
   background: #fff;
@@ -1293,7 +1303,7 @@ html, body {
   width: 100%;
   resize: vertical;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
   padding: 10px 12px;
   border-radius: 12px;
@@ -1456,7 +1466,7 @@ html, body {
   flex: 1;
   min-width: 0;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   padding: 11px 12px;
   border: var(--border-w) solid var(--ink);
@@ -1813,14 +1823,29 @@ html, body {
 }
 .sort-option:active { transform: scale(0.97); }
 .sort-option.active { background: var(--yellow); box-shadow: 3px 3px 0 var(--ink); }
+.sort-option-side {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
 .sort-option-note {
   font-size: 10.5px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   opacity: 0.5;
-  flex-shrink: 0;
 }
+/* One arrow, flipped. Which way it points IS the direction indicator, so the
+   active row never needs a second label to explain itself. */
+.sort-arrow {
+  width: 15px;
+  height: 15px;
+  display: block;
+  transition: transform .18s var(--spring);
+}
+.sort-arrow svg { width: 100%; height: 100%; display: block; }
+.sort-arrow.desc { transform: rotate(180deg); }
 
 /* ---------- edition chooser ---------- */
 
@@ -1880,3 +1905,110 @@ html, body {
   opacity: 0.6;
   margin: -10px 0 14px;
 }
+
+/* ---------- clearable text fields ---------- */
+
+/* The × lives inside the field's right edge. iOS Safari never renders the
+   native type="search" clear button, so this is ours. */
+.input-wrap { position: relative; display: flex; align-items: stretch; }
+.input-wrap > input { flex: 1; min-width: 0; }
+.input-wrap.has-value > input { padding-right: 40px; }
+
+.input-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  padding: 6px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(26, 26, 46, 0.1);
+  color: var(--ink);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.input-wrap.has-value > .input-clear { display: flex; }
+.input-clear svg { width: 100%; height: 100%; display: block; }
+.input-clear:active { background: rgba(26, 26, 46, 0.22); }
+
+/* The search row's field is itself a flex child, so its wrapper has to carry
+   the flex rather than sitting inside it as a fixed-width block. */
+.search-row .input-wrap { flex: 1; min-width: 0; }
+.picker-search .input-wrap { flex: 1; min-width: 0; }
+
+/* A textarea's × belongs at the top, not floating over the middle of the text. */
+.input-wrap.textarea { display: block; }
+.input-wrap.textarea > .input-clear { top: 10px; transform: none; }
+
+/* ---------- share sheet ---------- */
+
+.share-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.share-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  border: var(--border-w) solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s var(--spring), background .15s;
+}
+.share-type:active { transform: scale(0.97); }
+.share-type.active { background: var(--mint); box-shadow: 3px 3px 0 var(--ink); }
+.share-type-label { font-weight: 800; font-size: 13.5px; line-height: 1.2; }
+.share-type-sub { font-size: 11px; font-weight: 600; opacity: 0.6; }
+
+/* The canvas is 1080px wide; it's scaled to fit here purely for preview. */
+.share-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  margin-bottom: 12px;
+}
+.share-canvas {
+  max-width: 100%;
+  max-height: 46vh;
+  height: auto;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 var(--ink);
+  display: block;
+}
+.share-spinner {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.55;
+  padding: 40px 0;
+}
+.share-status { font-size: 12.5px; font-weight: 600; margin: 0 0 14px; min-height: 1em; }
+.share-status.bad { color: var(--red-accent); }
+.share-status.good { color: var(--ink); }
+
+.share-photo-btn.has-photo { background: var(--yellow); }
+
+/* The share button sits beside Edit on a detail sheet — smaller than the
+   header ones, since it's a secondary action next to a labelled button. */
+.detail-top-row .detail-share {
+  width: 38px;
+  height: 38px;
+  padding: 8px;
+  box-shadow: 3px 3px 0 var(--ink);
+  align-self: flex-start;
+  margin-left: auto;
+}
+.detail-top-row .edit-toggle-btn { margin-left: 0; }

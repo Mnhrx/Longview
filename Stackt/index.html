@@ -2,7 +2,10 @@
 <html lang="en" class="splash-up">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<!-- No maximum-scale/user-scalable: iOS has ignored both since iOS 10, and on
+       browsers that honour them they block pinch-zoom. The real cure for the
+       focus-zoom is 16px inputs, which css/styles.css now guarantees. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Stackt</title>
 
 <!-- iOS / Android home-screen app behavior -->

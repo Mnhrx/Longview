@@ -238,6 +238,91 @@ export function closeModal() {
   dismissLayer();
 }
 
+// ---------- input ergonomics ----------
+
+const CLEAR_ICON =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round">` +
+  `<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>`;
+
+/**
+ * Adds a clear (×) button inside a text field.
+ *
+ * Wraps the input in place, so callers keep their existing querySelector and
+ * their own listeners — nothing else has to know this happened. iOS Safari
+ * never renders the native type="search" clear button, which is why this
+ * exists at all. `onClear` fires after the field is emptied.
+ */
+export function makeClearable(input, onClear = null) {
+  if (!input || input.dataset.clearable) return input;
+  input.dataset.clearable = "1";
+
+  const wrap = document.createElement("span");
+  wrap.className = "input-wrap" + (input.tagName === "TEXTAREA" ? " textarea" : "");
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "input-clear";
+  btn.setAttribute("aria-label", "Clear");
+  btn.innerHTML = CLEAR_ICON;
+  wrap.appendChild(btn);
+
+  const sync = () => wrap.classList.toggle("has-value", !!input.value);
+  sync();
+  input.addEventListener("input", sync);
+  input.addEventListener("change", sync);
+
+  // pointerdown, not click: click blurs the field first, which closes the
+  // keyboard and makes "clear it and keep typing" two taps instead of one.
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    input.value = "";
+    sync();
+    input.focus();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    if (onClear) onClear();
+  });
+
+  return input;
+}
+
+/** Trailing debounce — stops every keystroke rebuilding a whole list. */
+export function debounce(fn, ms = 180) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+/**
+ * Wires a date field so it commits when you're DONE, not mid-spin.
+ *
+ * iOS fires `change` on every wheel nudge of an <input type="date">, so
+ * committing there re-rendered the sheet, tore the live input out of the DOM
+ * and closed the picker under your finger — once per field you wanted to
+ * change. Committing on blur instead lets day, month and year all be set in
+ * one visit. `commit(value)` only runs when the value actually changed.
+ */
+export function wireDateField(input, commit) {
+  if (!input) return;
+  let committed = input.value;
+
+  const flush = () => {
+    if (input.value === committed) return;
+    committed = input.value;
+    commit(input.value);
+  };
+
+  input.addEventListener("blur", flush);
+  // Desktop pickers and programmatic sets can change the value without the
+  // field ever holding focus; those still need to land.
+  input.addEventListener("change", () => {
+    if (document.activeElement !== input) flush();
+  });
+}
+
 export function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")

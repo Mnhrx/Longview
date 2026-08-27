@@ -4,11 +4,13 @@
 // barcode scanner with a view/edit split on the detail screen.
 // ============================================
 
-import { openModal, updateModal, closeModal, dismissLayer, openOverlay, escapeHtml } from "./ui.js";
+import { openModal, updateModal, closeModal, dismissLayer, openOverlay, escapeHtml, makeClearable, debounce, wireDateField } from "./ui.js";
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl, coverIdUrl, findCoverOptions } from "./barcode.js";
 import { ICONS } from "./icons.js";
+import { createSorter, collator, yearValue, titleSortKey, openSortSheet } from "./sorting.js";
+import { openShareSheet } from "./share.js";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -140,85 +142,50 @@ function getBooks(store) {
 
 // ---------- sorting ----------
 
-const SORTS = [
-  { key: "title", label: "Title A–Z", note: "Default" },
-  { key: "author", label: "Author A–Z" },
-  { key: "recent", label: "Recently added" },
-  { key: "added", label: "First added" },
-  { key: "oldest", label: "Oldest published" },
-  { key: "longest", label: "Longest to read" },
+const SORT_CRITERIA = [
+  { key: "title", label: "Title", asc: "A–Z", desc: "Z–A", note: "Default" },
+  {
+    key: "author", label: "Author", asc: "A–Z", desc: "Z–A",
+    value: (b) => b.creator || null,
+    compare: (x, y) => collator.compare(x, y),
+  },
+  {
+    key: "added", label: "Date added", asc: "newest first", desc: "oldest first",
+    value: (b) => b.addedDate || null,
+    compare: (x, y) => (x < y ? 1 : x > y ? -1 : 0), // newest first by default
+    describe: (b) => (b.addedDate ? `Added ${fmtDate(b.addedDate)}` : ""),
+  },
+  {
+    key: "year", label: "Year published", asc: "oldest first", desc: "newest first",
+    value: yearValue,
+    compare: (x, y) => x - y,
+    describe: (b) => (b.year ? `Published ${b.year}` : ""),
+  },
+  {
+    key: "longest", label: "Time to read", asc: "longest first", desc: "quickest first",
+    value: readingDays,
+    compare: (x, y) => y - x,
+    describe: (b) => {
+      const d = readingDays(b);
+      return d == null ? "" : `Took ${daysLabel(d)}`;
+    },
+  },
+  {
+    key: "rating", label: "Rating", asc: "highest first", desc: "lowest first",
+    value: (b) => b.rating || null,
+    compare: (x, y) => y - x,
+    describe: (b) => (b.rating ? `${b.rating}/5` : ""),
+  },
 ];
-let sortBy = "title";
 
-// Locale-aware and case-insensitive, so "émile" files next to "Emile" and
-// "Book 2" comes before "Book 10".
-const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
-
-/** Drops a leading article, so The Hobbit files under H the way a shelf would. */
-function titleSortKey(book) {
-  return String(book.title || "").replace(/^(the|a|an)\s+/i, "").trim();
-}
+const sorter = createSorter(SORT_CRITERIA, "title");
 
 function readingDays(book) {
   return daysBetween(book.startedDate, book.finishedDate);
 }
 
-/**
- * Sorts a list by the current choice. Books missing whatever the sort needs —
- * no publication year, never finished — collect at the END in title order,
- * rather than scattering through the middle where they look like mistakes.
- */
 function sortBooks(list) {
-  const byTitle = (a, b) => collator.compare(titleSortKey(a), titleSortKey(b));
-
-  const nullsLast = (valueOf, compare) => (a, b) => {
-    const av = valueOf(a);
-    const bv = valueOf(b);
-    if (av == null && bv == null) return byTitle(a, b);
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return compare(av, bv) || byTitle(a, b);
-  };
-  const asc = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
-  const desc = (x, y) => -asc(x, y);
-  const addedOf = (b) => b.addedDate || null;
-  const yearOf = (b) => {
-    const n = parseInt(b.year, 10);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  const arr = [...list];
-  switch (sortBy) {
-    case "author":
-      return arr.sort(
-        (a, b) => collator.compare(a.creator || "￿", b.creator || "￿") || byTitle(a, b)
-      );
-    case "recent":
-      return arr.sort(nullsLast(addedOf, desc));
-    case "added":
-      return arr.sort(nullsLast(addedOf, asc));
-    case "oldest":
-      return arr.sort(nullsLast(yearOf, (x, y) => x - y));
-    case "longest":
-      return arr.sort(nullsLast(readingDays, (x, y) => y - x));
-    default:
-      return arr.sort(byTitle);
-  }
-}
-
-/** One line of context under the title explaining what the current sort is
- *  ordering by — otherwise "Oldest published" looks identical to A–Z for any
- *  book that happens to have no year. */
-function sortSubtitle(book) {
-  if (sortBy === "oldest" && book.year) return `Published ${book.year}`;
-  if (sortBy === "longest") {
-    const d = readingDays(book);
-    if (d != null) return `Took ${daysLabel(d)}`;
-  }
-  if ((sortBy === "recent" || sortBy === "added") && book.addedDate) {
-    return `Added ${fmtDate(book.addedDate)}`;
-  }
-  return "";
+  return sorter.sort(list);
 }
 
 // ---------- edition grouping ----------
@@ -254,13 +221,99 @@ function groupEditions(list) {
   return [...groups.values()].map((editions) => ({ lead: editions[0], editions }));
 }
 
+// ---------- share ----------
+
+/** Which cards make sense for THIS book. A book with no review shouldn't be
+ *  offered a review card that renders an empty quote. */
+function shareCardsForBook(book) {
+  const cards = [
+    {
+      key: "item", label: "This book", sub: "Cover, rating, dates",
+      type: "item",
+      data: { item: book, coverSrc: bookCoverSrc(book, "L"), kindLabel: shelfLabel(book) },
+    },
+  ];
+  if (book.review && book.review.trim()) {
+    cards.push({
+      key: "review", label: "My review", sub: "What you wrote",
+      type: "review",
+      data: { item: book, coverSrc: bookCoverSrc(book, "L") },
+    });
+  }
+  return cards;
+}
+
+function shelfLabel(book) {
+  const kind = shelfOf(book);
+  if (kind === "wishlist") return "On my wishlist";
+  if (kind === "borrowed") return stillHolding(book) ? "Borrowed" : "Returned";
+  return STATUS_LABELS[book.readingStatus] || "In my library";
+}
+
+/** Collection-wide cards, built from whatever shelf you're looking at. */
+function shareCardsForShelf(store) {
+  const list = getBooks(store);
+  const all = store.itemsByType("book");
+  const owned = all.filter(isOwned);
+  const read = owned.filter((b) => b.readingStatus === "read");
+  const rated = owned.filter((b) => b.rating);
+
+  const shelfName =
+    shelf === "wishlist" ? "My wishlist"
+    : shelf === "borrowed" ? "Books I've borrowed"
+    : "My bookshelf";
+
+  const longest = read
+    .map((b) => ({ b, d: readingDays(b) }))
+    .filter((x) => x.d != null)
+    .sort((x, y) => y.d - x.d)[0];
+
+  const authorCounts = {};
+  owned.forEach((b) => {
+    const n = b.creator || "Unknown";
+    authorCounts[n] = (authorCounts[n] || 0) + 1;
+  });
+  const topAuthor = Object.keys(authorCounts).sort((a, b) => authorCounts[b] - authorCounts[a])[0];
+
+  const stats = [
+    { value: owned.length, label: "books owned" },
+    { value: read.length, label: "read" },
+    ...(longest ? [{ value: `${longest.d}d`, label: `longest read · ${longest.b.title}`.slice(0, 42) }] : []),
+    ...(topAuthor ? [{ value: authorCounts[topAuthor], label: `by ${topAuthor}`.slice(0, 42) }] : []),
+    ...(rated.length
+      ? [{
+          value: (rated.reduce((n, b) => n + b.rating, 0) / rated.length).toFixed(1),
+          label: "average rating",
+        }]
+      : []),
+  ];
+
+  return [
+    {
+      key: "grid", label: "My shelf", sub: "A wall of covers",
+      type: "grid",
+      data: {
+        items: list,
+        coverSrcs: list.map((b) => bookCoverSrc(b, "L")),
+        title: shelfName,
+        subtitle: `${list.length} book${list.length === 1 ? "" : "s"}${read.length ? ` · ${read.length} read` : ""}`,
+      },
+    },
+    {
+      key: "stats", label: "My numbers", sub: "No covers, just stats",
+      type: "stats",
+      data: { title: "My reading", stats },
+    },
+  ];
+}
+
 // ---------- main render ----------
 
 /** `opts` is only passed by the router, so its presence means "the module was
  *  just opened from the menu" rather than an internal redraw. Entering always
  *  starts alphabetical, as asked. */
 function render(container, store, opts) {
-  if (opts !== undefined) sortBy = "title";
+  if (opts !== undefined) sorter.reset();
 
   const wrap = document.createElement("div");
 
@@ -287,18 +340,18 @@ function render(container, store, opts) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search title or author..." value="${escapeHtml(searchQuery)}">
-    <button class="icon-btn ${sortBy !== "title" ? "on" : ""}" id="sortBtn" type="button" aria-label="Sort" >${ICONS.sort}</button>
+    <button class="icon-btn" id="shareBtn" type="button" aria-label="Share my collection">${ICONS.share}</button>
+    <button class="icon-btn ${sorter.isDefault ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
     <button class="icon-btn ${groupByAuthor ? "on" : ""}" id="authorBtn" type="button" aria-label="Group by author" aria-pressed="${groupByAuthor}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
 
   // Only worth naming the order when it isn't the default one.
-  if (sortBy !== "title" && !groupByAuthor) {
+  if (!sorter.isDefault && !groupByAuthor) {
     const note = document.createElement("p");
     note.className = "sort-note";
-    const active = SORTS.find((s) => s.key === sortBy);
-    note.textContent = `Sorted by ${active ? active.label : sortBy}`;
+    note.textContent = `Sorted by ${sorter.label()}`;
     wrap.appendChild(note);
   }
 
@@ -317,10 +370,16 @@ function render(container, store, opts) {
   container.innerHTML = "";
   container.appendChild(wrap);
 
-  wrap.querySelector("#searchInput").addEventListener("input", (e) => {
+  // Rebuilding every card (and restarting every cover fetch) on each keystroke
+  // is what made typing feel sticky; the caret survived, but the main thread
+  // didn't. Debounced, so the list catches up once you pause.
+  const searchInput = wrap.querySelector("#searchInput");
+  const runSearch = debounce(() => renderBody(bodyHolder, store, container), 180);
+  searchInput.addEventListener("input", (e) => {
     searchQuery = e.target.value;
-    renderBody(bodyHolder, store, container);
+    runSearch();
   });
+  makeClearable(searchInput);
   wrap.querySelector("#scanBtn").addEventListener("click", () => openScanModal(store, container));
 
   wrap.querySelector("#authorBtn").addEventListener("click", (e) => {
@@ -332,7 +391,12 @@ function render(container, store, opts) {
 
   wrap.querySelector("#sortBtn").addEventListener("click", (e) => {
     bounceTap(e.currentTarget);
-    openSortSheet(store, container);
+    openBookSortSheet(store, container);
+  });
+
+  wrap.querySelector("#shareBtn").addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    openShareSheet(shareCardsForShelf(store), { filename: "stackt-books" });
   });
 
   if (!authorFilter) {
@@ -349,33 +413,14 @@ function render(container, store, opts) {
   renderBody(bodyHolder, store, container);
 }
 
-/** Sort picker. A sheet rather than more chips in the header — it's a choice you
- *  make occasionally, and the header is already carrying three controls. */
-function openSortSheet(store, container) {
-  openModal((sheet) => {
-    sheet.innerHTML = `
-      <h2>Sort by</h2>
-      <div class="sort-list">
-        ${SORTS.map((s) => `
-          <button type="button" class="sort-option ${sortBy === s.key ? "active" : ""}" data-sort="${s.key}">
-            <span class="sort-option-label">${s.label}</span>
-            ${s.note ? `<span class="sort-option-note">${s.note}</span>` : ""}
-          </button>
-        `).join("")}
-      </div>
-      <p class="field-hint" style="margin-top:14px;">
-        Books with nothing to sort on — no publication year, never finished —
-        go to the end of the list rather than into the middle.
-      </p>
-    `;
-    sheet.querySelectorAll("[data-sort]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        sortBy = btn.dataset.sort;
-        dismissLayer();
-        render(container, store);
-      });
-    });
-  });
+/** Sort picker. A sheet rather than more chips in the header — it's a choice
+ *  you make occasionally, and the header already carries three controls. */
+function openBookSortSheet(store, container) {
+  openSortSheet(
+    sorter,
+    () => render(container, store),
+    "Books with nothing to sort on — no year, never finished, unrated — go to the end either way."
+  );
 }
 
 function renderBody(bodyHolder, store, container) {
@@ -560,7 +605,7 @@ function renderAuthorList(bodyHolder, store, container) {
     btn.addEventListener("click", () => {
       bounceTap(btn);
       authorFilter = name;
-      sortBy = "title"; // drilling into an author starts alphabetical too
+      sorter.reset(); // drilling into an author starts alphabetical too
       render(container, store);
     });
     grid.appendChild(btn);
@@ -678,7 +723,7 @@ function buildBookCard(book, onTap, editions = [book]) {
   const grouped = editionCount > 1;
 
   let extraHtml = "";
-  const sub = sortSubtitle(book);
+  const sub = sorter.describe(book);
   if (sub) extraHtml += `<div class="lent-note">${escapeHtml(sub)}</div>`;
   if (grouped) {
     const copyTotal = editions.reduce((n, e) => n + (e.copies || []).length, 0);
@@ -848,6 +893,7 @@ function openCoverPicker(bookish, onPick) {
     const grid = overlay.querySelector("#cpOptions");
     const label = overlay.querySelector("#cpLabel");
     const searchBox = overlay.querySelector("#cpSearch");
+    makeClearable(searchBox, () => load(null));
     const searchBtn = overlay.querySelector("#cpSearchBtn");
     let run = 0;
 
@@ -1051,6 +1097,7 @@ function viewModeHtml(book, opts) {
     ${opts.foundViaScan ? `<div class="found-banner"><span>Already in your library</span></div>` : ""}
     <div class="detail-top-row">
       <h2>${escapeHtml(book.title)}</h2>
+      <button class="icon-btn detail-share" id="shareItemBtn" type="button" aria-label="Share this book">${ICONS.share}</button>
       <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.edit}</span>Edit</button>
     </div>
     ${hasCover(book) ? `
@@ -1296,6 +1343,16 @@ function editModeHtml(book) {
 function wireViewMode(sheet, book, store, container, opts = {}) {
   wireCover(sheet, book);
 
+  const shareItemBtn = sheet.querySelector("#shareItemBtn");
+  if (shareItemBtn) {
+    shareItemBtn.addEventListener("click", () => {
+      bounceTap(shareItemBtn);
+      openShareSheet(shareCardsForBook(book), {
+        filename: `stackt-${(book.title || "book").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`,
+      });
+    });
+  }
+
   const coverTapTarget = sheet.querySelector("#coverTapTarget");
   if (coverTapTarget) {
     coverTapTarget.addEventListener("click", () => openCoverLightbox(book));
@@ -1336,8 +1393,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
   const startedInput = sheet.querySelector("#d-started");
   const finishedInput = sheet.querySelector("#d-finished");
   [startedInput, finishedInput].forEach((input) => {
-    if (!input) return;
-    input.addEventListener("change", () => {
+    wireDateField(input, () => {
       store.updateItem(book.id, {
         startedDate: startedInput.value || null,
         finishedDate: finishedInput.value || null,
@@ -1367,7 +1423,10 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       reviewEdit.hidden = !opening;
       reviewRead.hidden = opening;
       reviewEditBtn.classList.toggle("open", opening);
-      if (opening) paintStars();
+      if (opening) {
+        paintStars();
+        makeClearable(reviewEdit.querySelector("#reviewInput"));
+      }
     });
 
     reviewEdit.querySelectorAll(".star-btn").forEach((btn) => {
@@ -1409,8 +1468,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     });
     ["#b-from", "#b-start", "#b-returned"].forEach((sel) => {
       const input = sheet.querySelector(sel);
-      if (!input) return;
-      input.addEventListener("change", () => {
+      wireDateField(input, () => {
         store.updateItem(book.id, {
           borrowed: {
             ...book.borrowed,
@@ -1521,8 +1579,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     const loanWho = row.querySelector(".loan-who");
     const loanStart = row.querySelector(".loan-start");
     [loanWho, loanStart].forEach((input) => {
-      if (!input) return;
-      input.addEventListener("change", () => {
+      wireDateField(input, () => {
         const updatedCopies = copies.map((cc) =>
           cc.id === c.id
             ? {
@@ -1544,25 +1601,21 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
     // it's the record of the loan ending. Setting it closes the loan, which
     // also lets you record a book that came back last week.
     const loanReturned = row.querySelector(".loan-returned");
-    if (loanReturned) {
-      loanReturned.addEventListener("change", () => {
-        if (!loanReturned.value) return;
-        closeLoan(store, container, book, copies, c.id, loanReturned.value);
-      });
-    }
+    wireDateField(loanReturned, () => {
+      if (!loanReturned.value) return;
+      closeLoan(store, container, book, copies, c.id, loanReturned.value);
+    });
 
     // When a copy actually joined your shelf is editable — a book bought
     // years ago shouldn't be stamped with the day you happened to add it.
     const acquiredInput = row.querySelector(".copy-acquired");
-    if (acquiredInput) {
-      acquiredInput.addEventListener("change", () => {
-        const updatedCopies = copies.map((cc) =>
-          cc.id === c.id ? { ...cc, acquiredDate: acquiredInput.value || null } : cc
-        );
-        store.updateItem(book.id, { copies: updatedCopies });
-        refreshDetail(store, container, book.id);
-      });
-    }
+    wireDateField(acquiredInput, () => {
+      const updatedCopies = copies.map((cc) =>
+        cc.id === c.id ? { ...cc, acquiredDate: acquiredInput.value || null } : cc
+      );
+      store.updateItem(book.id, { copies: updatedCopies });
+      refreshDetail(store, container, book.id);
+    });
 
     // Past loans are editable too, so a return date can be corrected later.
     row.querySelectorAll(".loan-history-row").forEach((histRow) => {
@@ -1570,8 +1623,7 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       const hStart = histRow.querySelector(".hist-start");
       const hEnd = histRow.querySelector(".hist-end");
       [hStart, hEnd].forEach((input) => {
-        if (!input) return;
-        input.addEventListener("change", () => {
+        wireDateField(input, () => {
           const updatedCopies = copies.map((cc) => {
             if (cc.id !== c.id) return cc;
             const hist = [...(cc.history || [])];
@@ -1649,6 +1701,9 @@ function wireShelfSwitcher(sheet, item, store, container, kindLabel) {
 
 function wireEditMode(sheet, book, store, container) {
   wireShelfSwitcher(sheet, book, store, container, "book");
+  ["#f-title", "#f-creator", "#f-creator-alt"].forEach((sel) =>
+    makeClearable(sheet.querySelector(sel))
+  );
 
   // If the lookup guessed wrong about which spelling should sort, one tap fixes
   // it rather than retyping both names.
@@ -2026,6 +2081,7 @@ function openAddForm(store, container, prefill = {}) {
     const isbnStatus = sheet.querySelector("#isbnLookupStatus");
     const titleInput = sheet.querySelector("#a-title");
     const creatorInput = sheet.querySelector("#a-creator");
+    [titleInput, creatorInput].forEach((el) => makeClearable(el));
     const altInput = sheet.querySelector("#a-creator-alt");
     const altField = sheet.querySelector("#a-alt-field");
     const yearInput = sheet.querySelector("#a-year");
