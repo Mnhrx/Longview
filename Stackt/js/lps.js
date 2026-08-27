@@ -20,6 +20,7 @@ import { lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl }
 import { ICONS } from "./icons.js";
 import { createSorter, collator, yearValue, openSortSheet } from "./sorting.js";
 import { openShareSheet } from "./share.js";
+import { setCoverSrc, ownKey, putBlob, encodeCover, deleteBlob } from "./covers.js";
 
 const CONDITIONS = [
   { key: "mint", label: "Mint", short: "M" },
@@ -177,10 +178,28 @@ function openRecordSortSheet(store, container) {
 }
 
 
+/**
+ * Every remote cover is loaded with crossOrigin="anonymous", app-wide.
+ *
+ * Not for this screen's benefit — for the share cards'. Safari keys its image
+ * cache loosely across CORS modes, so a cover fetched here WITHOUT the flag can
+ * poison the entry the share canvas later needs, and the canvas ends up tainted
+ * or the load just fails. Keeping every request in the same mode avoids it.
+ * Data URLs (your own photos) are same-origin and skip it.
+ */
+function corsImage() {
+  const img = new Image();
+  // Set unconditionally: data: URLs are unaffected by it, and a conditional
+  // would need the src, which callers only assign after wiring handlers.
+  img.crossOrigin = "anonymous";
+  return img;
+}
+
 // ---------- covers ----------
 
 function recordCoverSrc(rec, size = 500) {
   if (!rec) return null;
+  if (rec.coverRef) return rec.coverRef; // your own photo, from the blob store
   if (rec.customCover) return rec.customCover;
   // A picked release-group is the album's canonical art; a picked release is
   // one specific pressing. Both beat whatever the barcode scan happened to hit.
@@ -191,7 +210,7 @@ function recordCoverSrc(rec, size = 500) {
   return null;
 }
 function hasCover(rec) {
-  return !!(rec && (rec.customCover || rec.coverRgid || rec.coverMbid || rec.rgid || rec.mbid));
+  return !!(rec && (rec.coverRef || rec.customCover || rec.coverRgid || rec.coverMbid || rec.rgid || rec.mbid));
 }
 
 function downscaleImage(file, maxEdge = 500, quality = 0.75) {
@@ -199,7 +218,7 @@ function downscaleImage(file, maxEdge = 500, quality = 0.75) {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read that file"));
     reader.onload = () => {
-      const img = new Image();
+      const img = corsImage();
       img.onerror = () => reject(new Error("That file isn't an image we can read"));
       img.onload = () => {
         const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
@@ -233,7 +252,7 @@ function wireCover(sheet, rec) {
     fallback.classList.add("fade-out");
   });
   img.addEventListener("error", () => fallback.classList.remove("shimmer"));
-  img.src = recordCoverSrc(rec, 500);
+  setCoverSrc(img, recordCoverSrc(rec, 500));
 }
 
 function openSleeveLightbox(rec) {
@@ -259,8 +278,24 @@ function openSleeveLightbox(rec) {
       fb.classList.remove("shimmer");
       cap.textContent = "No sleeve art found for this pressing";
     });
-    img.src = recordCoverSrc(rec, 1200);
+    setCoverSrc(img, recordCoverSrc(rec, 1200));
   });
+}
+
+/** Turns a picker result into a patch, filing any photo in the blob store. */
+async function applyArtPick(itemId, pick) {
+  const key = ownKey(itemId);
+  if (pick.ownBlob) {
+    await putBlob(key, pick.ownBlob, { permanent: true });
+    return { coverRef: key, customCover: null, coverMbid: null, coverRgid: null };
+  }
+  await deleteBlob(key);
+  return {
+    coverRef: null,
+    customCover: null,
+    coverMbid: pick.coverMbid ?? null,
+    coverRgid: pick.coverRgid ?? null,
+  };
 }
 
 /** Art picker: other pressings of the same album, or your own photo. */
@@ -300,7 +335,8 @@ function openArtPicker(recordish, onPick) {
       if (!file) return;
       label.textContent = "Processing your photo…";
       try {
-        onPick({ customCover: await downscaleImage(file), coverMbid: null, coverRgid: null });
+        // The blob, not a data URL — see the note in books.js.
+        onPick({ ownBlob: await encodeCover(file), customCover: null, coverMbid: null, coverRgid: null });
         dismissLayer();
       } catch (err) {
         label.textContent = err.message || "Couldn't use that image.";
@@ -370,12 +406,12 @@ function openArtPicker(recordish, onPick) {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "cover-option sleeve";
-          const img = new Image();
+          const img = corsImage();
           img.alt = "";
           img.loading = "lazy";
           img.addEventListener("load", () => btn.classList.add("loaded"));
           img.addEventListener("error", () => btn.remove()); // no art filed for this one
-          img.src = coverArtUrl(r.artId, 250, r.artKind);
+          setCoverSrc(img, coverArtUrl(r.artId, 250, r.artKind));
           btn.appendChild(img);
           const capText = r.artKind === "release-group"
             ? [r.creator, "album art"].filter(Boolean).join(" · ")
@@ -461,16 +497,31 @@ function shareCardsForShelf(store) {
   const years = owned.map(yearValue).filter((y) => y != null);
   const oldest = years.length ? Math.min(...years) : null;
 
+  const distinctArtists = new Set(owned.map((r) => r.creator || "Unknown")).size;
+  const fiveStars = owned.filter((r) => r.rating === 5).length;
+  const wishlist = all.filter((r) => shelfOf(r) === "wishlist").length;
+  const lentOut = owned.filter(hasLoan).length;
+  const totalCopies = owned.reduce((n, r) => n + (r.copies || []).length, 0);
+  const mint = owned.filter((r) => bestCondition(r) === "mint").length;
+  const newest = years.length ? Math.max(...years) : null;
+
+  const maybe = (cond, stat) => (cond ? [stat] : []);
   const stats = [
-    { value: owned.length, label: "records owned" },
-    ...(topArtist ? [{ value: artistCounts[topArtist], label: `by ${topArtist}`.slice(0, 42) }] : []),
-    ...(oldest ? [{ value: oldest, label: "oldest pressing" }] : []),
-    ...(rated.length
-      ? [{
-          value: (rated.reduce((n, r) => n + r.rating, 0) / rated.length).toFixed(1),
-          label: "average rating",
-        }]
-      : []),
+    { key: "owned", value: owned.length, label: "records owned" },
+    ...maybe(wishlist, { key: "wishlist", value: wishlist, label: "on the wishlist" }),
+    ...maybe(rated.length, {
+      key: "avg",
+      value: (rated.reduce((n, r) => n + r.rating, 0) / rated.length).toFixed(1),
+      label: "average rating",
+    }),
+    ...maybe(topArtist, { key: "topArtist", value: artistCounts[topArtist], label: `by ${topArtist}` }),
+    ...maybe(distinctArtists > 1, { key: "artists", value: distinctArtists, label: "different artists" }),
+    ...maybe(fiveStars, { key: "fivestar", value: fiveStars, label: "five-star records" }),
+    ...maybe(oldest, { key: "oldest", value: oldest, label: "oldest pressing" }),
+    ...maybe(newest && newest !== oldest, { key: "newest", value: newest, label: "newest pressing" }),
+    ...maybe(mint, { key: "mint", value: mint, label: "in mint condition" }),
+    ...maybe(totalCopies > owned.length, { key: "copies", value: totalCopies, label: "physical copies" }),
+    ...maybe(lentOut, { key: "lent", value: lentOut, label: "out on loan" }),
   ];
 
   return [
@@ -479,7 +530,8 @@ function shareCardsForShelf(store) {
       type: "grid",
       data: {
         items: list,
-        coverSrcs: list.map((r) => recordCoverSrc(r, 500)),
+        // 250 is the size the list cards already fetched — a cache hit here.
+        coverSrcs: list.map((r) => recordCoverSrc(r, 250)),
         title: shelfName,
         subtitle: `${list.length} record${list.length === 1 ? "" : "s"}`,
       },
@@ -524,7 +576,6 @@ function render(container, store, opts) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search album, artist or edition..." value="${escapeHtml(searchQuery)}">
-    <button class="icon-btn" id="shareBtn" type="button" aria-label="Share my collection">${ICONS.share}</button>
     <button class="icon-btn ${sorter.isDefault ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
     <button class="icon-btn ${groupByArtist ? "on" : ""}" id="artistBtn" type="button" aria-label="Group by artist" aria-pressed="${groupByArtist}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
@@ -569,10 +620,6 @@ function render(container, store, opts) {
     openRecordSortSheet(store, container);
   });
 
-  wrap.querySelector("#shareBtn").addEventListener("click", (e) => {
-    bounceTap(e.currentTarget);
-    openShareSheet(shareCardsForShelf(store), { filename: "stackt-records" });
-  });
   wrap.querySelector("#artistBtn").addEventListener("click", (e) => {
     bounceTap(e.currentTarget);
     groupByArtist = !groupByArtist;
@@ -729,7 +776,7 @@ function buildCard(rec, onTap) {
     const swatch = card.querySelector(".item-swatch");
     const swatchImg = swatch.querySelector(".swatch-img");
     const swatchEmoji = swatch.querySelector(".swatch-emoji");
-    const img = new Image();
+    const img = corsImage();
     img.onload = () => {
       swatchImg.src = img.src;
       swatchImg.classList.add("loaded");
@@ -737,7 +784,7 @@ function buildCard(rec, onTap) {
       swatch.classList.remove("shimmer");
     };
     img.onerror = () => swatch.classList.remove("shimmer");
-    img.src = recordCoverSrc(rec, 250);
+    setCoverSrc(img, recordCoverSrc(rec, 250));
   }
   return card;
 }
@@ -1454,8 +1501,8 @@ function wireEdit(sheet, rec, store, container) {
   const artBtn = sheet.querySelector("#changeArtBtn");
   if (artBtn) {
     artBtn.addEventListener("click", () => {
-      openArtPicker(rec, (pick) => {
-        store.updateItem(rec.id, pick);
+      openArtPicker(rec, async (pick) => {
+        store.updateItem(rec.id, await applyArtPick(rec.id, pick));
         refreshDetail(store, container, rec.id, { mode: "edit" });
       });
     });
@@ -1484,7 +1531,8 @@ function wireEdit(sheet, rec, store, container) {
   });
 
   sheet.querySelector("#deleteBtn").addEventListener("click", () => {
-    store.removeItem(rec.id);
+    deleteBlob(ownKey(rec.id)); // don't leave an orphan photo behind
+      store.removeItem(rec.id);
     dismissLayer();
     render(container, store);
   });
@@ -1761,11 +1809,15 @@ function openAddForm(store, container, prefill = {}) {
       coverMbid: prefill.mbid || null,
       coverRgid: prefill.rgid || null,
     };
+    let pickedBlob = null;
+    let pickedPreviewUrl = null;
     if (prefill.mbid || prefill.rgid) wireCover(sheet, { mbid: prefill.mbid, rgid: prefill.rgid });
 
     // Repaints the little preview from whatever art is currently picked.
     function repaintArt() {
-      const shape = { ...picked, color: "#eee" };
+      const shape = pickedPreviewUrl
+        ? { customCover: pickedPreviewUrl, color: "#eee" }
+        : { ...picked, color: "#eee" };
       artBlock.classList.toggle("hidden", !hasCover(shape));
       artBlock.innerHTML = coverBlockHtml(shape);
       wireCover(sheet, shape);
@@ -1777,7 +1829,14 @@ function openAddForm(store, container, prefill = {}) {
       openArtPicker(
         { title: titleInput.value.trim(), creator: creatorInput.value.trim(), ...picked },
         (pick) => {
-          picked = { ...picked, ...pick };
+          if (pickedPreviewUrl) URL.revokeObjectURL(pickedPreviewUrl);
+          pickedBlob = pick.ownBlob || null;
+          pickedPreviewUrl = pickedBlob ? URL.createObjectURL(pickedBlob) : null;
+          picked = {
+            customCover: null,
+            coverMbid: pick.coverMbid ?? null,
+            coverRgid: pick.coverRgid ?? null,
+          };
           repaintArt();
         }
       );
@@ -1833,7 +1892,7 @@ function openAddForm(store, container, prefill = {}) {
       const owned = destination === "library";
       const price = destination === "wishlist" ? (parseFloat(priceInput.value) || null) : null;
 
-      store.addItem({
+      const created = store.addItem({
         type: "lp",
         title: titleInput.value.trim(),
         creator: creatorInput.value.trim(),
@@ -1854,10 +1913,25 @@ function openAddForm(store, container, prefill = {}) {
             ? { from: sheet.querySelector("#a-borrow-from").value.trim() || null, borrowedDate: today(), returnedDate: null }
             : null,
       });
+
+      if (pickedBlob) {
+        const key = ownKey(created.id);
+        putBlob(key, pickedBlob, { permanent: true }).then((stored) => {
+          if (stored) store.updateItem(created.id, { coverRef: key });
+          if (pickedPreviewUrl) URL.revokeObjectURL(pickedPreviewUrl);
+          render(container, store);
+        });
+      }
+
       dismissLayer();
       render(container, store);
     });
   });
 }
 
-export default { render, openAddForm };
+/** Called by the header's share button — see applyChrome in core.js. */
+function openShelfShare(store) {
+  openShareSheet(shareCardsForShelf(store), { filename: "stackt-records" });
+}
+
+export default { render, openAddForm, openShelfShare };

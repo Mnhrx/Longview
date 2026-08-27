@@ -6,6 +6,7 @@
 
 import { transitionSwap } from "./animations.js";
 import { clearAllLayers } from "./ui.js";
+import { ownKey, putBlob, deleteBlob, dataUrlToBlob, blobToDataUrl, getRecord, allOwnRecords, encodeCover } from "./covers.js";
 
 const STORAGE_KEY = "stackt-state-v1";
 
@@ -40,13 +41,82 @@ export const store = {
     }
   },
 
+  /**
+   * Moves photos out of localStorage and into the blob store.
+   *
+   * Own-photo covers were saved as base64 data URLs alongside the text, which
+   * is what put the 5MB ceiling within reach. Each one moves across, gets
+   * re-encoded smaller, and leaves behind only a key — so a library that was
+   * close to the limit drops back to a few KB of text.
+   *
+   * Deliberately forgiving: any photo that won't move is left exactly where it
+   * is and still displays. A migration that loses a picture would be far worse
+   * than one that doesn't finish.
+   */
+  async migrateCovers() {
+    const withPhotos = this.state.items.filter(
+      (it) => typeof it.customCover === "string" && it.customCover.startsWith("data:")
+    );
+    if (!withPhotos.length) return 0;
+
+    let moved = 0;
+    for (const item of withPhotos) {
+      try {
+        const raw = await dataUrlToBlob(item.customCover);
+        let blob = raw;
+        try { blob = await encodeCover(raw); } catch (e) { /* keep the original */ }
+        const key = ownKey(item.id);
+        if (await putBlob(key, blob, { permanent: true })) {
+          item.coverRef = key;
+          item.customCover = null;
+          moved++;
+        }
+      } catch (err) {
+        console.warn("Left a photo where it was:", err);
+      }
+    }
+    if (moved) this.save();
+    return moved;
+  },
+
   get() {
     return this.state;
   },
 
+  /**
+   * Persists to localStorage, which is capped at ~5MB.
+   *
+   * That cap used to be able to break the app silently: once it was reached
+   * every subsequent write threw, so adding a book, ticking one as read and
+   * saving a review all failed with nothing on screen to say why. Images are
+   * the only thing large enough to get near it — they now live in IndexedDB
+   * (see covers.js) — but the guard stays, because a store that can fail
+   * quietly is worse than one that says so.
+   */
   save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      this.saveError = null;
+      return true;
+    } catch (err) {
+      const full =
+        err &&
+        (err.name === "QuotaExceededError" ||
+          err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+          err.code === 22);
+      this.saveError = full
+        ? "This device's storage for Stackt is full, so that change wasn't saved. Settings → Storage can free some up."
+        : "That change couldn't be saved to this device.";
+      console.warn("Save failed:", err);
+      this.listeners.forEach((fn) => {
+        try { fn(this.state); } catch (e) { /* a listener must not mask this */ }
+      });
+      return false;
+    }
   },
+
+  /** Set when the last save failed; null when all is well. */
+  saveError: null,
 
   /** Merge a partial state patch, persist, and notify subscribers. */
   update(patch) {
@@ -95,18 +165,39 @@ export const store = {
 
   /** Everything worth keeping, in a versioned envelope so a future build can
    *  recognise and migrate an older backup. */
-  exportBundle() {
-    return {
+  /**
+   * A backup.
+   *
+   * Photos you took are irreplaceable, so they're inlined as data URLs and go
+   * in every time. Downloaded covers are NOT: the source still has them, and
+   * including a few hundred would turn a ~50KB text file into tens of
+   * megabytes for no gain. `withPhotos: false` skips even your own, for when
+   * you just want the catalogue.
+   */
+  async exportBundle({ withPhotos = true } = {}) {
+    const bundle = {
       app: "stackt",
-      formatVersion: 1,
+      formatVersion: 2,
       exportedAt: new Date().toISOString(),
       state: this.state,
     };
+    if (!withPhotos) return bundle;
+
+    const photos = {};
+    for (const rec of await allOwnRecords()) {
+      try {
+        photos[rec.key] = await blobToDataUrl(rec.blob);
+      } catch (err) {
+        console.warn("Could not include a photo in the backup:", err);
+      }
+    }
+    if (Object.keys(photos).length) bundle.photos = photos;
+    return bundle;
   },
 
   /** Replaces everything from a backup. Throws with a readable message if the
    *  file isn't one of ours, so the UI can say what's wrong. */
-  importBundle(bundle) {
+  async importBundle(bundle) {
     if (!bundle || typeof bundle !== "object") throw new Error("That file isn't readable.");
     if (bundle.app !== "stackt") throw new Error("That doesn't look like a Stackt backup.");
     const incoming = bundle.state;
@@ -117,13 +208,31 @@ export const store = {
       finance: incoming.finance || { balance: 0, spendingLog: [] },
     };
     this.save();
+
+    // Put the photos back where the items expect to find them. Downloaded
+    // covers aren't in the file and don't need to be — they re-fetch on sight.
+    if (bundle.photos) {
+      for (const [key, dataUrl] of Object.entries(bundle.photos)) {
+        try {
+          await putBlob(key, await dataUrlToBlob(dataUrl), { permanent: true });
+        } catch (err) {
+          console.warn("Could not restore a photo:", err);
+        }
+      }
+    }
+    // A v1 backup still carries its photos inline, so move them across too.
+    await this.migrateCovers();
+
     this.listeners.forEach((fn) => fn(this.state));
     return this.state.items.length;
   },
 
   /** Back to a blank app. The seed deliberately does NOT run again — it only
    *  fills a first launch, and re-seeding demo books here would be a surprise. */
-  resetAll() {
+  async resetAll() {
+    // Take the photos with it — a reset that leaves 40MB of orphaned images
+    // behind isn't a reset.
+    for (const item of this.state.items) await deleteBlob(ownKey(item.id));
     this.state = { items: [], finance: { balance: 0, spendingLog: [] } };
     this.save();
     this.listeners.forEach((fn) => fn(this.state));
@@ -195,6 +304,12 @@ function applyChrome(view, isHome, mod) {
   const supportsAdd = !isHome && mod.openAddForm && !mod.openAddForm.isPlaceholder;
   const addBtn = document.getElementById("addBtn");
   if (addBtn) addBtn.classList.toggle("hidden", !supportsAdd);
+
+  // Sharing the whole shelf is a screen-level action, so it lives up here with
+  // the +, not down in the list's search row where it crowded the search box.
+  const supportsShare = !isHome && typeof mod.openShelfShare === "function";
+  const shareBtn = document.getElementById("shareShelfBtn");
+  if (shareBtn) shareBtn.classList.toggle("hidden", !supportsShare);
 
   // Home has nothing to add, so it carries settings instead.
   const settingsBtn = document.getElementById("settingsBtn");

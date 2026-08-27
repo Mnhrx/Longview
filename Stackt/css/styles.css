@@ -516,6 +516,19 @@ html, body {
   cursor: pointer;
   box-shadow: 4px 4px 0 var(--ink);
   transition: transform .15s var(--spring), box-shadow .15s var(--spring);
+  /* Several "buttons" here are <label>s wrapping a hidden file input. A <label>
+     doesn't centre its text or pick up the button font the way a <button> does,
+     which is why the photo picker sat left-aligned in a different typeface next
+     to Share this. Stated explicitly, the two match whatever the element. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: inherit;
+  line-height: 1.25;
+  min-height: 52px;
+  color: var(--ink);
+  -webkit-appearance: none;
 }
 .btn:active {
   transform: translate(3px, 3px);
@@ -2012,3 +2025,118 @@ html, body {
   margin-left: auto;
 }
 .detail-top-row .edit-toggle-btn { margin-left: 0; }
+
+/* Share sits beside + in the header. Secondary to adding, so it's white
+   rather than the yellow accent. */
+.share-fab {
+  background: #fff;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.share-fab svg { width: 100%; height: 100%; display: block; }
+.fab-inline.hidden, .share-fab.hidden { display: none; }
+
+/* ---------- stat picker ---------- */
+
+.share-options { margin-bottom: 14px; }
+.share-options-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+  margin: 0 0 10px;
+}
+.share-options-count { opacity: 0.9; transition: color .2s; }
+/* Flashes when you try to add a sixth, instead of silently ignoring the tap. */
+.share-options-count.full { color: var(--red-accent); opacity: 1; }
+
+.stat-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 34vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.stat-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .12s var(--spring), background .12s;
+}
+.stat-pick:active { transform: scale(0.98); }
+.stat-pick.on { background: var(--mint); }
+.stat-pick-tick {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 17px;
+  text-align: center;
+}
+.stat-pick-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-pick-value { flex: 0 0 auto; font-size: 13px; font-weight: 900; }
+
+/* ---------- storage ---------- */
+
+.storage-bar {
+  height: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+  margin: 10px 0 14px;
+}
+.storage-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--purple);
+  transition: width .4s var(--spring);
+}
+
+.settings-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 4px 0 14px;
+  cursor: pointer;
+}
+.settings-check input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--ink);
+}

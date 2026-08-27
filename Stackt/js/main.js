@@ -23,6 +23,10 @@ router.register("finance", makePlaceholder("finance", "Finance"));
 
 async function boot() {
   await store.init();
+  // Runs once: after the first launch on this build there's nothing left to
+  // move. Deliberately awaited, so no screen renders against half-migrated
+  // items and shows a cover that's about to change shape underneath it.
+  await store.migrateCovers();
 
   // ---- history-driven navigation ----
   // Every screen change pushes a history entry, so the platform's own back
@@ -66,6 +70,14 @@ async function boot() {
   settingsBtn.addEventListener("click", (e) => {
     bounceTap(e.currentTarget);
     router.navigate("settings");
+  });
+
+  const shareShelfBtn = document.getElementById("shareShelfBtn");
+  shareShelfBtn.innerHTML = ICONS.share;
+  shareShelfBtn.addEventListener("click", (e) => {
+    bounceTap(e.currentTarget);
+    const mod = router.modules[router.current];
+    if (mod && mod.openShelfShare) mod.openShelfShare(store, document.getElementById("view"));
   });
 
   document.getElementById("addBtn").addEventListener("click", (e) => {

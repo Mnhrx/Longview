@@ -39,15 +39,43 @@ const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
  * colour block, never the whole card. Data URLs (your own photos) are same
  * origin and skip the CORS dance entirely.
  */
-function loadImage(src) {
+function loadOnce(src, bust) {
   return new Promise((resolve) => {
-    if (!src) return resolve(null);
     const img = new Image();
-    if (!src.startsWith("data:")) img.crossOrigin = "anonymous";
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = src;
+    // A cache-busting param forces a fresh CORS request, which is the way past
+    // an entry Safari cached in the wrong mode before the app was consistent.
+    img.src = bust ? src + (src.includes("?") ? "&" : "?") + "_cors=1" : src;
   });
+}
+
+function loadImage(src) {
+  if (!src) return Promise.resolve(null);
+  if (String(src).startsWith("data:")) return loadOnce(src, false);
+  return loadOnce(src, false).then((img) => img || loadOnce(src, true));
+}
+
+/**
+ * Loads a batch of covers a few at a time.
+ *
+ * Open Library rate-limits cover-by-ISBN to 100 requests per IP per 5 minutes
+ * and 403s past that — firing 25 at once for a grid card is a good way to get
+ * half of them refused, which is exactly what "only some load" looked like.
+ * Four in flight is polite and still fast.
+ */
+async function loadImages(srcs, concurrency = 4) {
+  const out = new Array(srcs.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < srcs.length) {
+      const i = next++;
+      out[i] = await loadImage(srcs[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, srcs.length) }, worker));
+  return out;
 }
 
 // ---------- drawing helpers ----------
@@ -91,13 +119,38 @@ function drawCover(ctx, img, x, y, w, h, radius) {
   ctx.restore();
 }
 
-function artBlock(ctx, img, x, y, w, h, color, radius = 24) {
+/**
+ * Draws the artwork, or — when it couldn't be fetched — a tile carrying the
+ * title and creator instead. A bare colour block reads as a bug; a typeset one
+ * reads as a design, and you can still tell which book it is.
+ */
+function artBlock(ctx, img, x, y, w, h, color, radius = 24, item = null) {
   if (img) {
     drawCover(ctx, img, x, y, w, h, radius);
   } else {
     ctx.fillStyle = color || PALETTE.pink;
     roundRect(ctx, x, y, w, h, radius);
     ctx.fill();
+
+    if (item && w >= 120) {
+      ctx.save();
+      roundRect(ctx, x, y, w, h, radius);
+      ctx.clip();
+      const pad = Math.round(w * 0.1);
+      const titleSize = Math.max(15, Math.round(w * 0.11));
+      ctx.fillStyle = "rgba(26,26,46,0.92)";
+      setFont(ctx, titleSize, 900);
+      const lines = wrapText(ctx, item.title, w - pad * 2, w >= 260 ? 4 : 3);
+      let ty = y + pad + titleSize;
+      lines.forEach((l, i) => ctx.fillText(l, x + pad, ty + i * titleSize * 1.16));
+      if (item.creator && w >= 200) {
+        setFont(ctx, Math.round(titleSize * 0.66), 700);
+        ctx.fillStyle = "rgba(26,26,46,0.6)";
+        const cl = wrapText(ctx, item.creator, w - pad * 2, 1);
+        ctx.fillText(cl[0] || "", x + pad, ty + lines.length * titleSize * 1.16 + titleSize * 0.5);
+      }
+      ctx.restore();
+    }
   }
   ctx.lineWidth = 6;
   ctx.strokeStyle = PALETTE.ink;
@@ -259,53 +312,86 @@ export function spanLine(item) {
 async function renderItemCard(ctx, W, H, { item, coverSrc, photo, kindLabel }) {
   const onPhoto = await background(ctx, W, H, photo);
   const story = H > W;
-  const M = 84;
-  const cardW = W - M * 2;
+  const M = 72;
+  const PAD = 52;              // inside the panel — text never sits on the border
+  const panelW = W - M * 2;
+  const innerW = panelW - PAD * 2;
+  const innerX = M + PAD;
 
   const img = await loadImage(coverSrc);
-  const artSize = story ? Math.round(cardW * 0.82) : Math.round(cardW * 0.46);
-  const artX = story ? Math.round((W - artSize) / 2) : M + 28;
-  const artY = story ? Math.round(H * 0.16) : Math.round((H - artSize) / 2);
+  const missing = img ? 0 : 1;
 
-  if (!onPhoto) {
-    // A soft panel behind everything keeps the neubrutalist frame readable.
-    panel(ctx, M - 24, artY - 56, cardW + 48, story ? artSize + 520 : artSize + 112, "#fff");
-  }
+  // Measure first, draw second. The panel can only be sized to its content if
+  // we know the content height before we paint the panel — the old version
+  // guessed (artSize + 520), which is why the pill hung out of the bottom.
+  const artSize = story ? innerW : Math.round(panelW * 0.42);
+  const titleSize = story ? 62 : 50;
+  const titleLead = story ? 74 : 60;
+  const creatorSize = story ? 36 : 30;
+  const starSize = story ? 50 : 42;
+  const lineSize = story ? 30 : 26;
 
-  artBlock(ctx, img, artX, artY, artSize, artSize, item.color, 28);
+  setFont(ctx, titleSize, 900);
+  const titleLines = wrapText(ctx, item.title, story ? innerW : innerW - artSize - 40, 3);
+  setFont(ctx, creatorSize, 700);
+  const creatorLines = item.creator
+    ? wrapText(ctx, item.creator, story ? innerW : innerW - artSize - 40, 1) : [];
+  const line = spanLine(item);
+  setFont(ctx, lineSize, 700);
+  const spanLines = line
+    ? wrapText(ctx, line, story ? innerW : innerW - artSize - 40, 2) : [];
 
-  const textX = story ? M : artX + artSize + 48;
-  const textW = story ? cardW : W - textX - M - 24;
-  let y = story ? artY + artSize + 90 : artY + 18;
+  // Each block costs its first-line ascent PLUS a line-height per line — the
+  // baseline of line one sits `size` below where the block starts. Leaving the
+  // ascent out under-counted by ~128px, which is exactly how far the status
+  // pill used to hang below the panel.
+  const textH =
+    titleSize + titleLines.length * titleLead +
+    (creatorLines.length ? 20 + creatorSize + creatorLines.length * (creatorSize + 8) : 0) +
+    (item.rating ? 30 + starSize : 0) +
+    (spanLines.length ? 18 + lineSize + spanLines.length * 38 : 0) +
+    (kindLabel ? 22 + 62 : 0);
+
+  const contentH = story ? artSize + 52 + textH : Math.max(artSize, textH);
+  const panelH = contentH + PAD * 2;
+  const panelY = Math.round((H - panelH) / 2) - (story ? 40 : 0);
+
+  if (!onPhoto) panel(ctx, M, panelY, panelW, panelH, "#fff");
+
+  const artX = story ? innerX : innerX;
+  const artY = panelY + PAD;
+  artBlock(ctx, img, artX, artY, artSize, artSize, item.color, 28, item);
+
+  const textX = story ? innerX : innerX + artSize + 40;
+  let y = story ? artY + artSize + 52 : panelY + PAD + Math.round((contentH - textH) / 2);
 
   ctx.textAlign = "left";
   ctx.fillStyle = onPhoto ? "#fff" : PALETTE.ink;
+  setFont(ctx, titleSize, 900);
+  y = drawLines(ctx, titleLines, textX, y + titleSize, titleLead);
 
-  setFont(ctx, story ? 66 : 52, 900);
-  y = drawLines(ctx, wrapText(ctx, item.title, textW, 3), textX, y + (story ? 0 : 46), story ? 76 : 60);
-
-  setFont(ctx, story ? 40 : 32, 700);
-  ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.85)" : "rgba(26,26,46,0.62)";
-  y = drawLines(ctx, wrapText(ctx, item.creator || "", textW, 1), textX, y + 22, 44);
+  if (creatorLines.length) {
+    setFont(ctx, creatorSize, 700);
+    ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.85)" : "rgba(26,26,46,0.62)";
+    y = drawLines(ctx, creatorLines, textX, y + 20 + creatorSize, creatorSize + 8);
+  }
 
   if (item.rating) {
-    y += 34;
-    drawStars(ctx, item.rating, textX, y, story ? 52 : 42);
-    y += story ? 74 : 60;
+    y += 30;
+    drawStars(ctx, item.rating, textX, y, starSize);
+    y += starSize;
   }
 
-  const line = spanLine(item);
-  if (line) {
-    setFont(ctx, story ? 32 : 26, 700);
+  if (spanLines.length) {
+    setFont(ctx, lineSize, 700);
     ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.8)" : "rgba(26,26,46,0.55)";
-    y = drawLines(ctx, wrapText(ctx, line, textW, 2), textX, y + 12, 40);
+    y = drawLines(ctx, spanLines, textX, y + 18 + lineSize, 38);
   }
 
-  if (kindLabel) {
-    pill(ctx, kindLabel, textX, y + 26, PALETTE.yellow);
-  }
+  if (kindLabel) pill(ctx, kindLabel, textX, y + 22, PALETTE.yellow);
 
   watermark(ctx, W, H, onPhoto);
+  return { missing };
 }
 
 /** The review, big, with the cover small alongside. */
@@ -320,7 +406,7 @@ async function renderReviewCard(ctx, W, H, { item, coverSrc, photo }) {
 
   if (!onPhoto) panel(ctx, M - 24, top - 48, cardW + 48, H - top - 200, "#fff");
 
-  artBlock(ctx, img, M + 8, top, thumb, thumb, item.color, 22);
+  artBlock(ctx, img, M + 8, top, thumb, thumb, item.color, 22, item);
 
   ctx.textAlign = "left";
   ctx.fillStyle = onPhoto ? "#fff" : PALETTE.ink;
@@ -377,6 +463,7 @@ async function renderGridCard(ctx, W, H, { items, coverSrcs, photo, title, subti
   // showing bigger ones: take the fewest columns that still fits everything,
   // which is also the largest cell size that does. A partial last row is fine —
   // it's centred, so it reads as deliberate rather than as a gap.
+  let missing = 0;
   const gap = 20;
   const top = y + 56;
   const availH = H - top - 150; // room for the watermark
@@ -404,7 +491,7 @@ async function renderGridCard(ctx, W, H, { items, coverSrcs, photo, title, subti
   const gridH = rows * cell + (rows - 1) * gap;
   const gridTop = top + Math.max(0, Math.round((availH - gridH) / 2));
 
-  const imgs = await Promise.all(coverSrcs.slice(0, count).map(loadImage));
+  const imgs = await loadImages(coverSrcs.slice(0, count));
   for (let i = 0; i < count; i++) {
     const row = Math.floor(i / cols);
     const inRow = Math.min(cols, count - row * cols);
@@ -412,7 +499,8 @@ async function renderGridCard(ctx, W, H, { items, coverSrcs, photo, title, subti
     const rowX = M + Math.round((gridW - rowW) / 2); // centres a short last row
     const cx = rowX + (i % cols) * (cell + gap);
     const cy = gridTop + row * (cell + gap);
-    artBlock(ctx, imgs[i], cx, cy, cell, cell, items[i].color, 18);
+    artBlock(ctx, imgs[i], cx, cy, cell, cell, items[i].color, 18, items[i]);
+    if (!imgs[i]) missing++;
   }
 
   const more = items.length - count;
@@ -423,10 +511,19 @@ async function renderGridCard(ctx, W, H, { items, coverSrcs, photo, title, subti
   }
 
   watermark(ctx, W, H, onPhoto);
+  return { missing };
 }
 
 /** Numbers only — the year-in-review shape. */
-async function renderStatsCard(ctx, W, H, { title, stats, photo, accent = PALETTE.mint }) {
+const MAX_STATS = 5;
+
+async function renderStatsCard(ctx, W, H, { title, stats, chosen, photo, accent = PALETTE.mint }) {
+  // `chosen` is a Set of keys; without one, take the first few.
+  const picked = chosen
+    ? stats.filter((st) => chosen.has(st.key))
+    : stats.slice(0, MAX_STATS);
+  stats = picked.length ? picked : stats.slice(0, 1);
+
   const onPhoto = await background(ctx, W, H, photo);
   const M = 84;
   const cardW = W - M * 2;
@@ -438,9 +535,10 @@ async function renderStatsCard(ctx, W, H, { title, stats, photo, accent = PALETT
   y = drawLines(ctx, wrapText(ctx, title, cardW, 2), M, y, 76);
   y += 40;
 
-  const rowH = H > W ? 190 : 150;
   const gap = 22;
-  const shown = stats.slice(0, H > W ? 6 : 4);
+  const shown = stats.slice(0, MAX_STATS);
+  // Rows shrink a little as you add more, so five still breathe on a square.
+  const rowH = H > W ? 190 : Math.max(112, Math.round((H * 0.52 - gap * shown.length) / shown.length));
 
   // Centre the stack in what's left, so a short list doesn't hang off the top.
   const blockH = shown.length * rowH + (shown.length - 1) * gap;
@@ -488,7 +586,7 @@ export async function renderCard(type, format, data) {
   ctx.textBaseline = "alphabetic";
 
   const draw = RENDERERS[type] || RENDERERS.item;
-  await draw(ctx, f.w, f.h, data);
+  const meta = (await draw(ctx, f.w, f.h, data)) || {};
 
   let blob = null;
   let tainted = false;
@@ -497,7 +595,7 @@ export async function renderCard(type, format, data) {
   } catch (err) {
     tainted = true;
   }
-  return { canvas, blob, tainted };
+  return { canvas, blob, tainted, missing: meta.missing || 0 };
 }
 
 /**
@@ -546,6 +644,7 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
 
   let cardKey = cards[0].key;
   let format = "square";
+  const chosenStats = new Map(); // card key -> Set of stat keys
   let photo = null;
   let run = 0;
   let current = null;
@@ -574,6 +673,8 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
         `).join("")}
       </div>
 
+      <div class="share-options" id="shareOptions" hidden></div>
+
       <div class="share-preview" id="sharePreview">
         <div class="share-spinner">Drawing your card…</div>
       </div>
@@ -590,17 +691,79 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
     `;
 
     const preview = sheet.querySelector("#sharePreview");
+    const options = sheet.querySelector("#shareOptions");
     const status = sheet.querySelector("#shareStatus");
     const goBtn = sheet.querySelector("#shareGoBtn");
     const photoInput = sheet.querySelector("#sharePhoto");
     const photoLabel = sheet.querySelector("#sharePhotoLabel");
+
+    /** The stat tick-list, shown only for the stats card. */
+    function paintOptions() {
+      const card = cards.find((c) => c.key === cardKey) || cards[0];
+      const all = (card.data && card.data.stats) || [];
+      if (card.type !== "stats" || all.length <= 1) {
+        options.hidden = true;
+        options.innerHTML = "";
+        return;
+      }
+      const chosen = chosenStats.get(card.key);
+      options.hidden = false;
+      options.innerHTML = `
+        <p class="share-options-head">
+          What goes on the card
+          <span class="share-options-count" id="statCount"></span>
+        </p>
+        <div class="stat-picks">
+          ${all.map((st) => `
+            <button type="button" class="stat-pick ${chosen.has(st.key) ? "on" : ""}"
+                    data-stat="${st.key}">
+              <span class="stat-pick-tick">${chosen.has(st.key) ? "✓" : ""}</span>
+              <span class="stat-pick-label">${escapeHtml(st.label)}</span>
+              <span class="stat-pick-value">${escapeHtml(String(st.value))}</span>
+            </button>
+          `).join("")}
+        </div>
+      `;
+      options.querySelector("#statCount").textContent = `${chosen.size} of ${MAX_STATS}`;
+
+      options.querySelectorAll("[data-stat]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.dataset.stat;
+          if (chosen.has(key)) {
+            if (chosen.size === 1) return; // never leave the card empty
+            chosen.delete(key);
+          } else {
+            if (chosen.size >= MAX_STATS) {
+              const count = options.querySelector("#statCount");
+              count.classList.add("full");
+              setTimeout(() => count.classList.remove("full"), 700);
+              return;
+            }
+            chosen.add(key);
+          }
+          paintOptions();
+          draw();
+        });
+      });
+    }
 
     async function draw() {
       const mine = ++run;
       goBtn.disabled = true;
       preview.innerHTML = `<div class="share-spinner">Drawing your card…</div>`;
       const card = cards.find((c) => c.key === cardKey) || cards[0];
-      const result = await renderCard(card.type, format, { ...card.data, photo });
+
+      if (card.type === "stats" && !chosenStats.has(card.key)) {
+        const all = (card.data && card.data.stats) || [];
+        chosenStats.set(card.key, new Set(all.slice(0, MAX_STATS).map((st) => st.key)));
+        paintOptions();
+      }
+
+      const result = await renderCard(card.type, format, {
+        ...card.data,
+        photo,
+        chosen: chosenStats.get(card.key) || null,
+      });
       if (mine !== run) return; // a newer draw already started
       current = result;
 
@@ -615,7 +778,10 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
         status.className = "share-status bad";
         goBtn.disabled = true;
       } else {
-        status.textContent = "";
+        // Say so rather than letting a colour tile look like a broken render.
+        status.textContent = result.missing
+          ? `${result.missing} cover${result.missing === 1 ? "" : "s"} couldn't be fetched — those show the title instead.`
+          : "";
         status.className = "share-status";
         goBtn.disabled = false;
       }
@@ -625,6 +791,12 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
       btn.addEventListener("click", () => {
         cardKey = btn.dataset.card;
         sheet.querySelectorAll("[data-card]").forEach((b) => b.classList.toggle("active", b === btn));
+        const card = cards.find((c) => c.key === cardKey);
+        if (card && card.type === "stats" && !chosenStats.has(card.key)) {
+          const all = (card.data && card.data.stats) || [];
+          chosenStats.set(card.key, new Set(all.slice(0, MAX_STATS).map((st) => st.key)));
+        }
+        paintOptions();
         draw();
       });
     });

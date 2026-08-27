@@ -9,6 +9,7 @@
 
 import { store } from "./core.js";
 import { bounceTap } from "./animations.js";
+import { usage, clearCache, CACHE_CAP_BYTES } from "./covers.js";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -60,12 +61,29 @@ function render(container, flash = null) {
     </div>
 
     <div class="settings-card">
+      <p class="settings-heading">Storage</p>
+      <p class="settings-note">
+        Your photos are kept forever and travel in your backups. Covers
+        downloaded from the web are only a cache — clearing them frees space
+        and they come back next time you look at the book.
+      </p>
+      <p class="settings-stat" id="storageStat">Measuring…</p>
+      <div class="storage-bar" id="storageBar" hidden><span></span></div>
+      <button class="btn btn-secondary" id="clearCacheBtn" type="button">Clear downloaded covers</button>
+      <p class="settings-status" id="storageStatus"></p>
+    </div>
+
+    <div class="settings-card">
       <p class="settings-heading">Back up</p>
       <p class="settings-note">
         Saves everything to a file you keep — books, records, copies, loans,
         reviews, dates. Worth doing before you clear Safari data or move to a
         new phone.
       </p>
+      <label class="settings-check">
+        <input type="checkbox" id="backupPhotos" checked>
+        <span>Include the photos I took (bigger file, but nothing is lost)</span>
+      </label>
       <button class="btn btn-primary" id="backupBtn" type="button">Back up my library</button>
       <p class="settings-status" id="backupStatus"></p>
       <textarea class="settings-json" id="backupJson" readonly hidden></textarea>
@@ -104,6 +122,7 @@ function render(container, flash = null) {
   container.appendChild(wrap);
 
   wireBackup(wrap);
+  wireStorage(wrap);
   wireRestore(wrap, container);
   wireReset(wrap, container);
 
@@ -126,7 +145,9 @@ function wireBackup(wrap) {
 
   btn.addEventListener("click", async () => {
     bounceTap(btn);
-    const bundle = store.exportBundle();
+    const withPhotos = btn.closest(".settings-card").querySelector("#backupPhotos").checked;
+    status.textContent = withPhotos ? "Gathering your photos…" : "Preparing…";
+    const bundle = await store.exportBundle({ withPhotos });
     const text = JSON.stringify(bundle, null, 2);
     const filename = `stackt-backup-${today()}.json`;
 
@@ -169,6 +190,51 @@ function wireBackup(wrap) {
   });
 }
 
+// ---------- storage ----------
+
+function fmtBytes(n) {
+  if (!n) return "0 KB";
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb.toFixed(0)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+function wireStorage(wrap) {
+  const stat = wrap.querySelector("#storageStat");
+  const bar = wrap.querySelector("#storageBar");
+  const btn = wrap.querySelector("#clearCacheBtn");
+  const status = wrap.querySelector("#storageStatus");
+
+  async function paint() {
+    const u = await usage();
+    stat.innerHTML =
+      `<strong>${fmtBytes(u.ownBytes)}</strong> your photos (${u.ownCount}) · ` +
+      `<strong>${fmtBytes(u.cachedBytes)}</strong> downloaded covers (${u.cachedCount})`;
+
+    // Measured against OUR cap, not the browser's quota — the cap is the number
+    // that actually governs anything, and it's the one we can promise.
+    const pct = Math.min(100, Math.round((u.cachedBytes / CACHE_CAP_BYTES) * 100));
+    bar.hidden = false;
+    bar.firstElementChild.style.width = `${Math.max(pct, u.cachedBytes ? 2 : 0)}%`;
+    bar.title = `${pct}% of the ${fmtBytes(CACHE_CAP_BYTES)} cover cache`;
+    btn.disabled = !u.cachedCount;
+  }
+
+  btn.addEventListener("click", async () => {
+    bounceTap(btn);
+    btn.disabled = true;
+    status.textContent = "Clearing…";
+    const n = await clearCache();
+    status.textContent = n
+      ? `Cleared ${n} cover${n === 1 ? "" : "s"}. They'll come back as you browse.`
+      : "Nothing cached to clear.";
+    status.className = "settings-status good";
+    paint();
+  });
+
+  paint();
+}
+
 // ---------- restore ----------
 
 function wireRestore(wrap, container) {
@@ -179,7 +245,7 @@ function wireRestore(wrap, container) {
   const pasteBox = wrap.querySelector("#restoreJson");
   const pasteBtn = wrap.querySelector("#restorePasteBtn");
 
-  function apply(text) {
+  async function apply(text) {
     let bundle;
     try {
       bundle = JSON.parse(text);
@@ -189,7 +255,7 @@ function wireRestore(wrap, container) {
       return;
     }
     try {
-      const n = store.importBundle(bundle);
+      const n = await store.importBundle(bundle);
       // Re-render so the counts at the top reflect what just landed, carrying
       // the confirmation across so it isn't wiped by the redraw.
       render(container, {
@@ -245,8 +311,9 @@ function wireReset(wrap, container) {
       }, 0);
       return;
     }
-    store.resetAll();
-    render(container, { selector: "#resetStatus", text: "Library erased.", kind: "good" });
+    store.resetAll().then(() => {
+      render(container, { selector: "#resetStatus", text: "Library erased.", kind: "good" });
+    });
   });
 
   function cancel(e) {

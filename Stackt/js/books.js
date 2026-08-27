@@ -11,6 +11,7 @@ import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, cove
 import { ICONS } from "./icons.js";
 import { createSorter, collator, yearValue, titleSortKey, openSortSheet } from "./sorting.js";
 import { openShareSheet } from "./share.js";
+import { setCoverSrc, ownKey, putBlob, encodeCover, deleteBlob } from "./covers.js";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -275,17 +276,44 @@ function shareCardsForShelf(store) {
   });
   const topAuthor = Object.keys(authorCounts).sort((a, b) => authorCounts[b] - authorCounts[a])[0];
 
+  // Every stat the data can support. Only ones with something to say are
+  // offered — a "longest read" row is noise if nothing has both dates.
+  const thisYear = String(new Date().getFullYear());
+  const readThisYear = read.filter((b) => (b.finishedDate || "").startsWith(thisYear));
+  const quickest = read
+    .map((b) => ({ b, d: readingDays(b) }))
+    .filter((x) => x.d != null)
+    .sort((x, y) => x.d - y.d)[0];
+  const fiveStars = owned.filter((b) => b.rating === 5).length;
+  const distinctAuthors = new Set(owned.map((b) => b.creator || "Unknown")).size;
+  const wishlist = all.filter((b) => shelfOf(b) === "wishlist").length;
+  const lentOut = owned.filter(hasLoan).length;
+  const totalCopies = owned.reduce((n, b) => n + (b.copies || []).length, 0);
+  const years = owned.map((b) => parseInt(b.year, 10)).filter(Number.isFinite);
+
+  const maybe = (cond, stat) => (cond ? [stat] : []);
   const stats = [
-    { value: owned.length, label: "books owned" },
-    { value: read.length, label: "read" },
-    ...(longest ? [{ value: `${longest.d}d`, label: `longest read · ${longest.b.title}`.slice(0, 42) }] : []),
-    ...(topAuthor ? [{ value: authorCounts[topAuthor], label: `by ${topAuthor}`.slice(0, 42) }] : []),
-    ...(rated.length
-      ? [{
-          value: (rated.reduce((n, b) => n + b.rating, 0) / rated.length).toFixed(1),
-          label: "average rating",
-        }]
-      : []),
+    // the basics
+    { key: "owned", value: owned.length, label: "books owned" },
+    { key: "read", value: read.length, label: "read" },
+    ...maybe(wishlist, { key: "wishlist", value: wishlist, label: "on the wishlist" }),
+    ...maybe(rated.length, {
+      key: "avg",
+      value: (rated.reduce((n, b) => n + b.rating, 0) / rated.length).toFixed(1),
+      label: "average rating",
+    }),
+    // reading milestones
+    ...maybe(readThisYear.length, { key: "year", value: readThisYear.length, label: `read in ${thisYear}` }),
+    ...maybe(longest, { key: "longest", value: `${longest && longest.d}d`, label: `longest read · ${longest && longest.b.title}` }),
+    ...maybe(quickest, { key: "quickest", value: `${quickest && quickest.d}d`, label: `quickest read · ${quickest && quickest.b.title}` }),
+    // people and taste
+    ...maybe(topAuthor, { key: "topAuthor", value: authorCounts[topAuthor], label: `by ${topAuthor}` }),
+    ...maybe(distinctAuthors > 1, { key: "authors", value: distinctAuthors, label: "different authors" }),
+    ...maybe(fiveStars, { key: "fivestar", value: fiveStars, label: "five-star books" }),
+    // collection facts
+    ...maybe(years.length, { key: "oldest", value: Math.min(...years), label: "oldest book" }),
+    ...maybe(totalCopies > owned.length, { key: "copies", value: totalCopies, label: "physical copies" }),
+    ...maybe(lentOut, { key: "lent", value: lentOut, label: "out on loan" }),
   ];
 
   return [
@@ -294,6 +322,8 @@ function shareCardsForShelf(store) {
       type: "grid",
       data: {
         items: list,
+        // "L" is what the list cards already requested, so these come out of
+        // cache instead of costing another rate-limited fetch each.
         coverSrcs: list.map((b) => bookCoverSrc(b, "L")),
         title: shelfName,
         subtitle: `${list.length} book${list.length === 1 ? "" : "s"}${read.length ? ` · ${read.length} read` : ""}`,
@@ -340,7 +370,6 @@ function render(container, store, opts) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search title or author..." value="${escapeHtml(searchQuery)}">
-    <button class="icon-btn" id="shareBtn" type="button" aria-label="Share my collection">${ICONS.share}</button>
     <button class="icon-btn ${sorter.isDefault ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
     <button class="icon-btn ${groupByAuthor ? "on" : ""}" id="authorBtn" type="button" aria-label="Group by author" aria-pressed="${groupByAuthor}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
@@ -394,10 +423,6 @@ function render(container, store, opts) {
     openBookSortSheet(store, container);
   });
 
-  wrap.querySelector("#shareBtn").addEventListener("click", (e) => {
-    bounceTap(e.currentTarget);
-    openShareSheet(shareCardsForShelf(store), { filename: "stackt-books" });
-  });
 
   if (!authorFilter) {
     wrap.querySelectorAll(".mode-btn").forEach((btn) => {
@@ -613,6 +638,23 @@ function renderAuthorList(bodyHolder, store, container) {
   bodyHolder.appendChild(grid);
 }
 
+/**
+ * Every remote cover is loaded with crossOrigin="anonymous", app-wide.
+ *
+ * Not for this screen's benefit — for the share cards'. Safari keys its image
+ * cache loosely across CORS modes, so a cover fetched here WITHOUT the flag can
+ * poison the entry the share canvas later needs, and the canvas ends up tainted
+ * or the load just fails. Keeping every request in the same mode avoids it.
+ * Data URLs (your own photos) are same-origin and skip it.
+ */
+function corsImage() {
+  const img = new Image();
+  // Set unconditionally: data: URLs are unaffected by it, and a conditional
+  // would need the src, which callers only assign after wiring handlers.
+  img.crossOrigin = "anonymous";
+  return img;
+}
+
 // ---------- cards ----------
 
 function renderBookGrid(container, books, onTap) {
@@ -689,14 +731,14 @@ function openEditionChooser(editions, onPick) {
     sheet.querySelectorAll(".swatch-img[data-src]").forEach((el) => {
       const src = el.dataset.src;
       if (!src) return;
-      const probe = new Image();
+      const probe = corsImage();
       probe.onload = () => {
         el.src = src;
         el.classList.add("loaded");
         const emoji = el.parentElement.querySelector(".swatch-emoji");
         if (emoji) emoji.classList.add("hidden");
       };
-      probe.src = src;
+      setCoverSrc(probe, src);
     });
   });
 }
@@ -775,7 +817,7 @@ function buildBookCard(book, onTap, editions = [book]) {
     const swatch = card.querySelector(".item-swatch");
     const swatchImg = swatch.querySelector(".swatch-img");
     const swatchEmoji = swatch.querySelector(".swatch-emoji");
-    const img = new Image();
+    const img = corsImage();
     img.onload = () => {
       swatchImg.src = img.src;
       swatchImg.classList.add("loaded");
@@ -788,7 +830,7 @@ function buildBookCard(book, onTap, editions = [book]) {
     // Request Open Library's largest cover size even for the small card thumbnail —
     // a browser shrinking a big image down looks sharp; stretching the "S" size up to
     // fit a retina-density 52px box is what was causing the blurry/soft covers.
-    img.src = bookCoverSrc(book, "L");
+    setCoverSrc(img, bookCoverSrc(book, "L"));
   }
 
   return card;
@@ -803,13 +845,17 @@ function buildBookCard(book, onTap, editions = [book]) {
  */
 function bookCoverSrc(book, size = "L") {
   if (!book) return null;
+  // coverRef is a key into the blob store — your own photo, kept locally.
+  // customCover is the old inline form, still honoured for anything a
+  // migration couldn't move.
+  if (book.coverRef) return book.coverRef;
   if (book.customCover) return book.customCover;
   if (book.coverId) return coverIdUrl(book.coverId, size);
   if (book.isbn) return coverUrl(book.isbn, size);
   return null;
 }
 function hasCover(book) {
-  return !!(book && (book.customCover || book.coverId || book.isbn));
+  return !!(book && (book.coverRef || book.customCover || book.coverId || book.isbn));
 }
 
 /** Shrinks a picked photo before storing it. Browser storage is ~5MB for the
@@ -819,7 +865,7 @@ function downscaleImage(file, maxEdge = 500, quality = 0.75) {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read that file"));
     reader.onload = () => {
-      const img = new Image();
+      const img = corsImage();
       img.onerror = () => reject(new Error("That file isn't an image we can read"));
       img.onload = () => {
         const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
@@ -882,8 +928,11 @@ function openCoverPicker(bookish, onPick) {
       const label = overlay.querySelector("#cpLabel");
       label.textContent = "Processing your photo…";
       try {
-        const dataUrl = await downscaleImage(file);
-        onPick({ customCover: dataUrl, coverId: null });
+        // Hands back the encoded BLOB, not a data URL. Where it gets filed
+        // depends on the caller: an existing book keys it by id, while the add
+        // form has to hold it until the book exists and has one.
+        const blob = await encodeCover(file);
+        onPick({ ownBlob: blob, customCover: null, coverId: null });
         dismissLayer();
       } catch (err) {
         label.textContent = err.message || "Couldn't use that image.";
@@ -947,12 +996,12 @@ function openCoverPicker(bookish, onPick) {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "cover-option";
-          const img = new Image();
+          const img = corsImage();
           img.alt = "";
           img.loading = "lazy";
           img.addEventListener("load", () => btn.classList.add("loaded"));
           img.addEventListener("error", () => btn.remove()); // drop dead thumbnails
-          img.src = coverIdUrl(id, "M");
+          setCoverSrc(img, coverIdUrl(id, "M"));
           btn.appendChild(img);
           btn.addEventListener("click", () => {
             onPick({ customCover: null, coverId: id });
@@ -976,6 +1025,22 @@ function openCoverPicker(bookish, onPick) {
   });
 }
 
+/**
+ * Turns a picker result into a patch, storing any photo in the blob store.
+ *
+ * Picking anything at all clears the previous photo: one cover per item, and a
+ * stale blob nobody references would sit there forever otherwise.
+ */
+async function applyCoverPick(itemId, pick) {
+  const key = ownKey(itemId);
+  if (pick.ownBlob) {
+    await putBlob(key, pick.ownBlob, { permanent: true });
+    return { coverRef: key, customCover: null, coverId: null };
+  }
+  await deleteBlob(key);
+  return { coverRef: null, customCover: null, coverId: pick.coverId ?? null };
+}
+
 function coverBlockHtml(book) {
   return `
     <div class="detail-cover-wrap">
@@ -996,7 +1061,7 @@ function wireCover(sheet, book) {
   img.addEventListener("error", () => {
     fallback.classList.remove("shimmer");
   });
-  img.src = bookCoverSrc(book, "L");
+  setCoverSrc(img, bookCoverSrc(book, "L"));
 }
 
 // Opens a fullscreen lightbox of the front cover. Open Library (our free
@@ -1033,7 +1098,7 @@ function openCoverLightbox(book) {
       fallback.classList.remove("shimmer");
       caption.textContent = "No cover image found for this edition";
     });
-    img.src = bookCoverSrc(book, "L");
+    setCoverSrc(img, bookCoverSrc(book, "L"));
   });
 }
 
@@ -1721,8 +1786,9 @@ function wireEditMode(sheet, book, store, container) {
   const changeCoverBtn = sheet.querySelector("#changeCoverBtn");
   if (changeCoverBtn) {
     changeCoverBtn.addEventListener("click", () => {
-      openCoverPicker(book, (pick) => {
-        store.updateItem(book.id, pick);
+      openCoverPicker(book, async (pick) => {
+        const patch = await applyCoverPick(book.id, pick);
+        store.updateItem(book.id, patch);
         refreshDetail(store, container, book.id, { mode: "edit" });
       });
     });
@@ -1756,7 +1822,8 @@ function wireEditMode(sheet, book, store, container) {
   });
 
   sheet.querySelector("#deleteBtn").addEventListener("click", () => {
-    store.removeItem(book.id);
+    deleteBlob(ownKey(book.id)); // don't leave an orphan photo behind
+      store.removeItem(book.id);
     closeModal();
     render(container, store);
   });
@@ -2075,8 +2142,11 @@ function openAddForm(store, container, prefill = {}) {
     `;
 
     const coverBlock = sheet.querySelector("#addCoverBlock");
-    // Cover chosen in the picker before the book exists; applied on save.
+    // Chosen before the book exists, so it can't be keyed by id yet: the blob
+    // is held here and filed the moment addItem hands back an id.
     let pickedCover = { customCover: null, coverId: null };
+    let pickedBlob = null;
+    let pickedPreviewUrl = null;
     const isbnInput = sheet.querySelector("#a-isbn");
     const isbnStatus = sheet.querySelector("#isbnLookupStatus");
     const titleInput = sheet.querySelector("#a-title");
@@ -2108,7 +2178,9 @@ function openAddForm(store, container, prefill = {}) {
 
     // Re-paints the add form's preview from whatever the current pick is.
     function repaintAddCover(isbn) {
-      const shape = { isbn: isbn || null, ...pickedCover, color: "#eee" };
+      const shape = pickedPreviewUrl
+        ? { customCover: pickedPreviewUrl, color: "#eee" }
+        : { isbn: isbn || null, ...pickedCover, color: "#eee" };
       // Only the preview hides when there's nothing to show — the button stays
       // put, so a hand-typed book can still be given a cover.
       coverBlock.classList.toggle("hidden", !hasCover(shape));
@@ -2120,7 +2192,10 @@ function openAddForm(store, container, prefill = {}) {
       openCoverPicker(
         { title: titleInput.value.trim(), creator: creatorInput.value.trim(), ...pickedCover },
         (pick) => {
-          pickedCover = pick;
+          if (pickedPreviewUrl) URL.revokeObjectURL(pickedPreviewUrl);
+          pickedBlob = pick.ownBlob || null;
+          pickedPreviewUrl = pickedBlob ? URL.createObjectURL(pickedBlob) : null;
+          pickedCover = { customCover: null, coverId: pick.coverId ?? null };
           repaintAddCover(isbnInput.value.trim() || null);
         }
       );
@@ -2210,7 +2285,7 @@ function openAddForm(store, container, prefill = {}) {
       // it's fresh as of today — same "checked on" convention as the edit screen.
       const priceCheckedDate = price != null ? today() : null;
 
-      store.addItem({
+      const created = store.addItem({
         type: "book",
         title: titleInput.value.trim(),
         creator: creatorInput.value.trim(),
@@ -2226,6 +2301,16 @@ function openAddForm(store, container, prefill = {}) {
         copies,
         borrowed,
       });
+
+      if (pickedBlob) {
+        const key = ownKey(created.id);
+        putBlob(key, pickedBlob, { permanent: true }).then((stored) => {
+          if (stored) store.updateItem(created.id, { coverRef: key });
+          if (pickedPreviewUrl) URL.revokeObjectURL(pickedPreviewUrl);
+          render(container, store);
+        });
+      }
+
       closeModal();
       render(container, store);
     });
@@ -2353,4 +2438,9 @@ function randomColor() {
   return palette[Math.floor(Math.random() * palette.length)];
 }
 
-export default { render, openAddForm };
+/** Called by the header's share button — see applyChrome in core.js. */
+function openShelfShare(store) {
+  openShareSheet(shareCardsForShelf(store), { filename: "stackt-books" });
+}
+
+export default { render, openAddForm, openShelfShare };
