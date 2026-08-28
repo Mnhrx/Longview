@@ -113,6 +113,18 @@ function touch(key) {
 const urlCache = new Map(); // key -> object URL, so we don't re-create per render
 
 /**
+ * How many object URLs we'll hold open at once.
+ *
+ * This used to be unbounded, which was a slow poison: every cover you had ever
+ * scrolled past kept a live handle for the whole session, so an afternoon of
+ * browsing a few hundred covers left a few hundred blob handles pinned. iOS
+ * reclaims that kind of memory without asking, and a reclaimed handle is a
+ * cover that silently never loads again. Holding fewer is the actual fix; the
+ * retry below is the safety net for when one dies anyway.
+ */
+const URL_CACHE_MAX = 200;
+
+/**
  * A URL you can put straight into an <img>, or null if we don't hold this one.
  *
  * Object URLs are kept in a map rather than created per call: making a fresh
@@ -121,12 +133,46 @@ const urlCache = new Map(); // key -> object URL, so we don't re-create per rend
  */
 export async function localUrl(key) {
   if (!key) return null;
-  if (urlCache.has(key)) return urlCache.get(key);
+  if (urlCache.has(key)) {
+    const url = urlCache.get(key);
+    // Re-insert so the map stays in least-recently-used order.
+    urlCache.delete(key);
+    urlCache.set(key, url);
+    return url;
+  }
   const rec = await getRecord(key);
   if (!rec || !rec.blob) return null;
   const url = URL.createObjectURL(rec.blob);
   urlCache.set(key, url);
+  trimUrlCache();
   return url;
+}
+
+/** Is anything on screen currently pointed at this URL? */
+function onScreen(url) {
+  if (typeof document === "undefined") return false;
+  try {
+    return !!document.querySelector(`img[src="${url}"]`);
+  } catch (err) {
+    return false; // an unusual URL that won't go in a selector: assume in use
+  }
+}
+
+/**
+ * Releases the oldest handles once we're over the cap.
+ *
+ * Deliberately skips anything still displayed — revoking the URL out from
+ * under a visible <img> is precisely the failure we're here to stop, and it
+ * would be a poor joke to cause it ourselves.
+ */
+function trimUrlCache() {
+  if (urlCache.size <= URL_CACHE_MAX) return;
+  for (const [key, url] of [...urlCache]) {
+    if (urlCache.size <= URL_CACHE_MAX) break;
+    if (onScreen(url)) continue;
+    URL.revokeObjectURL(url);
+    urlCache.delete(key);
+  }
 }
 
 function forgetUrl(key) {
@@ -135,6 +181,24 @@ function forgetUrl(key) {
     URL.revokeObjectURL(url);
     urlCache.delete(key);
   }
+}
+
+/**
+ * Same bytes, a brand-new object URL.
+ *
+ * The second rung of the retry ladder: when a cached URL stops working, the
+ * blob behind it is usually still perfectly good and only the handle has gone
+ * stale, so rebuilding costs one IndexedDB read and fixes it outright.
+ */
+export async function rebuildUrl(key) {
+  if (!key) return null;
+  forgetUrl(key);
+  return localUrl(key);
+}
+
+/** How many handles we're holding — for the Settings cover check. */
+export function liveUrlCount() {
+  return urlCache.size;
 }
 
 // ---------- writing ----------
@@ -378,36 +442,95 @@ export async function setCoverSrc(img, src) {
   // Only a genuinely cross-origin URL wants crossOrigin. Setting it on a
   // blob: or data: URL is at best pointless and, in WebKit, fatal — the load
   // just fails. Assigned before src, since changing it afterwards is ignored.
-  const sameOrigin = (url) => /^(blob:|data:)/.test(url);
+  const isLocal = (url) => /^(blob:|data:)/.test(url);
   const point = (url) => {
-    if (sameOrigin(url)) img.removeAttribute("crossorigin");
+    if (isLocal(url)) img.removeAttribute("crossorigin");
     else img.crossOrigin = "anonymous";
     img.src = url;
   };
 
-  if (String(src).startsWith("own:")) {
-    const url = await localUrl(src);
-    if (url) {
-      point(url);
-    } else if (img.onerror) {
-      img.onerror(new Event("error")); // nothing stored: let the caller fall back
+  const s = String(src);
+  const own = s.startsWith("own:");
+  const data = s.startsWith("data:");
+  const key = own ? s : data ? null : remoteKey(s);
+
+  /**
+   * The ladder, most local rung first. Each returns a URL or null.
+   *
+   *   1. the cached object URL      — instant, and right almost always
+   *   2. the same blob, rebuilt     — fixes a handle that went stale
+   *   3. the network                — fixes a blob that went bad
+   *
+   * A photo you took has no third rung; there is nowhere to re-fetch it from.
+   */
+  const ladder = data
+    ? [async () => s]
+    : [
+        () => localUrl(key),
+        () => rebuildUrl(key),
+        ...(own
+          ? []
+          : [
+              async () => {
+                // We only get here because the stored copy failed twice. It's
+                // a cached download, disposable by definition, so bin it and
+                // fetch a clean one — the read-through at the bottom has
+                // already run by now and would have found the bad record.
+                await deleteBlob(key);
+                cacheRemote(s);
+                return s;
+              },
+            ]),
+      ];
+
+  let rung = 0;
+  let rounds = 0;
+
+  const advance = async () => {
+    while (rung < ladder.length) {
+      let url = null;
+      try {
+        url = await ladder[rung++]();
+      } catch (err) {
+        url = null;
+      }
+      if (url) {
+        point(url);
+        return true;
+      }
     }
+    return false;
+  };
+
+  /**
+   * Recovery is armed for the life of the element, not just the first paint.
+   *
+   * That matters because the most annoying version of this bug doesn't happen
+   * during a render at all: the app sits in the background, the system throws
+   * away the decoded images, and when you come back the <img> tries to redraw
+   * itself from a handle that no longer works. There's no re-render to hang a
+   * fix on — the element just fails on its own. So a successful load resets
+   * the ladder rather than closing it, and the picture repairs itself in
+   * place. Capped at a few rounds so a genuinely missing cover can't spin.
+   */
+  img.addEventListener("error", async () => {
+    if (rounds > 3) return;
+    if (!(await advance())) rounds = 99; // out of rungs; stop trying
+  });
+  img.addEventListener("load", () => {
+    rung = 0;
+    rounds++;
+  });
+
+  if (!(await advance())) {
+    // Nothing to show at all. dispatchEvent rather than calling img.onerror,
+    // because half the call sites attach their fallback with addEventListener
+    // and a direct call skips those entirely.
+    img.dispatchEvent(new Event("error"));
     return;
   }
 
-  if (String(src).startsWith("data:")) {
-    point(src);
-    return;
-  }
-
-  const cached = await localUrl(remoteKey(src));
-  if (cached) {
-    point(cached);
-    return;
-  }
-
-  point(src);
-  // Fetch a private copy in the background. It doesn't matter if this fails —
-  // the image on screen already loaded from the network.
-  cacheRemote(src);
+  // Read-through: keep a private copy for next time. Self-guarding — it
+  // returns early if we already hold this one — so it's safe on every path.
+  if (!own && !data) cacheRemote(s);
 }

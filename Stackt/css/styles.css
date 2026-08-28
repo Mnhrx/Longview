@@ -1739,6 +1739,27 @@ html, body {
 }
 .settings-status.good { color: #0A8F6B; }
 .settings-status.bad { color: var(--red-accent); }
+.settings-status.warn { color: #B45309; }
+
+/* The cover-check readout. Monospace because it's a column-aligned report,
+   and scrollable in its own right so a long one can't stretch the page. */
+.settings-readout {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #1A1A2E;
+  color: #F5F5F5;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre;
+  user-select: text;
+  -webkit-user-select: text;
+}
 
 .settings-file-btn {
   display: block;

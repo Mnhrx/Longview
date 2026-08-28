@@ -228,7 +228,7 @@ function corsImage() {
 
 // ---------- covers ----------
 
-function recordCoverSrc(rec, size = 500) {
+export function recordCoverSrc(rec, size = 500) {
   if (!rec) return null;
   if (rec.coverRef) return rec.coverRef; // your own photo, from the blob store
   if (rec.customCover) return rec.customCover;
@@ -507,16 +507,87 @@ function shareCardsForRecord(rec) {
   return cards;
 }
 
+/** Sets the view flags directly, for the headline tests. See books.js. */
+export function __setViewState(patch = {}) {
+  if ("shelf" in patch) shelf = patch.shelf;
+  if ("favesOnly" in patch) favesOnly = patch.favesOnly;
+  if ("artistFilter" in patch) artistFilter = patch.artistFilter;
+  if ("activeFilter" in patch) activeFilter = patch.activeFilter;
+  if ("searchQuery" in patch) searchQuery = patch.searchQuery;
+  if ("ratingFilter" in patch) ratingFilter = patch.ratingFilter;
+}
+
+/**
+ * What the card calls itself — the records half of the same idea as books.
+ *
+ * WHERE you are gives the base; the strongest thing you've narrowed by is
+ * phrased against it. The condition chips are the one difference: "Mint" is a
+ * property of the pressing rather than a state you put it in, so it reads as
+ * "My mint pressings" rather than a verb phrase.
+ */
+export function shelfShareTitle() {
+  const where = favesOnly ? "faves" : shelf;
+  const BASE = {
+    faves: "My favourite records",
+    library: "My record collection",
+    wishlist: "My wishlist",
+    borrowed: "Records I've borrowed",
+  };
+
+  const q = searchQuery.trim();
+  if (q) {
+    const IN = {
+      faves: "in my favourites",
+      library: "in my collection",
+      wishlist: "on my wishlist",
+      borrowed: "among my borrowed",
+    };
+    return `“${q}” ${IN[where]}`;
+  }
+
+  if (artistFilter) {
+    return {
+      faves: `My favourite ${artistFilter}`,
+      library: `${artistFilter}, on my shelf`,
+      wishlist: `${artistFilter}, on my wishlist`,
+      borrowed: `${artistFilter}, borrowed`,
+    }[where];
+  }
+
+  if (ratingFilter != null) {
+    const stars = `${formatRating(ratingFilter)}★`;
+    return {
+      faves: `My ${stars} favourites`,
+      library: `My ${stars} records`,
+      wishlist: `${stars} on my wishlist`,
+      borrowed: `${stars}, borrowed`,
+    }[where];
+  }
+
+  if (activeFilter !== "all") {
+    if (activeFilter === "lent-out") {
+      return where === "faves" ? "Favourites I've lent out" : "Records I've lent out";
+    }
+    const cond = CONDITION_LABELS[activeFilter];
+    if (cond) {
+      const c = cond.toLowerCase();
+      return {
+        faves: `My favourite ${c} pressings`,
+        library: `My ${c} pressings`,
+        wishlist: `${cond} on my wishlist`,
+        borrowed: `${cond}, borrowed`,
+      }[where];
+    }
+  }
+
+  return BASE[where];
+}
+
 function shareCardsForShelf(store) {
   const list = getRecords(store);
   const all = store.itemsByType("lp");
   const owned = all.filter(isOwned);
   const rated = owned.filter((r) => r.rating);
-
-  const shelfName =
-    shelf === "wishlist" ? "My wishlist"
-    : shelf === "borrowed" ? "Records I've borrowed"
-    : "My record collection";
 
   const artistCounts = {};
   owned.forEach((r) => {
@@ -530,6 +601,7 @@ function shareCardsForShelf(store) {
 
   const distinctArtists = new Set(owned.map((r) => r.creator || "Unknown")).size;
   const fiveStars = owned.filter((r) => r.rating === 5).length;
+  const favourites = all.filter((r) => r.favourite).length;
   const wishlist = all.filter((r) => shelfOf(r) === "wishlist").length;
   const lentOut = owned.filter(hasLoan).length;
   const totalCopies = owned.reduce((n, r) => n + (r.copies || []).length, 0);
@@ -548,6 +620,7 @@ function shareCardsForShelf(store) {
     ...maybe(topArtist, { key: "topArtist", value: artistCounts[topArtist], label: `by ${topArtist}` }),
     ...maybe(distinctArtists > 1, { key: "artists", value: distinctArtists, label: "different artists" }),
     ...maybe(fiveStars, { key: "fivestar", value: fiveStars, label: "five-star records" }),
+    ...maybe(favourites, { key: "faves", value: favourites, label: "favourites" }),
     ...maybe(oldest, { key: "oldest", value: oldest, label: "oldest pressing" }),
     ...maybe(newest && newest !== oldest, { key: "newest", value: newest, label: "newest pressing" }),
     ...maybe(mint, { key: "mint", value: mint, label: "in mint condition" }),
@@ -555,15 +628,14 @@ function shareCardsForShelf(store) {
     ...maybe(lentOut, { key: "lent", value: lentOut, label: "out on loan" }),
   ];
 
-  const shareTitle =
-    artistFilter ? `${artistFilter}, on my shelf`
-    : ratingFilter != null ? `My ${formatRating(ratingFilter)}★ records`
-    : shelfName;
+  const shareTitle = shelfShareTitle();
 
   /** Describes the SELECTION, not the whole collection. */
   const shareSubtitleFor = (picked) => {
     const n = picked.length;
-    const noun = `${n} record${n === 1 ? "" : "s"}`;
+    const noun = favesOnly
+      ? `${n} favourite${n === 1 ? "" : "s"}`
+      : `${n} record${n === 1 ? "" : "s"}`;
     return ratingFilter != null ? `${noun}, all ${formatRating(ratingFilter)}★` : noun;
   };
 
@@ -845,15 +917,17 @@ function buildCard(rec, onTap) {
     const swatch = card.querySelector(".item-swatch");
     const swatchImg = swatch.querySelector(".swatch-img");
     const swatchEmoji = swatch.querySelector(".swatch-emoji");
-    const img = corsImage();
-    img.onload = () => {
-      swatchImg.src = img.src;
+
+    // Straight at the visible <img> — see the matching note in books.js. The
+    // off-screen probe that used to sit here meant setCoverSrc's recovery was
+    // attached to an element nobody could see.
+    swatchImg.addEventListener("load", () => {
       swatchImg.classList.add("loaded");
       if (swatchEmoji) swatchEmoji.classList.add("hidden");
       swatch.classList.remove("shimmer");
-    };
-    img.onerror = () => swatch.classList.remove("shimmer");
-    setCoverSrc(img, recordCoverSrc(rec, 250));
+    });
+    swatchImg.addEventListener("error", () => swatch.classList.remove("shimmer"));
+    setCoverSrc(swatchImg, recordCoverSrc(rec, 250));
   }
   return card;
 }

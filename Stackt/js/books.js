@@ -266,6 +266,97 @@ function shelfLabel(book) {
   return STATUS_LABELS[book.readingStatus] || "In my library";
 }
 
+/**
+ * Sets the view flags directly. Exists for the tests: several headline
+ * combinations (a rating filter inside the wishlist, for one) have no UI path
+ * to them, and a heading only checked where you can click to it is a heading
+ * that goes wrong everywhere else. Nothing in the app calls this.
+ */
+export function __setViewState(patch = {}) {
+  if ("shelf" in patch) shelf = patch.shelf;
+  if ("favesOnly" in patch) favesOnly = patch.favesOnly;
+  if ("authorFilter" in patch) authorFilter = patch.authorFilter;
+  if ("activeFilter" in patch) activeFilter = patch.activeFilter;
+  if ("searchQuery" in patch) searchQuery = patch.searchQuery;
+  if ("ratingFilter" in patch) ratingFilter = patch.ratingFilter;
+}
+
+/**
+ * What the card calls itself.
+ *
+ * The heading has to follow the screen, or it lies: sharing from Favourites
+ * and getting "My bookshelf" was the version of this that shipped, and a card
+ * of six Murakami novels announcing itself as the whole shelf is the same
+ * mistake with a different filter.
+ *
+ * Two parts. WHERE you are — a shelf, or favourites, which cut across shelves
+ * — gives the base. Then the strongest thing you've narrowed by (a search you
+ * typed beats an author you tapped beats a rating beats a status chip) is
+ * phrased against that base, so "5★" reads correctly whether you're in the
+ * library or the wishlist. Only one qualifier is used: two would make it a
+ * sentence, and this is a headline.
+ */
+export function shelfShareTitle() {
+  const where = favesOnly ? "faves" : shelf;
+  const BASE = {
+    faves: "My favourites",
+    library: "My bookshelf",
+    wishlist: "My wishlist",
+    borrowed: "Books I've borrowed",
+  };
+
+  const q = searchQuery.trim();
+  if (q) {
+    const IN = {
+      faves: "in my favourites",
+      library: "on my shelf",
+      wishlist: "on my wishlist",
+      borrowed: "among my borrowed",
+    };
+    return `“${q}” ${IN[where]}`;
+  }
+
+  if (authorFilter) {
+    return {
+      faves: `My favourite ${authorFilter}`,
+      library: `${authorFilter}, on my shelf`,
+      wishlist: `${authorFilter}, on my wishlist`,
+      borrowed: `${authorFilter}, borrowed`,
+    }[where];
+  }
+
+  if (ratingFilter != null) {
+    const stars = `${formatRating(ratingFilter)}★`;
+    return {
+      faves: `My ${stars} favourites`,
+      library: `My ${stars} books`,
+      wishlist: `${stars} on my wishlist`,
+      borrowed: `${stars}, borrowed`,
+    }[where];
+  }
+
+  if (activeFilter !== "all") {
+    const PLAIN = {
+      "to-read": "Next on my shelf",
+      reading: "What I'm reading",
+      read: "Books I've read",
+      "lent-out": "Books I've lent out",
+    };
+    const FAVE = {
+      "to-read": "Favourites I've yet to read",
+      reading: "Favourites I'm reading now",
+      read: "Favourites I've read",
+      "lent-out": "Favourites I've lent out",
+    };
+    if (where === "library" && PLAIN[activeFilter]) return PLAIN[activeFilter];
+    if (where === "faves" && FAVE[activeFilter]) return FAVE[activeFilter];
+    const chip = FILTERS.find((f) => f.key === activeFilter);
+    if (chip) return `${BASE[where]} · ${chip.label}`;
+  }
+
+  return BASE[where];
+}
+
 /** Collection-wide cards, built from whatever shelf you're looking at. */
 function shareCardsForShelf(store) {
   const list = getBooks(store);
@@ -273,11 +364,6 @@ function shareCardsForShelf(store) {
   const owned = all.filter(isOwned);
   const read = owned.filter((b) => b.readingStatus === "read");
   const rated = owned.filter((b) => b.rating);
-
-  const shelfName =
-    shelf === "wishlist" ? "My wishlist"
-    : shelf === "borrowed" ? "Books I've borrowed"
-    : "My bookshelf";
 
   const longest = read
     .map((b) => ({ b, d: readingDays(b) }))
@@ -300,6 +386,7 @@ function shareCardsForShelf(store) {
     .filter((x) => x.d != null)
     .sort((x, y) => x.d - y.d)[0];
   const fiveStars = owned.filter((b) => b.rating === 5).length;
+  const favourites = all.filter((b) => b.favourite).length;
   const distinctAuthors = new Set(owned.map((b) => b.creator || "Unknown")).size;
   const wishlist = all.filter((b) => shelfOf(b) === "wishlist").length;
   const lentOut = owned.filter(hasLoan).length;
@@ -325,18 +412,14 @@ function shareCardsForShelf(store) {
     ...maybe(topAuthor, { key: "topAuthor", value: authorCounts[topAuthor], label: `by ${topAuthor}` }),
     ...maybe(distinctAuthors > 1, { key: "authors", value: distinctAuthors, label: "different authors" }),
     ...maybe(fiveStars, { key: "fivestar", value: fiveStars, label: "five-star books" }),
+    ...maybe(favourites, { key: "faves", value: favourites, label: "favourites" }),
     // collection facts
     ...maybe(years.length, { key: "oldest", value: Math.min(...years), label: "oldest book" }),
     ...maybe(totalCopies > owned.length, { key: "copies", value: totalCopies, label: "physical copies" }),
     ...maybe(lentOut, { key: "lent", value: lentOut, label: "out on loan" }),
   ];
 
-  // The heading follows what you're actually looking at, so a card of six
-  // Murakami novels doesn't call itself "My bookshelf".
-  const shareTitle =
-    authorFilter ? `${authorFilter}, on my shelf`
-    : ratingFilter != null ? `My ${formatRating(ratingFilter)}★ books`
-    : shelfName;
+  const shareTitle = shelfShareTitle();
 
   /**
    * Describes the SELECTION, not the library.
@@ -347,10 +430,19 @@ function shareCardsForShelf(store) {
    */
   const shareSubtitleFor = (picked) => {
     const n = picked.length;
-    const noun = `${n} book${n === 1 ? "" : "s"}`;
+    const noun = favesOnly
+      ? `${n} favourite${n === 1 ? "" : "s"}`
+      : `${n} book${n === 1 ? "" : "s"}`;
     if (ratingFilter != null) return `${noun}, all ${formatRating(ratingFilter)}★`;
-    if (authorFilter) return noun;
-    const whole = n === list.length && shelf === "library" && n === owned.length;
+    if (authorFilter || favesOnly) return noun;
+    // "12 read" is only true of the whole shelf. Any narrowing at all — a
+    // status chip, a search — and it stops describing what's on the card.
+    const whole =
+      n === list.length &&
+      shelf === "library" &&
+      activeFilter === "all" &&
+      !searchQuery.trim() &&
+      n === owned.length;
     if (whole && read.length) return `${noun} · ${read.length} read`;
     return noun;
   };
@@ -944,20 +1036,25 @@ function buildBookCard(book, onTap, editions = [book]) {
     const swatch = card.querySelector(".item-swatch");
     const swatchImg = swatch.querySelector(".swatch-img");
     const swatchEmoji = swatch.querySelector(".swatch-emoji");
-    const img = corsImage();
-    img.onload = () => {
-      swatchImg.src = img.src;
+
+    // Pointed straight at the visible <img>, not at an off-screen probe that
+    // copies its src across once it loads. The probe was there to avoid a
+    // broken-image flash, but the swatch is already transparent until .loaded
+    // adds it — so it bought nothing, and it cost everything: setCoverSrc's
+    // recovery has to be attached to the element that actually fails, and with
+    // a probe in the way the thing on screen had nobody listening to it.
+    swatchImg.addEventListener("load", () => {
       swatchImg.classList.add("loaded");
       if (swatchEmoji) swatchEmoji.classList.add("hidden");
       swatch.classList.remove("shimmer");
-    };
-    img.onerror = () => {
+    });
+    swatchImg.addEventListener("error", () => {
       swatch.classList.remove("shimmer");
-    };
+    });
     // Request Open Library's largest cover size even for the small card thumbnail —
     // a browser shrinking a big image down looks sharp; stretching the "S" size up to
     // fit a retina-density 52px box is what was causing the blurry/soft covers.
-    setCoverSrc(img, bookCoverSrc(book, "L"));
+    setCoverSrc(swatchImg, bookCoverSrc(book, "L"));
   }
 
   return card;
@@ -970,7 +1067,7 @@ function buildBookCard(book, onTap, editions = [book]) {
  *   1. a photo you added yourself   2. a cover you picked from other editions
  *   3. the ISBN's own cover         4. nothing (fall back to the icon)
  */
-function bookCoverSrc(book, size = "L") {
+export function bookCoverSrc(book, size = "L") {
   if (!book) return null;
   // coverRef is a key into the blob store — your own photo, kept locally.
   // customCover is the old inline form, still honoured for anything a

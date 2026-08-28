@@ -9,7 +9,12 @@
 
 import { store } from "./core.js";
 import { bounceTap } from "./animations.js";
-import { usage, clearCache, CACHE_CAP_BYTES } from "./covers.js";
+import {
+  usage, clearCache, CACHE_CAP_BYTES,
+  getRecord, localUrl, rebuildUrl, remoteKey, liveUrlCount,
+} from "./covers.js";
+import { bookCoverSrc } from "./books.js";
+import { recordCoverSrc } from "./lps.js";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -74,6 +79,19 @@ function render(container, flash = null) {
     </div>
 
     <div class="settings-card">
+      <p class="settings-heading">Check covers</p>
+      <p class="settings-note">
+        If covers have gone missing, run this. It tests every one and says
+        where it stands — stored, loading, or broken — so a fix can be aimed at
+        the real problem instead of guessed at.
+      </p>
+      <button class="btn btn-secondary" id="coverCheckBtn" type="button">Run the check</button>
+      <p class="settings-status" id="coverCheckStatus"></p>
+      <pre class="settings-readout" id="coverCheckOut" hidden></pre>
+      <button class="btn btn-secondary" id="coverCopyBtn" type="button" hidden>Copy the report</button>
+    </div>
+
+    <div class="settings-card">
       <p class="settings-heading">Back up</p>
       <p class="settings-note">
         Saves everything to a file you keep — books, records, copies, loans,
@@ -123,6 +141,7 @@ function render(container, flash = null) {
 
   wireBackup(wrap);
   wireStorage(wrap);
+  wireCoverCheck(wrap);
   wireRestore(wrap, container);
   wireReset(wrap, container);
 
@@ -233,6 +252,137 @@ function wireStorage(wrap) {
   });
 
   paint();
+}
+
+// ---------- cover check ----------
+
+/** Loads a URL on a throwaway image and says whether it decodes. */
+function tryLoad(url, cross) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    let done = false;
+    const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    if (cross) img.crossOrigin = "anonymous";
+    img.src = url;
+    setTimeout(() => finish(false), 8000); // a hung request is a failure too
+  });
+}
+
+/**
+ * Walks every cover and reports where it actually stands.
+ *
+ * This exists because I could not reproduce the disappearing covers on any
+ * browser I have, and diagnosing by hypothesis was costing rounds. It answers
+ * the three questions that separate the plausible causes: is the picture in
+ * the store at all, does the handle we cached still load, and does a freshly
+ * built handle load? A stored cover whose cached handle fails but whose fresh
+ * one works is a stale-handle problem; both failing is a bad blob; neither
+ * stored is a caching problem. Different fixes, and now they're telling apart.
+ */
+function wireCoverCheck(wrap) {
+  const btn = wrap.querySelector("#coverCheckBtn");
+  const status = wrap.querySelector("#coverCheckStatus");
+  const out = wrap.querySelector("#coverCheckOut");
+  const copyBtn = wrap.querySelector("#coverCopyBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    bounceTap(btn);
+    btn.disabled = true;
+    out.hidden = true;
+    copyBtn.hidden = true;
+    status.className = "settings-status";
+    status.textContent = "Checking…";
+
+    const items = store.get().items.filter((it) => it.type === "book" || it.type === "lp");
+    const tally = { total: 0, none: 0, fine: 0, stale: 0, bad: 0, uncached: 0, remoteOnly: 0 };
+    const lines = [];
+
+    for (const it of items) {
+      const src = it.type === "book" ? bookCoverSrc(it, "L") : recordCoverSrc(it, 500);
+      if (!src) { tally.none++; continue; }
+      tally.total++;
+
+      const own = String(src).startsWith("own:");
+      const key = own ? src : remoteKey(src);
+      const rec = await getRecord(key);
+      const name = `${(it.title || "untitled").slice(0, 34)}`;
+
+      if (!rec) {
+        // Nothing stored. For a downloaded cover that's normal until you've
+        // seen it once; for your own photo it means the picture is gone.
+        if (own) { tally.bad++; lines.push(`GONE      ${name} — your photo isn't in the store`); }
+        else {
+          const net = await tryLoad(src, true);
+          if (net) { tally.uncached++; lines.push(`NOT CACHED ${name} — loads from the web`); }
+          else { tally.remoteOnly++; lines.push(`NO SOURCE ${name} — not stored and won't download`); }
+        }
+        continue;
+      }
+
+      const cached = await localUrl(key);
+      if (cached && (await tryLoad(cached, false))) { tally.fine++; continue; }
+
+      const fresh = await rebuildUrl(key);
+      if (fresh && (await tryLoad(fresh, false))) {
+        tally.stale++;
+        lines.push(`STALE     ${name} — stored fine, its handle had died`);
+      } else {
+        tally.bad++;
+        lines.push(`BAD BLOB  ${name} — stored, but the image won't decode`);
+      }
+    }
+
+    const u = await usage();
+    const report = [
+      `Stackt cover check — ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+      `${navigator.userAgent}`,
+      "",
+      `covers checked   ${tally.total}   (${tally.none} items have no cover set)`,
+      `loading fine     ${tally.fine}`,
+      `stale handle     ${tally.stale}`,
+      `bad blob         ${tally.bad}`,
+      `not yet cached   ${tally.uncached}`,
+      `no source at all ${tally.remoteOnly}`,
+      "",
+      `open handles     ${liveUrlCount()}`,
+      `store            ${u.ownCount} photos, ${u.cachedCount} cached covers`,
+      "",
+      ...(lines.length ? lines.slice(0, 60) : ["Nothing to report — every cover loaded."]),
+      ...(lines.length > 60 ? [`…and ${lines.length - 60} more`] : []),
+    ].join("\n");
+
+    out.textContent = report;
+    out.hidden = false;
+    copyBtn.hidden = false;
+    btn.disabled = false;
+
+    const trouble = tally.stale + tally.bad + tally.remoteOnly;
+    status.textContent = trouble
+      ? `${trouble} cover${trouble === 1 ? "" : "s"} in trouble out of ${tally.total}.`
+      : `All ${tally.total} covers are fine.`;
+    status.className = `settings-status ${trouble ? "warn" : "good"}`;
+
+    copyBtn.onclick = async () => {
+      bounceTap(copyBtn);
+      try {
+        await navigator.clipboard.writeText(report);
+        copyBtn.textContent = "Copied";
+        setTimeout(() => { copyBtn.textContent = "Copy the report"; }, 2000);
+      } catch (err) {
+        // Clipboard access is refused often enough on iOS that a dead button
+        // would be a real dead end — select it instead so it can be copied.
+        const range = document.createRange();
+        range.selectNodeContents(out);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        copyBtn.textContent = "Selected — copy it";
+      }
+    };
+  });
 }
 
 // ---------- restore ----------
