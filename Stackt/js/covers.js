@@ -375,10 +375,20 @@ export async function dataUrlToBlob(dataUrl) {
 export async function setCoverSrc(img, src) {
   if (!img || !src) return;
 
+  // Only a genuinely cross-origin URL wants crossOrigin. Setting it on a
+  // blob: or data: URL is at best pointless and, in WebKit, fatal — the load
+  // just fails. Assigned before src, since changing it afterwards is ignored.
+  const sameOrigin = (url) => /^(blob:|data:)/.test(url);
+  const point = (url) => {
+    if (sameOrigin(url)) img.removeAttribute("crossorigin");
+    else img.crossOrigin = "anonymous";
+    img.src = url;
+  };
+
   if (String(src).startsWith("own:")) {
     const url = await localUrl(src);
     if (url) {
-      img.src = url;
+      point(url);
     } else if (img.onerror) {
       img.onerror(new Event("error")); // nothing stored: let the caller fall back
     }
@@ -386,17 +396,17 @@ export async function setCoverSrc(img, src) {
   }
 
   if (String(src).startsWith("data:")) {
-    img.src = src;
+    point(src);
     return;
   }
 
   const cached = await localUrl(remoteKey(src));
   if (cached) {
-    img.src = cached;
+    point(cached);
     return;
   }
 
-  img.src = src;
+  point(src);
   // Fetch a private copy in the background. It doesn't matter if this fails —
   // the image on screen already loaded from the network.
   cacheRemote(src);

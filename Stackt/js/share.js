@@ -12,7 +12,7 @@
 // favour of a colour block. See loadImage().
 // ============================================
 
-import { openModal, dismissLayer, escapeHtml } from "./ui.js";
+import { openModal, dismissLayer, escapeHtml, makeClearable } from "./ui.js";
 
 const PALETTE = {
   bg: "#FFF8F0",
@@ -306,20 +306,30 @@ function fmt(iso) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+/**
+ * ELAPSED days between two dates — not calendar days touched.
+ *
+ * This used to add one, so a book started yesterday and finished today read as
+ * "took 2 days". Counting the span rather than the days it spanned is what
+ * people mean, so a same-day read is 0 and the label says "same day".
+ * Math.round absorbs DST, where a day is 23 or 25 hours.
+ */
 function daysBetween(a, b) {
   if (!a || !b) return null;
   const x = new Date(a + "T00:00:00");
   const y = new Date(b + "T00:00:00");
   if (isNaN(x) || isNaN(y)) return null;
   const n = Math.round((y - x) / 86400000);
-  return n < 0 ? null : n + 1;
+  return n < 0 ? null : n;
 }
 
 /** The one line under an item that says what you did with it and when. */
 export function spanLine(item) {
   if (item.startedDate && item.finishedDate) {
     const d = daysBetween(item.startedDate, item.finishedDate);
-    return `Read ${fmt(item.startedDate)} – ${fmt(item.finishedDate)}${d ? ` · took ${d} day${d === 1 ? "" : "s"}` : ""}`;
+    const took =
+      d == null ? "" : d === 0 ? " · same day" : ` · took ${d} day${d === 1 ? "" : "s"}`;
+    return `Read ${fmt(item.startedDate)} – ${fmt(item.finishedDate)}${took}`;
   }
   if (item.startedDate) return `Started ${fmt(item.startedDate)}`;
   if (item.finishedDate) return `Finished ${fmt(item.finishedDate)}`;
@@ -420,48 +430,100 @@ async function renderItemCard(ctx, W, H, { item, coverSrc, photo, kindLabel }) {
 /** The review, big, with the cover small alongside. */
 async function renderReviewCard(ctx, W, H, { item, coverSrc, photo }) {
   const onPhoto = await background(ctx, W, H, photo);
-  const M = 84;
-  const cardW = W - M * 2;
+  const story = H > W;
+  const M = 72;
+  const PAD = 48;
+  const panelW = W - M * 2;
+  const innerW = panelW - PAD * 2;
+  const innerX = M + PAD;
+
   const img = await loadImage(coverSrc);
+  const missing = img ? 0 : 1;
 
-  const thumb = 190;
-  const top = Math.round(H * (H > W ? 0.14 : 0.12));
+  const thumb = story ? 190 : 150;
+  const headSize = story ? 46 : 40;
+  const creatorSize = story ? 30 : 26;
+  const starSize = story ? 54 : 44;
+  const dateSize = 26;
 
-  if (!onPhoto) panel(ctx, M - 24, top - 48, cardW + 48, H - top - 200, "#fff");
+  // The quote is the point of the card, so it gets whatever room is left —
+  // and the type steps DOWN until it fits rather than running through the
+  // bottom border, which is what a fixed size did on the square format.
+  const headW = panelW - PAD * 2 - thumb - 40;
+  setFont(ctx, headSize, 900);
+  const titleLines = wrapText(ctx, item.title, headW, 2);
+  setFont(ctx, creatorSize, 700);
+  const creatorLines = item.creator ? wrapText(ctx, item.creator, headW, 1) : [];
 
-  artBlock(ctx, img, M + 8, top, thumb, thumb, item.color, 22, item);
+  const line = spanLine(item);
+  const headBlock = Math.max(
+    thumb,
+    headSize + titleLines.length * (headSize + 8) + (creatorLines.length ? 16 + creatorSize : 0)
+  );
+  const fixedH =
+    headBlock + 40 +
+    (item.rating ? starSize + 34 : 0) +
+    (line ? dateSize + 30 : 0);
+
+  const maxPanelH = H - 150 - Math.round(H * (story ? 0.12 : 0.08)) * 2;
+  const quoteText = `“${String(item.review || "").trim()}”`;
+
+  let quoteSize = story ? 52 : 44;
+  let quoteLines = [];
+  let quoteH = 0;
+  const roomForQuote = maxPanelH - PAD * 2 - fixedH;
+  while (quoteSize >= 22) {
+    setFont(ctx, quoteSize, 800);
+    const lead = Math.round(quoteSize * 1.3);
+    // A generous line cap so we shrink before we truncate — losing words is
+    // worse than losing a couple of points of type size.
+    const lines = wrapText(ctx, quoteText, innerW, 40);
+    if (lines.length * lead <= roomForQuote || quoteSize === 22) {
+      quoteLines = lines;
+      quoteH = lines.length * lead;
+      break;
+    }
+    quoteSize -= 3;
+  }
+  const quoteLead = Math.round(quoteSize * 1.3);
+
+  const panelH = Math.min(maxPanelH, fixedH + quoteH + PAD * 2);
+  const panelY = Math.round((H - panelH) / 2);
+
+  if (!onPhoto) panel(ctx, M, panelY, panelW, panelH, "#fff");
+
+  const top = panelY + PAD;
+  artBlock(ctx, img, innerX, top, thumb, thumb, item.color, 22, item);
 
   ctx.textAlign = "left";
   ctx.fillStyle = onPhoto ? "#fff" : PALETTE.ink;
-  setFont(ctx, 46, 900);
-  const headX = M + 8 + thumb + 40;
-  const headW = cardW - thumb - 60;
-  let y = drawLines(ctx, wrapText(ctx, item.title, headW, 2), headX, top + 58, 54);
-  setFont(ctx, 30, 700);
-  ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.85)" : "rgba(26,26,46,0.6)";
-  drawLines(ctx, wrapText(ctx, item.creator || "", headW, 1), headX, y + 16, 38);
-
-  y = top + thumb + 84;
-  if (item.rating) {
-    drawStars(ctx, item.rating, M + 8, y, 54);
-    y += 96;
+  setFont(ctx, headSize, 900);
+  const headX = innerX + thumb + 40;
+  let y = drawLines(ctx, titleLines, headX, top + headSize, headSize + 8);
+  if (creatorLines.length) {
+    setFont(ctx, creatorSize, 700);
+    ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.85)" : "rgba(26,26,46,0.6)";
+    drawLines(ctx, creatorLines, headX, y + 16, creatorSize + 6);
   }
 
-  // The quote is the point of this card, so it gets the room.
-  ctx.fillStyle = onPhoto ? "#fff" : PALETTE.ink;
-  setFont(ctx, H > W ? 52 : 44, 800);
-  const maxLines = H > W ? 12 : 7;
-  const quote = `“${String(item.review || "").trim()}”`;
-  y = drawLines(ctx, wrapText(ctx, quote, cardW - 16, maxLines), M + 8, y + 20, H > W ? 68 : 58);
+  y = top + headBlock + 40;
+  if (item.rating) {
+    drawStars(ctx, item.rating, innerX, y, starSize);
+    y += starSize + 34;
+  }
 
-  const line = spanLine(item);
+  ctx.fillStyle = onPhoto ? "#fff" : PALETTE.ink;
+  setFont(ctx, quoteSize, 800);
+  y = drawLines(ctx, quoteLines, innerX, y + quoteSize, quoteLead) - quoteLead + quoteLead;
+
   if (line) {
-    setFont(ctx, 28, 700);
+    setFont(ctx, dateSize, 700);
     ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.78)" : "rgba(26,26,46,0.5)";
-    drawLines(ctx, wrapText(ctx, line, cardW - 16, 2), M + 8, y + 46, 36);
+    ctx.fillText(wrapText(ctx, line, innerW, 1)[0] || "", innerX, y + 12 + dateSize);
   }
 
   watermark(ctx, W, H, onPhoto);
+  return { missing };
 }
 
 /** A mosaic of covers with a count strip. */
@@ -737,60 +799,139 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
     function selectionFor(card) {
       const all = (card.data && card.data.items) || [];
       const chosen = chosenItems.get(card.key);
-      if (!chosen) return all;
-      const picked = all.filter((it) => chosen.has(it.id));
-      return picked.length ? picked : all; // never render an empty shelf
+      // No chooser open, or nothing ticked yet: the card shows everything, so
+      // the preview is never blank while you decide.
+      if (!chosen || chosen.size === 0) return all;
+      return all.filter((it) => chosen.has(it.id));
     }
 
-    /** The item tick-list, for cards built from a set of books or records. */
+    let pickQuery = "";
+    let pickFilter = "all"; // all | fave | 5 | 4.5 | … | shelf keys | author name
+
+    /** The items the picker currently shows, after search and filter. */
+    function visibleItems(all) {
+      const q = pickQuery.trim().toLowerCase();
+      return all.filter((it) => {
+        if (q) {
+          const hay = `${it.title || ""} ${it.creator || ""} ${it.creatorAlt || ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (pickFilter === "all") return true;
+        if (pickFilter === "fave") return !!it.favourite;
+        if (pickFilter.startsWith("rating:")) {
+          return (Number(it.rating) || 0) === Number(pickFilter.slice(7));
+        }
+        if (pickFilter.startsWith("author:")) {
+          return (it.creator || "") === pickFilter.slice(7);
+        }
+        return true;
+      });
+    }
+
+    /**
+     * The item tick-list.
+     *
+     * Two things it deliberately does NOT do: it doesn't start with everything
+     * ticked (you came here to choose), and it doesn't rebuild itself when you
+     * tick a row. Rebuilding threw away the scroll position of this box, so
+     * tapping the tenth book bounced you back to the first — you had to scroll
+     * down again for every single choice.
+     */
     function paintItemPicker() {
       const card = cards.find((c) => c.key === cardKey) || cards[0];
       const all = (card.data && card.data.items) || [];
-      const chosen = chosenItems.get(card.key) || new Set(all.map((i) => i.id));
+      const chosen = chosenItems.get(card.key) || new Set();
       chosenItems.set(card.key, chosen);
+
+      const shown = visibleItems(all);
+      const authors = [...new Set(all.map((i) => i.creator).filter(Boolean))];
+      const ratings = [...new Set(all.map((i) => Number(i.rating) || 0).filter(Boolean))]
+        .sort((a, b) => b - a);
+      const anyFave = all.some((i) => i.favourite);
 
       options.hidden = false;
       options.innerHTML = `
         <p class="share-options-head">
           What goes on the card
-          <span class="share-options-count" id="pickCount">${chosen.size} of ${all.length}</span>
+          <span class="share-options-count" id="pickCount"></span>
         </p>
+        <div class="picker-search">
+          <input type="search" id="pickSearch" placeholder="Search by title or author" value="${escapeHtml(pickQuery)}">
+        </div>
+        <div class="rating-filter-row pick-filters">
+          <button type="button" class="rating-chip ${pickFilter === "all" ? "active" : ""}" data-pf="all">All</button>
+          ${anyFave ? `<button type="button" class="rating-chip ${pickFilter === "fave" ? "active" : ""}" data-pf="fave">♥ Loved</button>` : ""}
+          ${ratings.map((r) => `
+            <button type="button" class="rating-chip ${pickFilter === "rating:" + r ? "active" : ""}" data-pf="rating:${r}">${r}★</button>
+          `).join("")}
+          ${authors.length > 1 ? authors.slice(0, 8).map((a) => `
+            <button type="button" class="rating-chip ${pickFilter === "author:" + a ? "active" : ""}" data-pf="author:${escapeHtml(a)}">${escapeHtml(a)}</button>
+          `).join("") : ""}
+        </div>
         <div class="share-pick-actions">
-          <button type="button" class="link-btn" id="pickAll">Select all</button>
+          <button type="button" class="link-btn" id="pickAll">Select all shown</button>
           <button type="button" class="link-btn" id="pickNone">Clear</button>
         </div>
-        <div class="stat-picks">
-          ${all.map((it) => `
+        <div class="stat-picks" id="pickList">
+          ${shown.length ? shown.map((it) => `
             <button type="button" class="stat-pick ${chosen.has(it.id) ? "on" : ""}" data-item="${escapeHtml(it.id)}">
               <span class="stat-pick-tick">${chosen.has(it.id) ? "✓" : ""}</span>
               <span class="stat-pick-label">${escapeHtml(it.title || "Untitled")}</span>
-              <span class="stat-pick-value">${it.rating ? `${it.rating}★` : ""}</span>
+              <span class="stat-pick-value">${it.favourite ? "♥ " : ""}${it.rating ? `${it.rating}★` : ""}</span>
             </button>
-          `).join("")}
+          `).join("") : `<p class="cover-picker-note">Nothing matches that.</p>`}
         </div>
       `;
 
+      const countEl = options.querySelector("#pickCount");
+      const syncCount = () => {
+        countEl.textContent = chosen.size
+          ? `${chosen.size} selected`
+          : "none selected";
+        goBtn.disabled = chosen.size === 0;
+      };
+      syncCount();
+
+      // Toggle in place. No innerHTML, so the list stays exactly where it was.
       options.querySelectorAll("[data-item]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const id = btn.dataset.item;
-          if (chosen.has(id)) {
-            if (chosen.size === 1) return; // a card of nothing isn't a card
-            chosen.delete(id);
-          } else {
-            chosen.add(id);
-          }
-          paintItemPicker();
+          const on = chosen.has(id);
+          if (on) chosen.delete(id);
+          else chosen.add(id);
+          btn.classList.toggle("on", !on);
+          btn.querySelector(".stat-pick-tick").textContent = on ? "" : "✓";
+          syncCount();
           draw();
         });
       });
+
+      const search = options.querySelector("#pickSearch");
+      makeClearable(search, () => { pickQuery = ""; paintItemPicker(); });
+      search.addEventListener("input", () => {
+        pickQuery = search.value;
+        const at = search.selectionStart;
+        paintItemPicker();
+        // Repainting replaces the field, so put the caret back where it was.
+        const again = options.querySelector("#pickSearch");
+        again.focus();
+        try { again.setSelectionRange(at, at); } catch (e) { /* not all types allow it */ }
+      });
+
+      options.querySelectorAll("[data-pf]").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          pickFilter = chip.dataset.pf;
+          paintItemPicker();
+        });
+      });
+
       options.querySelector("#pickAll").addEventListener("click", () => {
-        all.forEach((i) => chosen.add(i.id));
+        shown.forEach((i) => chosen.add(i.id));
         paintItemPicker();
         draw();
       });
       options.querySelector("#pickNone").addEventListener("click", () => {
         chosen.clear();
-        if (all[0]) chosen.add(all[0].id); // keep one, so there's something to see
         paintItemPicker();
         draw();
       });
@@ -864,8 +1005,12 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
       if (card.type === "stats" && !chosenStats.has(card.key)) {
         const all = (card.data && card.data.stats) || [];
         chosenStats.set(card.key, new Set(all.slice(0, MAX_STATS).map((st) => st.key)));
+        paintOptions();
       }
-      paintOptions();
+      // Deliberately NOT repainting the options here. draw() runs on every
+      // tick, and repainting rebuilt the tick-list's innerHTML — which threw
+      // away its scroll position, bouncing you to the top of the list after
+      // each choice. The picker updates itself in place instead.
 
       const picked = selectionFor(card);
       const result = await renderCard(card.type, format, {
@@ -889,6 +1034,18 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
       result.canvas.className = "share-canvas " + format;
       preview.appendChild(result.canvas);
 
+      const chosenNow = chosenItems.get(card.key);
+      const nothingPicked = picking && chosenNow && chosenNow.size === 0;
+
+      if (nothingPicked) {
+        // The preview still shows everything, so the sheet isn't blank while
+        // you decide — but there's nothing chosen to send yet.
+        status.textContent = "Showing everything — tick the ones you want.";
+        status.className = "share-status";
+        goBtn.disabled = true;
+        return;
+      }
+
       if (result.tainted || !result.blob) {
         // Honest about it rather than offering a button that does nothing.
         status.textContent =
@@ -909,9 +1066,13 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
       btn.addEventListener("click", () => {
         picking = btn.dataset.scope === "pick";
         scope.querySelectorAll("[data-scope]").forEach((b) => b.classList.toggle("active", b === btn));
+        const card = cards.find((c) => c.key === cardKey) || cards[0];
         if (!picking) {
-          const card = cards.find((c) => c.key === cardKey) || cards[0];
           chosenItems.delete(card.key); // back to everything
+          goBtn.disabled = false;
+        } else {
+          // Start from nothing: you opened the chooser to choose.
+          chosenItems.set(card.key, new Set());
         }
         paintOptions();
         draw();

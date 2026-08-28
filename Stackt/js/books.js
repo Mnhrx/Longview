@@ -9,7 +9,7 @@ import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl, coverIdUrl, findCoverOptions } from "./barcode.js";
 import { ICONS } from "./icons.js";
-import { createSorter, collator, yearValue, titleSortKey, openSortSheet } from "./sorting.js";
+import { createSorter, collator, yearValue, titleSortKey, workKey, openSortSheet } from "./sorting.js";
 import { starsHtml, wireStars, paintStars, formatRating, normaliseRating } from "./stars.js";
 import { openShareSheet } from "./share.js";
 import { setCoverSrc, ownKey, putBlob, encodeCover, deleteBlob } from "./covers.js";
@@ -29,7 +29,10 @@ let shelf = "library";     // 'library' | 'wishlist' | 'borrowed'
 let groupByAuthor = false; // a way of viewing a shelf, not a shelf itself
 let authorFilter = null;
 let searchQuery = "";
-let ratingFilter = null;  // 5, 4.5, 4 … or null for any
+let ratingFilter = null;
+// Favourites cuts ACROSS shelves — a book is in your library AND hearted — so
+// it's a view flag rather than a fourth value of `shelf`.
+let favesOnly = false;  // 5, 4.5, 4 … or null for any
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -76,17 +79,26 @@ function stillHolding(book) {
 
 /** Whole days between two YYYY-MM-DD strings, counting both ends
  *  (finishing the same day you started reads as "1 day", not "0"). */
+/**
+ * ELAPSED days between two dates — not calendar days touched.
+ *
+ * This used to add one, so a book started yesterday and finished today read as
+ * "took 2 days". Counting the span rather than the days it spanned is what
+ * people mean, so a same-day read is 0 and the label says "same day".
+ * Math.round absorbs DST, where a day is 23 or 25 hours.
+ */
 function daysBetween(startStr, endStr) {
   if (!startStr || !endStr) return null;
   const a = new Date(startStr + "T00:00:00");
   const b = new Date(endStr + "T00:00:00");
   if (isNaN(a) || isNaN(b)) return null;
   const diff = Math.round((b - a) / 86400000);
-  return diff < 0 ? null : diff + 1;
+  return diff < 0 ? null : diff;
 }
 
 function daysLabel(n) {
   if (n == null) return "";
+  if (n === 0) return "same day";
   return n === 1 ? "1 day" : `${n} days`;
 }
 
@@ -124,8 +136,11 @@ function matchesQuery(book, q) {
 }
 
 function getBooks(store) {
-  let books =
-    shelf === "wishlist" ? wishlistBooks(store)
+  // Favourites deliberately ignores the shelf tabs: a hearted wishlist book is
+  // still a favourite, and hiding it behind "which shelf" would defeat the point.
+  let books = favesOnly
+    ? store.itemsByType("book").filter((b) => b.favourite)
+    : shelf === "wishlist" ? wishlistBooks(store)
     : shelf === "borrowed" ? borrowedBooks(store)
     : ownedBooks(store);
   if (authorFilter) books = books.filter((b) => (b.creator || "Unknown") === authorFilter);
@@ -177,6 +192,11 @@ const SORT_CRITERIA = [
     },
   },
   {
+    key: "favourite", label: "Favourites", asc: "hearted first", desc: "hearted last",
+    value: (b) => (b.favourite ? 1 : null),  // null = not hearted, so it sinks
+    compare: () => 0,                          // all favourites are equal; title breaks the tie
+  },
+  {
     key: "rating", label: "Rating", asc: "highest first", desc: "lowest first",
     value: (b) => b.rating || null,
     compare: (x, y) => y - x,
@@ -204,17 +224,7 @@ function sortBooks(list) {
  * edition keeps its own cover, ISBN, reading status, copies and loans, and
  * every count in the app still counts editions individually.
  */
-function workKey(book) {
-  const norm = (s) =>
-    String(s || "")
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "") // strip accents left by NFKD
-      .replace(/[^\p{L}\p{N} ]+/gu, " ") // punctuation out, any script's letters in
-      .replace(/\s+/g, " ")
-      .trim();
-  return `${norm(titleSortKey(book))}|${norm(book.creator)}`;
-}
+
 
 /** [{ lead, editions }] — order preserved, so whatever sort ran still holds. */
 function groupEditions(list) {
@@ -378,6 +388,7 @@ function render(container, store, opts) {
   if (opts !== undefined) {
     sorter.reset();
     ratingFilter = null;
+    favesOnly = false;
   }
 
   const wrap = document.createElement("div");
@@ -387,7 +398,9 @@ function render(container, store, opts) {
   // The tab says where you are; the heading says what you're looking at.
   const SHELF_TABS = { library: "Library", wishlist: "Wishlist", borrowed: "Borrowed" };
   const SHELF_TITLES = { library: "Books", wishlist: "Wishlist", borrowed: "Borrowed" };
-  title.textContent = authorFilter ? `Books by ${authorFilter}` : SHELF_TITLES[shelf];
+  title.textContent = favesOnly
+    ? "Favourites"
+    : authorFilter ? `Books by ${authorFilter}` : SHELF_TITLES[shelf];
   wrap.appendChild(title);
 
   if (authorFilter) {
@@ -424,9 +437,13 @@ function render(container, store, opts) {
   if (!authorFilter) {
     const modeToggle = document.createElement("div");
     modeToggle.className = "mode-toggle";
-    modeToggle.innerHTML = ["library", "wishlist", "borrowed"]
-      .map((k) => `<button class="mode-btn ${shelf === k ? "active" : ""}" data-shelf="${k}" type="button">${SHELF_TABS[k]}</button>`)
-      .join("");
+    modeToggle.innerHTML =
+      ["library", "wishlist", "borrowed"]
+        .map((k) => `<button class="mode-btn ${shelf === k && !favesOnly ? "active" : ""}" data-shelf="${k}" type="button">${SHELF_TABS[k]}</button>`)
+        .join("") +
+      `<button class="mode-btn faves-btn ${favesOnly ? "active" : ""}" data-faves="1" type="button" aria-label="Favourites">
+         <span class="faves-icon">${ICONS.heart}</span>
+       </button>`;
     wrap.appendChild(modeToggle);
   }
 
@@ -465,6 +482,12 @@ function render(container, store, opts) {
     wrap.querySelectorAll(".mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         bounceTap(btn);
+        if (btn.dataset.faves) {
+          favesOnly = !favesOnly;   // a toggle, so you can come back out of it
+          render(container, store);
+          return;
+        }
+        favesOnly = false;
         shelf = btn.dataset.shelf;
         activeFilter = "all"; // don't carry a hidden status filter across shelves
         render(container, store);
@@ -500,17 +523,19 @@ function renderBody(bodyHolder, store, container) {
     return;
   }
 
-  if (shelf === "wishlist" && !authorFilter) {
+  // Those two are shelf-specific screens; favourites spans all of them, so it
+  // uses the ordinary grid instead.
+  if (shelf === "wishlist" && !authorFilter && !favesOnly) {
     renderWishlist(bodyHolder, store, container);
     return;
   }
 
-  if (shelf === "borrowed" && !authorFilter) {
+  if (shelf === "borrowed" && !authorFilter && !favesOnly) {
     renderBorrowed(bodyHolder, store, container);
     return;
   }
 
-  renderFilterRow(bodyHolder, store, container);
+  if (!favesOnly) renderFilterRow(bodyHolder, store, container);
 
   const listHolder = document.createElement("div");
   bodyHolder.appendChild(listHolder);
@@ -676,6 +701,20 @@ function renderAuthorList(bodyHolder, store, container) {
       sorter.reset(); // drilling into an author starts alphabetical too
       render(container, store);
     });
+    // Long-press to rename: this list is where a wrong spelling is obvious,
+    // and it's the only place you can see every book it affects at once.
+    let held = null;
+    const startHold = () => {
+      held = setTimeout(() => {
+        held = null;
+        openAuthorRename(store, container, name, counts[name]);
+      }, 550);
+    };
+    const cancelHold = () => { if (held) clearTimeout(held); held = null; };
+    btn.addEventListener("pointerdown", startHold);
+    ["pointerup", "pointerleave", "pointercancel"].forEach((e) =>
+      btn.addEventListener(e, cancelHold)
+    );
     grid.appendChild(btn);
   });
   bodyHolder.appendChild(grid);
@@ -691,14 +730,54 @@ function renderAuthorList(bodyHolder, store, container) {
  * Data URLs (your own photos) are same-origin and skip it.
  */
 function corsImage() {
-  const img = new Image();
-  // Set unconditionally: data: URLs are unaffected by it, and a conditional
-  // would need the src, which callers only assign after wiring handlers.
-  img.crossOrigin = "anonymous";
-  return img;
+  // crossOrigin is NOT set here any more — setCoverSrc decides, because it is
+  // the only place that knows what the URL turns out to be. Setting it blanket
+  // meant cached covers were loaded as blob: URLs *with* crossOrigin, and
+  // WebKit refuses that combination: covers appeared on a first visit and then
+  // vanished once they'd been cached, which is exactly the reported symptom.
+  return new Image();
 }
 
 // ---------- cards ----------
+
+/** Rename an author across every book of theirs, in one go. */
+function openAuthorRename(store, container, name, count) {
+  openModal((sheet) => {
+    sheet.innerHTML = `
+      <h2>Rename author</h2>
+      <p class="field-hint" style="margin:-6px 0 16px;">
+        Changes the name on ${count} book${count === 1 ? "" : "s"}. Handy when a
+        lookup catalogued it in a different script from the one you read in.
+      </p>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="renameTo" value="${escapeHtml(name)}">
+        <p class="field-hint">This is what the list sorts and groups by.</p>
+      </div>
+      <div class="field">
+        <label>Original script (optional)</label>
+        <input type="text" id="renameAlt" placeholder="村上春樹">
+        <p class="field-hint">Kept on every one of their books and matched by search.</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="renameGo" type="button">Rename ${count} book${count === 1 ? "" : "s"}</button>
+      </div>
+    `;
+    const input = sheet.querySelector("#renameTo");
+    const alt = sheet.querySelector("#renameAlt");
+    makeClearable(input);
+    makeClearable(alt);
+
+    sheet.querySelector("#renameGo").addEventListener("click", () => {
+      const to = input.value.trim();
+      if (!to) return nudge(input);
+      renameAuthorEverywhere(store, name, to, alt.value.trim() || undefined);
+      if (authorFilter === name) authorFilter = to;
+      dismissLayer();
+      render(container, store);
+    });
+  });
+}
 
 function renderBookGrid(container, books, onTap) {
   if (books.length === 0) {
@@ -842,6 +921,10 @@ function buildBookCard(book, onTap, editions = [book]) {
     ? `<span class="swatch-emoji">${ICONS.books}</span><img class="swatch-img" alt="">`
     : `<span class="swatch-emoji">${ICONS.books}</span>`;
 
+  const faveMark = book.favourite
+    ? `<span class="card-fave" aria-label="Favourite">${ICONS.heart}</span>`
+    : "";
+
   card.innerHTML = `
     <div class="item-swatch ${hasCover(book) ? "shimmer" : ""}" style="background:${book.color || "#eee"}">${swatchInner}</div>
     <div class="item-body">
@@ -850,6 +933,7 @@ function buildBookCard(book, onTap, editions = [book]) {
       ${pillHtml}
       ${extraHtml}
     </div>
+    ${faveMark}
   `;
   card.addEventListener("click", () => {
     bounceTap(card);
@@ -1205,6 +1289,8 @@ function viewModeHtml(book, opts) {
     ${opts.foundViaScan ? `<div class="found-banner"><span>Already in your library</span></div>` : ""}
     <div class="detail-top-row">
       <h2>${escapeHtml(book.title)}</h2>
+      <button class="icon-btn detail-fave ${book.favourite ? "on" : ""}" id="faveBtn" type="button"
+              aria-pressed="${!!book.favourite}" aria-label="Favourite">${ICONS.heart}</button>
       <button class="icon-btn detail-share" id="shareItemBtn" type="button" aria-label="Share this book">${ICONS.share}</button>
       <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.edit}</span>Edit</button>
     </div>
@@ -1399,6 +1485,10 @@ function editModeHtml(book) {
       <label>Author</label>
       <input type="text" id="f-creator" value="${escapeHtml(book.creator || "")}">
       <p class="field-hint">This is the name the list sorts and groups by.</p>
+      <label class="settings-check bulk-rename" id="bulkRenameWrap" hidden>
+        <input type="checkbox" id="bulkRename">
+        <span id="bulkRenameLabel"></span>
+      </label>
     </div>
     <div class="field">
       <label>Author, original script</label>
@@ -1441,6 +1531,17 @@ function editModeHtml(book) {
 
 function wireViewMode(sheet, book, store, container, opts = {}) {
   wireCover(sheet, book);
+
+  const faveBtn = sheet.querySelector("#faveBtn");
+  if (faveBtn) {
+    faveBtn.addEventListener("click", () => {
+      bounceTap(faveBtn);
+      // Favouriting is about the book, so it travels with the review across
+      // every edition you own.
+      updateWork(store, book, { favourite: !book.favourite });
+      refreshDetail(store, container, book.id);
+    });
+  }
 
   const shareItemBtn = sheet.querySelector("#shareItemBtn");
   if (shareItemBtn) {
@@ -1542,7 +1643,8 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       const text = sheet.querySelector("#reviewInput").value.trim();
       const had = !!(book.review && book.review.trim()) || !!book.rating;
       const has = !!text || !!draftRating;
-      store.updateItem(book.id, {
+      // Every edition of this book, not just the copy you happened to open.
+      updateWork(store, book, {
         rating: draftRating || null,
         review: text || null,
         reviewDate: has ? (book.reviewDate && had ? book.reviewDate : today()) : null,
@@ -1798,6 +1900,29 @@ function wireEditMode(sheet, book, store, container) {
     makeClearable(sheet.querySelector(sel))
   );
 
+  // Offer "apply to all" only once the name has actually been changed, and only
+  // when this author has other books — otherwise it's a checkbox that does
+  // nothing, which is worse than no checkbox.
+  const creatorField = sheet.querySelector("#f-creator");
+  const bulkWrap = sheet.querySelector("#bulkRenameWrap");
+  const bulkLabel = sheet.querySelector("#bulkRenameLabel");
+  const originalAuthor = book.creator || "";
+  const siblingCount = store
+    .itemsByType("book")
+    .filter((b) => (b.creator || "") === originalAuthor && b.id !== book.id).length;
+
+  const refreshBulk = () => {
+    const changed = creatorField.value.trim() !== originalAuthor.trim();
+    const worth = changed && originalAuthor.trim() && siblingCount > 0;
+    bulkWrap.hidden = !worth;
+    if (worth) {
+      bulkLabel.textContent =
+        `Also rename the other ${siblingCount} book${siblingCount === 1 ? "" : "s"} by ${originalAuthor}`;
+    }
+  };
+  creatorField.addEventListener("input", refreshBulk);
+  refreshBulk();
+
   // If the lookup guessed wrong about which spelling should sort, one tap fixes
   // it rather than retyping both names.
   const swapBtn = sheet.querySelector("#swapNamesBtn");
@@ -1828,6 +1953,11 @@ function wireEditMode(sheet, book, store, container) {
       nudge(titleInput);
       return;
     }
+    const bulk = sheet.querySelector("#bulkRename");
+    if (bulk && bulk.checked && !bulkWrap.hidden) {
+      renameAuthorEverywhere(store, originalAuthor, creatorField.value.trim());
+    }
+
     const patch = {
       title: titleInput.value.trim(),
       creator: sheet.querySelector("#f-creator").value,
@@ -1865,6 +1995,47 @@ function wireEditMode(sheet, book, store, container) {
  * looked like the sheet jumping. Also keeps the list behind it in sync, without
  * re-animating it.
  */
+/**
+ * Renames an author everywhere.
+ *
+ * Editing one book's author field only ever fixed that book, so correcting a
+ * name you'd catalogued in another script meant opening every title by them.
+ * Returns how many changed, so the UI can say.
+ */
+function renameAuthorEverywhere(store, from, to, altTo = undefined) {
+  const before = String(from || "").trim();
+  const after = String(to || "").trim();
+  if (!before || !after) return 0;
+  const matches = store.itemsByType("book").filter((b) => (b.creator || "") === before);
+  matches.forEach((b) => {
+    const patch = { creator: after };
+    if (altTo !== undefined) patch.creatorAlt = altTo || null;
+    store.updateItem(b.id, patch);
+  });
+  return matches.length;
+}
+
+/**
+ * Applies a patch to every edition of the same work.
+ *
+ * A review is about the book, not the printing — so writing one on any copy
+ * shows it on all of them, and on the grouped row in the list. Each item keeps
+ * its own fields (nothing about the data shape changed), they're just kept in
+ * step, which means sorting, filtering and the share cards all carry on
+ * working without knowing this happens.
+ */
+function updateWork(store, book, patch) {
+  const key = workKey(book);
+  const siblings = store
+    .itemsByType("book")
+    .filter((b) => workKey(b) === key);
+  if (siblings.length <= 1) {
+    store.updateItem(book.id, patch);
+    return;
+  }
+  siblings.forEach((b) => store.updateItem(b.id, patch));
+}
+
 function refreshDetail(store, container, bookId, opts = {}) {
   const fresh = store.get().items.find((it) => it.id === bookId);
   if (!fresh) {

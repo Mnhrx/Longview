@@ -38,6 +38,9 @@ let activeFilter = "all";
 let artistFilter = null;
 let searchQuery = "";
 let ratingFilter = null;
+// Favourites cuts ACROSS shelves — a book is in your library AND hearted — so
+// it's a view flag rather than a fourth value of `shelf`.
+let favesOnly = false;
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -47,16 +50,26 @@ function fmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
+/**
+ * ELAPSED days between two dates — not calendar days touched.
+ *
+ * This used to add one, so a book started yesterday and finished today read as
+ * "took 2 days". Counting the span rather than the days it spanned is what
+ * people mean, so a same-day read is 0 and the label says "same day".
+ * Math.round absorbs DST, where a day is 23 or 25 hours.
+ */
 function daysBetween(a, b) {
   if (!a || !b) return null;
   const d1 = new Date(a + "T00:00:00");
   const d2 = new Date(b + "T00:00:00");
   if (isNaN(d1) || isNaN(d2)) return null;
   const diff = Math.round((d2 - d1) / 86400000);
-  return diff < 0 ? null : diff + 1;
+  return diff < 0 ? null : diff;
 }
 function daysLabel(n) {
-  return n == null ? "" : n === 1 ? "1 day" : `${n} days`;
+  if (n == null) return "";
+  if (n === 0) return "same day";
+  return n === 1 ? "1 day" : `${n} days`;
 }
 
 function isOwned(rec) {
@@ -110,8 +123,9 @@ function bestCondition(rec) {
 }
 
 function getRecords(store) {
-  let list =
-    shelf === "wishlist" ? wishlistRecords(store)
+  let list = favesOnly
+    ? store.itemsByType("lp").filter((r) => r.favourite)
+    : shelf === "wishlist" ? wishlistRecords(store)
     : shelf === "borrowed" ? borrowedRecords(store)
     : ownedRecords(store);
 
@@ -149,6 +163,11 @@ const SORT_CRITERIA = [
     value: yearValue,
     compare: (x, y) => x - y,
     describe: (r) => (r.year ? `Released ${r.year}` : ""),
+  },
+  {
+    key: "favourite", label: "Favourites", asc: "hearted first", desc: "hearted last",
+    value: (r) => (r.favourite ? 1 : null),  // null = not hearted, so it sinks
+    compare: () => 0,                          // all favourites are equal; title breaks the tie
   },
   {
     key: "rating", label: "Rating", asc: "highest first", desc: "lowest first",
@@ -199,11 +218,12 @@ function openRecordSortSheet(store, container) {
  * Data URLs (your own photos) are same-origin and skip it.
  */
 function corsImage() {
-  const img = new Image();
-  // Set unconditionally: data: URLs are unaffected by it, and a conditional
-  // would need the src, which callers only assign after wiring handlers.
-  img.crossOrigin = "anonymous";
-  return img;
+  // crossOrigin is NOT set here any more — setCoverSrc decides, because it is
+  // the only place that knows what the URL turns out to be. Setting it blanket
+  // meant cached covers were loaded as blob: URLs *with* crossOrigin, and
+  // WebKit refuses that combination: covers appeared on a first visit and then
+  // vanished once they'd been cached, which is exactly the reported symptom.
+  return new Image();
 }
 
 // ---------- covers ----------
@@ -578,6 +598,7 @@ function render(container, store, opts) {
   if (opts !== undefined) {
     sorter.reset();
     ratingFilter = null;
+    favesOnly = false;
   }
 
   const wrap = document.createElement("div");
@@ -587,7 +608,9 @@ function render(container, store, opts) {
 
   const title = document.createElement("p");
   title.className = "view-title";
-  title.textContent = artistFilter ? `Records by ${artistFilter}` : SHELF_TITLES[shelf];
+  title.textContent = favesOnly
+    ? "Favourites"
+    : artistFilter ? `Records by ${artistFilter}` : SHELF_TITLES[shelf];
   wrap.appendChild(title);
 
   if (artistFilter) {
@@ -623,9 +646,13 @@ function render(container, store, opts) {
   if (!artistFilter) {
     const modeToggle = document.createElement("div");
     modeToggle.className = "mode-toggle";
-    modeToggle.innerHTML = ["library", "wishlist", "borrowed"]
-      .map((k) => `<button class="mode-btn ${shelf === k ? "active" : ""}" data-shelf="${k}" type="button">${SHELF_TABS[k]}</button>`)
-      .join("");
+    modeToggle.innerHTML =
+      ["library", "wishlist", "borrowed"]
+        .map((k) => `<button class="mode-btn ${shelf === k && !favesOnly ? "active" : ""}" data-shelf="${k}" type="button">${SHELF_TABS[k]}</button>`)
+        .join("") +
+      `<button class="mode-btn faves-btn ${favesOnly ? "active" : ""}" data-faves="1" type="button" aria-label="Favourites">
+         <span class="faves-icon">${ICONS.heart}</span>
+       </button>`;
     wrap.appendChild(modeToggle);
   }
 
@@ -662,6 +689,12 @@ function render(container, store, opts) {
     wrap.querySelectorAll(".mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         bounceTap(btn);
+        if (btn.dataset.faves) {
+          favesOnly = !favesOnly;   // a toggle, so you can come back out of it
+          render(container, store);
+          return;
+        }
+        favesOnly = false;
         shelf = btn.dataset.shelf;
         activeFilter = "all";
         render(container, store);
@@ -789,6 +822,10 @@ function buildCard(rec, onTap) {
     ? `<span class="swatch-emoji">${ICONS.lps}</span><img class="swatch-img" alt="">`
     : `<span class="swatch-emoji">${ICONS.lps}</span>`;
 
+  const faveMark = rec.favourite
+    ? `<span class="card-fave" aria-label="Favourite">${ICONS.heart}</span>`
+    : "";
+
   card.innerHTML = `
     <div class="item-swatch sleeve ${hasCover(rec) ? "shimmer" : ""}" style="background:${rec.color || "#eee"}">${inner}</div>
     <div class="item-body">
@@ -797,6 +834,7 @@ function buildCard(rec, onTap) {
       ${pill}
       ${extra}
     </div>
+    ${faveMark}
   `;
   card.addEventListener("click", () => {
     bounceTap(card);
@@ -992,6 +1030,8 @@ function viewHtml(rec, opts) {
     ${opts.foundViaScan ? `<div class="found-banner"><span>Already in your collection</span></div>` : ""}
     <div class="detail-top-row">
       <h2>${escapeHtml(rec.title)}</h2>
+      <button class="icon-btn detail-fave ${rec.favourite ? "on" : ""}" id="faveBtn" type="button"
+              aria-pressed="${!!rec.favourite}" aria-label="Favourite">${ICONS.heart}</button>
       <button class="icon-btn detail-share" id="shareItemBtn" type="button" aria-label="Share this record">${ICONS.share}</button>
       <button class="edit-toggle-btn" id="toggleEditBtn" type="button"><span class="btn-icon">${ICONS.edit}</span>Edit</button>
     </div>
@@ -1235,6 +1275,15 @@ function editHtml(rec) {
 
 function wireView(sheet, rec, store, container, opts = {}) {
   wireCover(sheet, rec);
+
+  const faveBtn = sheet.querySelector("#faveBtn");
+  if (faveBtn) {
+    faveBtn.addEventListener("click", () => {
+      bounceTap(faveBtn);
+      store.updateItem(rec.id, { favourite: !rec.favourite });
+      refreshDetail(store, container, rec.id);
+    });
+  }
 
   const shareItemBtn = sheet.querySelector("#shareItemBtn");
   if (shareItemBtn) {

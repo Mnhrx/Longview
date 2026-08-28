@@ -2258,3 +2258,51 @@ html, body {
   gap: 14px;
   margin: -4px 0 10px;
 }
+
+/* ---------- favourites ---------- */
+
+/* A heart, never a star. Rating is "how good was it"; this is "I love it",
+   and the two need to stay visually distinct or neither means anything. */
+.faves-btn {
+  flex: 0 0 auto;
+  width: 46px;
+  padding: 9px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.faves-icon { width: 20px; height: 20px; display: block; }
+.faves-icon svg { width: 100%; height: 100%; display: block; }
+.mode-btn.faves-btn.active .faves-icon svg path { fill: var(--pink); }
+
+.detail-fave {
+  width: 38px;
+  height: 38px;
+  padding: 8px;
+  box-shadow: 3px 3px 0 var(--ink);
+  align-self: flex-start;
+  margin-left: auto;
+}
+.detail-fave + .detail-share { margin-left: 8px; }
+.detail-fave.on { background: var(--pink); }
+.detail-fave.on svg path { fill: #fff; stroke: #fff; }
+
+/* Sits in the card's top-right corner, out of the way of the text. */
+.card-fave {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.card-fave svg { width: 100%; height: 100%; display: block; }
+.card-fave svg path { fill: var(--pink); stroke: var(--ink); }
+.item-card { position: relative; }
+
+.bulk-rename { margin-top: 10px; }
+
+/* The picker's filter chips are secondary to the list, so they stay compact. */
+.pick-filters { margin-bottom: 12px; }
+.pick-filters .rating-chip { padding: 6px 11px; font-size: 12px; }
+.share-options .picker-search { margin-bottom: 10px; }

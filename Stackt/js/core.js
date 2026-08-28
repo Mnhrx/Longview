@@ -7,6 +7,7 @@
 import { transitionSwap } from "./animations.js";
 import { clearAllLayers } from "./ui.js";
 import { ownKey, putBlob, deleteBlob, dataUrlToBlob, blobToDataUrl, getRecord, allOwnRecords, encodeCover } from "./covers.js";
+import { workKey } from "./sorting.js";
 
 const STORAGE_KEY = "stackt-state-v1";
 
@@ -77,6 +78,50 @@ export const store = {
     }
     if (moved) this.save();
     return moved;
+  },
+
+  /**
+   * Brings existing per-edition reviews up to the work.
+   *
+   * Reviews used to belong to one printing, so owning two editions could hide
+   * the review you wrote. Each work's editions are reconciled to a single
+   * review and rating. Where two editions disagree the LONGER review wins and
+   * the higher rating is kept — silently binning something you wrote would be
+   * the one unforgivable outcome here.
+   */
+  mergeWorkReviews() {
+    const groups = new Map();
+    this.state.items
+      .filter((it) => it.type === "book")
+      .forEach((b) => {
+        const k = workKey(b);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(b);
+      });
+
+    let changed = 0;
+    groups.forEach((editions) => {
+      if (editions.length < 2) return;
+      const reviewed = editions
+        .filter((b) => (b.review && b.review.trim()) || b.rating)
+        .sort((a, b) => (b.review || "").length - (a.review || "").length);
+      if (!reviewed.length) return;
+
+      const best = {
+        review: reviewed[0].review || null,
+        rating: Math.max(...editions.map((b) => Number(b.rating) || 0)) || null,
+        reviewDate: reviewed[0].reviewDate || null,
+      };
+      editions.forEach((b) => {
+        if (b.review === best.review && b.rating === best.rating) return;
+        b.review = best.review;
+        b.rating = best.rating;
+        b.reviewDate = best.reviewDate;
+        changed++;
+      });
+    });
+    if (changed) this.save();
+    return changed;
   },
 
   get() {

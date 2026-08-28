@@ -172,3 +172,24 @@ export function openSortSheet(sorter, onChange, hint, rating = null) {
     });
   });
 }
+
+// ---------- work identity ----------
+
+/**
+ * Two items are the same WORK when title and author match once case,
+ * punctuation, accents and a leading article are stripped.
+ *
+ * This is what groups editions in the list, and what makes a review apply to
+ * the book rather than to one printing of it.
+ */
+export function workKey(item) {
+  const norm = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\p{L}\p{N} ]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  return `${norm(titleSortKey(item))}|${norm(item.creator)}`;
+}

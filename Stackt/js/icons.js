@@ -51,6 +51,9 @@ export const ICONS = {
   // Author / signature mark.
   author: `<svg viewBox="0 0 48 48"><path d="M8 34c6-2 10-8 14-15s7-11 10-11 4 4 1 9-9 11-14 15-8 5-11 2z" ${S}/><line x1="8" y1="40" x2="40" y2="40" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/></svg>`,
 
+  // Heart — favouriting, deliberately unlike the star so the two never blur.
+  heart: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linejoin="round"><path d="M24 41S6 30 6 18.5A9.5 9.5 0 0 1 24 14a9.5 9.5 0 0 1 18 4.5C42 30 24 41 24 41z"/></svg>`,
+
   // Share — box with an arrow leaving it, the platform-neutral gesture.
   share: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M34 16h5a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3h5"/><path d="M24 4v26M15 12l9-8 9 8"/></svg>`,
 

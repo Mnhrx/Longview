@@ -27,6 +27,7 @@ async function boot() {
   // move. Deliberately awaited, so no screen renders against half-migrated
   // items and shows a cover that's about to change shape underneath it.
   await store.migrateCovers();
+  store.mergeWorkReviews();
 
   // ---- history-driven navigation ----
   // Every screen change pushes a history entry, so the platform's own back
