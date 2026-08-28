@@ -19,6 +19,7 @@ import { isScanSupported, startScanner } from "./barcode.js";
 import { lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl } from "./music.js";
 import { ICONS } from "./icons.js";
 import { createSorter, collator, yearValue, openSortSheet } from "./sorting.js";
+import { starsHtml, wireStars, paintStars, formatRating, normaliseRating } from "./stars.js";
 import { openShareSheet } from "./share.js";
 import { setCoverSrc, ownKey, putBlob, encodeCover, deleteBlob } from "./covers.js";
 
@@ -36,6 +37,7 @@ let groupByArtist = false;
 let activeFilter = "all";
 let artistFilter = null;
 let searchQuery = "";
+let ratingFilter = null;
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -121,6 +123,9 @@ function getRecords(store) {
       ? list.filter(hasLoan)
       : list.filter((r) => (r.copies || []).some((c) => c.condition === activeFilter));
   }
+  if (ratingFilter != null) {
+    list = list.filter((r) => normaliseRating(r.rating) === ratingFilter);
+  }
   return sorter.sort(list);
 }
 
@@ -170,10 +175,16 @@ const SORT_CRITERIA = [
 const sorter = createSorter(SORT_CRITERIA, "title");
 
 function openRecordSortSheet(store, container) {
+  const pool = ownedRecords(store);
   openSortSheet(
     sorter,
     () => render(container, store),
-    "Records with nothing to sort on — no year, no condition, unrated — go to the end either way."
+    "Records with nothing to sort on — no year, no condition, unrated — go to the end either way.",
+    {
+      value: ratingFilter,
+      countFor: (v) => pool.filter((r) => normaliseRating(r.rating) === v).length,
+      onChange: (v) => { ratingFilter = v; },
+    }
   );
 }
 
@@ -524,16 +535,31 @@ function shareCardsForShelf(store) {
     ...maybe(lentOut, { key: "lent", value: lentOut, label: "out on loan" }),
   ];
 
+  const shareTitle =
+    artistFilter ? `${artistFilter}, on my shelf`
+    : ratingFilter != null ? `My ${formatRating(ratingFilter)}★ records`
+    : shelfName;
+
+  /** Describes the SELECTION, not the whole collection. */
+  const shareSubtitleFor = (picked) => {
+    const n = picked.length;
+    const noun = `${n} record${n === 1 ? "" : "s"}`;
+    return ratingFilter != null ? `${noun}, all ${formatRating(ratingFilter)}★` : noun;
+  };
+
   return [
     {
       key: "grid", label: "My shelf", sub: "A wall of sleeves",
       type: "grid",
+      pickable: true,
       data: {
         items: list,
         // 250 is the size the list cards already fetched — a cache hit here.
         coverSrcs: list.map((r) => recordCoverSrc(r, 250)),
-        title: shelfName,
-        subtitle: `${list.length} record${list.length === 1 ? "" : "s"}`,
+        srcFor: (r) => recordCoverSrc(r, 250),
+        title: shareTitle,
+        subtitleFor: shareSubtitleFor,
+        subtitle: shareSubtitleFor(list),
       },
     },
     {
@@ -549,7 +575,10 @@ function shareCardsForShelf(store) {
 /** `opts` is only passed by the router, so its presence means the module was
  *  just opened from the menu rather than redrawn in place. */
 function render(container, store, opts) {
-  if (opts !== undefined) sorter.reset();
+  if (opts !== undefined) {
+    sorter.reset();
+    ratingFilter = null;
+  }
 
   const wrap = document.createElement("div");
 
@@ -576,16 +605,18 @@ function render(container, store, opts) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search album, artist or edition..." value="${escapeHtml(searchQuery)}">
-    <button class="icon-btn ${sorter.isDefault ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
+    <button class="icon-btn ${sorter.isDefault && ratingFilter == null ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
     <button class="icon-btn ${groupByArtist ? "on" : ""}" id="artistBtn" type="button" aria-label="Group by artist" aria-pressed="${groupByArtist}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
 
-  if (!sorter.isDefault && !groupByArtist) {
+  if ((!sorter.isDefault || ratingFilter != null) && !groupByArtist) {
     const note = document.createElement("p");
     note.className = "sort-note";
-    note.textContent = `Sorted by ${sorter.label()}`;
+    note.textContent =
+      (ratingFilter != null ? `${formatRating(ratingFilter)}★ only · ` : "") +
+      `Sorted by ${sorter.label()}`;
     wrap.appendChild(note);
   }
 
@@ -881,16 +912,7 @@ function renderBorrowed(bodyHolder, store, container) {
 
 // ---------- stars / review ----------
 
-function starsHtml(rating, interactive = false) {
-  const r = Number(rating) || 0;
-  const star = (on) =>
-    `<svg viewBox="0 0 24 24" class="star ${on ? "on" : ""}"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5-4.7-4.6 6.5-.95L12 2.6z"/></svg>`;
-  return `<span class="star-row">${[1, 2, 3, 4, 5]
-    .map((n) => (interactive
-      ? `<button type="button" class="star-btn" data-rate="${n}" aria-label="${n} star${n === 1 ? "" : "s"}">${star(n <= r)}</button>`
-      : star(n <= r)))
-    .join("")}</span>`;
-}
+
 
 function reviewHtml(rec) {
   const has = (rec.review && rec.review.trim()) || rec.rating;
@@ -901,7 +923,7 @@ function reviewHtml(rec) {
         <button class="mini-edit" id="reviewEditBtn" type="button" aria-label="Edit notes"><span class="btn-icon">${ICONS.edit}</span></button>
       </div>
       <div class="review-read" id="reviewRead">
-        ${rec.rating ? `<div class="review-stars">${starsHtml(rec.rating)}<span class="review-score">${rec.rating}/5</span></div>` : ""}
+        ${rec.rating ? `<div class="review-stars">${starsHtml(rec.rating)}<span class="review-score">${formatRating(rec.rating)}/5</span></div>` : ""}
         ${rec.review && rec.review.trim()
           ? `<p class="review-text">${escapeHtml(rec.review)}</p>`
           : (rec.rating ? "" : `<p class="review-empty">Nothing noted yet — tap the pencil to add something.</p>`)}
@@ -911,6 +933,7 @@ function reviewHtml(rec) {
         <div class="review-rate-row">
           <span class="review-rate-label">Rating</span>
           ${starsHtml(rec.rating, true)}
+          <span class="draft-score" id="draftScore">${rec.rating ? formatRating(rec.rating) + "/5" : ""}</span>
           <button type="button" class="clear-rating" id="clearRating">Clear</button>
         </div>
         <textarea id="reviewInput" class="review-input" rows="4" placeholder="How does it sound? Pressing quality, favourite side, where you found it…">${escapeHtml(rec.review || "")}</textarea>
@@ -1357,11 +1380,11 @@ function wireReview(sheet, rec, store, container) {
   const edit = sheet.querySelector("#reviewEdit");
   if (!editBtn || !read || !edit) return;
 
-  let draft = rec.rating || 0;
-  const paint = () => {
-    edit.querySelectorAll(".star-btn").forEach((b) => {
-      b.querySelector(".star").classList.toggle("on", Number(b.dataset.rate) <= draft);
-    });
+  let draft = normaliseRating(rec.rating);
+  const starRow = edit.querySelector(".star-row");
+  const score = edit.querySelector("#draftScore");
+  const showScore = () => {
+    if (score) score.textContent = draft ? `${formatRating(draft)}/5` : "";
   };
 
   editBtn.addEventListener("click", () => {
@@ -1370,21 +1393,18 @@ function wireReview(sheet, rec, store, container) {
     read.hidden = opening;
     editBtn.classList.toggle("open", opening);
     if (opening) {
-      paint();
+      paintStars(starRow, draft);
       makeClearable(edit.querySelector("#reviewInput"));
     }
   });
 
-  edit.querySelectorAll(".star-btn").forEach((b) => {
-    b.addEventListener("click", () => {
-      const n = Number(b.dataset.rate);
-      draft = draft === n ? 0 : n;
-      paint();
-    });
+  wireStars(starRow, draft, (value) => {
+    draft = value;
+    showScore();
   });
 
   const clear = sheet.querySelector("#clearRating");
-  if (clear) clear.addEventListener("click", () => { draft = 0; paint(); });
+  if (clear) clear.addEventListener("click", () => { draft = 0; paintStars(starRow, 0); showScore(); });
 
   sheet.querySelector("#saveReviewBtn").addEventListener("click", () => {
     const text = sheet.querySelector("#reviewInput").value.trim();

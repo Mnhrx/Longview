@@ -115,10 +115,25 @@ const ARROW_UP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
  * reverses it — that's the whole "A–Z / Z–A" mechanic, and it works the same
  * way for dates, ratings and condition without needing a separate control.
  */
-export function openSortSheet(sorter, onChange, hint) {
+export function openSortSheet(sorter, onChange, hint, rating = null) {
+  const RATINGS = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5];
   openModal((sheet) => {
     sheet.innerHTML = `
-      <h2>Sort by</h2>
+      <h2>Sort &amp; filter</h2>
+
+      ${rating ? `
+        <p class="cover-picker-label">Show only</p>
+        <div class="rating-filter-row" id="ratingFilter">
+          <button type="button" class="rating-chip ${rating.value == null ? "active" : ""}" data-rating="any">Any rating</button>
+          ${RATINGS.map((v) => `
+            <button type="button" class="rating-chip ${rating.value === v ? "active" : ""}" data-rating="${v}">
+              ${v}★<span class="chip-count">${rating.countFor(v)}</span>
+            </button>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <p class="cover-picker-label">Sort by</p>
       <div class="sort-list">
         ${sorter.criteria.map((c) => {
           const active = c.key === sorter.key;
@@ -139,6 +154,15 @@ export function openSortSheet(sorter, onChange, hint) {
         ${hint || ""}
       </p>
     `;
+    sheet.querySelectorAll("[data-rating]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const raw = btn.dataset.rating;
+        rating.onChange(raw === "any" ? null : Number(raw));
+        dismissLayer();
+        onChange();
+      });
+    });
+
     sheet.querySelectorAll("[data-sort]").forEach((btn) => {
       btn.addEventListener("click", () => {
         sorter.select(btn.dataset.sort);

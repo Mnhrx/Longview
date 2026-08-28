@@ -205,8 +205,9 @@ function drawLines(ctx, lines, x, y, lineHeight) {
   return y + lines.length * lineHeight;
 }
 
+/** Draws a 0–5 rating, halves included. */
 function drawStars(ctx, rating, x, y, size, gap = 8) {
-  const star = (cx, cy, r, filled) => {
+  const outline = (cx, cy, r) => {
     ctx.beginPath();
     for (let i = 0; i < 10; i++) {
       const rad = i % 2 === 0 ? r : r * 0.45;
@@ -216,14 +217,36 @@ function drawStars(ctx, rating, x, y, size, gap = 8) {
       i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
     }
     ctx.closePath();
-    ctx.fillStyle = filled ? PALETTE.yellow : "rgba(26,26,46,0.14)";
+  };
+
+  const star = (cx, cy, r, fill) => {
+    outline(cx, cy, r);
+    ctx.fillStyle = "rgba(26,26,46,0.14)";
     ctx.fill();
+
+    // A partial star is the full shape, filled through a clip cut to the
+    // fraction earned — so a half star is a half star, not a smaller one.
+    if (fill > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx - r, cy - r, r * 2 * fill, r * 2);
+      ctx.clip();
+      outline(cx, cy, r);
+      ctx.fillStyle = PALETTE.yellow;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    outline(cx, cy, r);
     ctx.lineWidth = 4;
     ctx.strokeStyle = PALETTE.ink;
     ctx.stroke();
   };
+
+  const r = Math.max(0, Math.min(5, Number(rating) || 0));
   for (let i = 0; i < 5; i++) {
-    star(x + size / 2 + i * (size + gap), y + size / 2, size / 2, i < rating);
+    const fill = Math.max(0, Math.min(1, r - i));
+    star(x + size / 2 + i * (size + gap), y + size / 2, size / 2, fill);
   }
   return x + 5 * (size + gap);
 }
@@ -537,8 +560,13 @@ async function renderStatsCard(ctx, W, H, { title, stats, chosen, photo, accent 
 
   const gap = 22;
   const shown = stats.slice(0, MAX_STATS);
-  // Rows shrink a little as you add more, so five still breathe on a square.
+  // Rows shrink as you add more — and so must the type inside them, or five
+  // stats on a square push their own labels through the bottom border.
   const rowH = H > W ? 190 : Math.max(112, Math.round((H * 0.52 - gap * shown.length) / shown.length));
+  const valueSize = Math.round(Math.min(H > W ? 78 : 62, rowH * 0.42));
+  const labelSize = Math.round(Math.min(H > W ? 30 : 26, rowH * 0.19));
+  const valueBaseline = Math.round(rowH * 0.52);
+  const labelBaseline = Math.round(rowH * 0.78);
 
   // Centre the stack in what's left, so a short list doesn't hang off the top.
   const blockH = shown.length * rowH + (shown.length - 1) * gap;
@@ -550,14 +578,14 @@ async function renderStatsCard(ctx, W, H, { title, stats, chosen, photo, accent 
     panel(ctx, M, top, cardW, rowH, i % 2 ? "#fff" : accent, { radius: 28, offset: 10, border: 6 });
 
     ctx.fillStyle = PALETTE.ink;
-    setFont(ctx, H > W ? 78 : 62, 900);
-    ctx.fillText(String(s.value), M + 40, top + (H > W ? 100 : 82));
+    setFont(ctx, valueSize, 900);
+    ctx.fillText(String(s.value), M + 40, top + valueBaseline);
 
     // Ellipsised rather than hard-sliced, so a long author name says so.
-    setFont(ctx, H > W ? 30 : 26, 800);
+    setFont(ctx, labelSize, 800);
     ctx.fillStyle = "rgba(26,26,46,0.6)";
     const label = wrapText(ctx, String(s.label).toUpperCase(), cardW - 80, 1);
-    ctx.fillText(label[0] || "", M + 40, top + (H > W ? 148 : 120));
+    ctx.fillText(label[0] || "", M + 40, top + labelBaseline);
   });
 
   watermark(ctx, W, H, onPhoto);
@@ -645,6 +673,8 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
   let cardKey = cards[0].key;
   let format = "square";
   const chosenStats = new Map(); // card key -> Set of stat keys
+  const chosenItems = new Map(); // card key -> Set of item ids, or null for "all"
+  let picking = false;           // is the item chooser open?
   let photo = null;
   let run = 0;
   let current = null;
@@ -673,6 +703,11 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
         `).join("")}
       </div>
 
+      <div class="share-scope" id="shareScope" hidden>
+        <button type="button" class="share-scope-btn active" data-scope="all">Everything</button>
+        <button type="button" class="share-scope-btn" data-scope="pick">Choose…</button>
+      </div>
+
       <div class="share-options" id="shareOptions" hidden></div>
 
       <div class="share-preview" id="sharePreview">
@@ -692,14 +727,87 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
 
     const preview = sheet.querySelector("#sharePreview");
     const options = sheet.querySelector("#shareOptions");
+    const scope = sheet.querySelector("#shareScope");
     const status = sheet.querySelector("#shareStatus");
     const goBtn = sheet.querySelector("#shareGoBtn");
     const photoInput = sheet.querySelector("#sharePhoto");
     const photoLabel = sheet.querySelector("#sharePhotoLabel");
 
+    /** Which items end up on the card: all of them, or the ones you ticked. */
+    function selectionFor(card) {
+      const all = (card.data && card.data.items) || [];
+      const chosen = chosenItems.get(card.key);
+      if (!chosen) return all;
+      const picked = all.filter((it) => chosen.has(it.id));
+      return picked.length ? picked : all; // never render an empty shelf
+    }
+
+    /** The item tick-list, for cards built from a set of books or records. */
+    function paintItemPicker() {
+      const card = cards.find((c) => c.key === cardKey) || cards[0];
+      const all = (card.data && card.data.items) || [];
+      const chosen = chosenItems.get(card.key) || new Set(all.map((i) => i.id));
+      chosenItems.set(card.key, chosen);
+
+      options.hidden = false;
+      options.innerHTML = `
+        <p class="share-options-head">
+          What goes on the card
+          <span class="share-options-count" id="pickCount">${chosen.size} of ${all.length}</span>
+        </p>
+        <div class="share-pick-actions">
+          <button type="button" class="link-btn" id="pickAll">Select all</button>
+          <button type="button" class="link-btn" id="pickNone">Clear</button>
+        </div>
+        <div class="stat-picks">
+          ${all.map((it) => `
+            <button type="button" class="stat-pick ${chosen.has(it.id) ? "on" : ""}" data-item="${escapeHtml(it.id)}">
+              <span class="stat-pick-tick">${chosen.has(it.id) ? "✓" : ""}</span>
+              <span class="stat-pick-label">${escapeHtml(it.title || "Untitled")}</span>
+              <span class="stat-pick-value">${it.rating ? `${it.rating}★` : ""}</span>
+            </button>
+          `).join("")}
+        </div>
+      `;
+
+      options.querySelectorAll("[data-item]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.item;
+          if (chosen.has(id)) {
+            if (chosen.size === 1) return; // a card of nothing isn't a card
+            chosen.delete(id);
+          } else {
+            chosen.add(id);
+          }
+          paintItemPicker();
+          draw();
+        });
+      });
+      options.querySelector("#pickAll").addEventListener("click", () => {
+        all.forEach((i) => chosen.add(i.id));
+        paintItemPicker();
+        draw();
+      });
+      options.querySelector("#pickNone").addEventListener("click", () => {
+        chosen.clear();
+        if (all[0]) chosen.add(all[0].id); // keep one, so there's something to see
+        paintItemPicker();
+        draw();
+      });
+    }
+
     /** The stat tick-list, shown only for the stats card. */
     function paintOptions() {
       const card = cards.find((c) => c.key === cardKey) || cards[0];
+
+      // Scope toggle only makes sense for a card built from a list of items.
+      const canPick = !!card.pickable && ((card.data && card.data.items) || []).length > 1;
+      scope.hidden = !canPick;
+      if (canPick && picking) {
+        paintItemPicker();
+        return;
+      }
+
       const all = (card.data && card.data.stats) || [];
       if (card.type !== "stats" || all.length <= 1) {
         options.hidden = true;
@@ -756,13 +864,23 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
       if (card.type === "stats" && !chosenStats.has(card.key)) {
         const all = (card.data && card.data.stats) || [];
         chosenStats.set(card.key, new Set(all.slice(0, MAX_STATS).map((st) => st.key)));
-        paintOptions();
       }
+      paintOptions();
 
+      const picked = selectionFor(card);
       const result = await renderCard(card.type, format, {
         ...card.data,
         photo,
         chosen: chosenStats.get(card.key) || null,
+        ...(card.pickable
+          ? {
+              items: picked,
+              coverSrcs: card.data.srcFor ? picked.map(card.data.srcFor) : card.data.coverSrcs,
+              subtitle: card.data.subtitleFor
+                ? card.data.subtitleFor(picked)
+                : card.data.subtitle,
+            }
+          : {}),
       });
       if (mine !== run) return; // a newer draw already started
       current = result;
@@ -787,9 +905,26 @@ export function openShareSheet(cards, { filename = "stackt" } = {}) {
       }
     }
 
+    scope.querySelectorAll("[data-scope]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        picking = btn.dataset.scope === "pick";
+        scope.querySelectorAll("[data-scope]").forEach((b) => b.classList.toggle("active", b === btn));
+        if (!picking) {
+          const card = cards.find((c) => c.key === cardKey) || cards[0];
+          chosenItems.delete(card.key); // back to everything
+        }
+        paintOptions();
+        draw();
+      });
+    });
+
     sheet.querySelectorAll("[data-card]").forEach((btn) => {
       btn.addEventListener("click", () => {
         cardKey = btn.dataset.card;
+        picking = false;
+        scope.querySelectorAll("[data-scope]").forEach((b) =>
+          b.classList.toggle("active", b.dataset.scope === "all")
+        );
         sheet.querySelectorAll("[data-card]").forEach((b) => b.classList.toggle("active", b === btn));
         const card = cards.find((c) => c.key === cardKey);
         if (card && card.type === "stats" && !chosenStats.has(card.key)) {

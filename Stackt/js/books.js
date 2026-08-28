@@ -10,6 +10,7 @@ import { uid } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl, coverIdUrl, findCoverOptions } from "./barcode.js";
 import { ICONS } from "./icons.js";
 import { createSorter, collator, yearValue, titleSortKey, openSortSheet } from "./sorting.js";
+import { starsHtml, wireStars, paintStars, formatRating, normaliseRating } from "./stars.js";
 import { openShareSheet } from "./share.js";
 import { setCoverSrc, ownKey, putBlob, encodeCover, deleteBlob } from "./covers.js";
 
@@ -28,6 +29,7 @@ let shelf = "library";     // 'library' | 'wishlist' | 'borrowed'
 let groupByAuthor = false; // a way of viewing a shelf, not a shelf itself
 let authorFilter = null;
 let searchQuery = "";
+let ratingFilter = null;  // 5, 4.5, 4 … or null for any
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -137,6 +139,9 @@ function getBooks(store) {
     books = activeFilter === "lent-out"
       ? books.filter(hasLoan)
       : books.filter((b) => b.readingStatus === activeFilter);
+  }
+  if (ratingFilter != null) {
+    books = books.filter((b) => normaliseRating(b.rating) === ratingFilter);
   }
   return sortBooks(books);
 }
@@ -295,7 +300,7 @@ function shareCardsForShelf(store) {
   const stats = [
     // the basics
     { key: "owned", value: owned.length, label: "books owned" },
-    { key: "read", value: read.length, label: "read" },
+    { key: "read", value: read.length, label: "books read" },
     ...maybe(wishlist, { key: "wishlist", value: wishlist, label: "on the wishlist" }),
     ...maybe(rated.length, {
       key: "avg",
@@ -303,7 +308,7 @@ function shareCardsForShelf(store) {
       label: "average rating",
     }),
     // reading milestones
-    ...maybe(readThisYear.length, { key: "year", value: readThisYear.length, label: `read in ${thisYear}` }),
+    ...maybe(readThisYear.length, { key: "year", value: readThisYear.length, label: `books read in ${thisYear}` }),
     ...maybe(longest, { key: "longest", value: `${longest && longest.d}d`, label: `longest read · ${longest && longest.b.title}` }),
     ...maybe(quickest, { key: "quickest", value: `${quickest && quickest.d}d`, label: `quickest read · ${quickest && quickest.b.title}` }),
     // people and taste
@@ -316,17 +321,44 @@ function shareCardsForShelf(store) {
     ...maybe(lentOut, { key: "lent", value: lentOut, label: "out on loan" }),
   ];
 
+  // The heading follows what you're actually looking at, so a card of six
+  // Murakami novels doesn't call itself "My bookshelf".
+  const shareTitle =
+    authorFilter ? `${authorFilter}, on my shelf`
+    : ratingFilter != null ? `My ${formatRating(ratingFilter)}★ books`
+    : shelfName;
+
+  /**
+   * Describes the SELECTION, not the library.
+   *
+   * "12 read" belongs on a card showing your whole shelf and nowhere else — on
+   * four hand-picked books it's a non-sequitur, which is exactly how it read.
+   * So the read count only appears when the card really is everything.
+   */
+  const shareSubtitleFor = (picked) => {
+    const n = picked.length;
+    const noun = `${n} book${n === 1 ? "" : "s"}`;
+    if (ratingFilter != null) return `${noun}, all ${formatRating(ratingFilter)}★`;
+    if (authorFilter) return noun;
+    const whole = n === list.length && shelf === "library" && n === owned.length;
+    if (whole && read.length) return `${noun} · ${read.length} read`;
+    return noun;
+  };
+
   return [
     {
       key: "grid", label: "My shelf", sub: "A wall of covers",
       type: "grid",
+      pickable: true,
       data: {
         items: list,
         // "L" is what the list cards already requested, so these come out of
         // cache instead of costing another rate-limited fetch each.
         coverSrcs: list.map((b) => bookCoverSrc(b, "L")),
-        title: shelfName,
-        subtitle: `${list.length} book${list.length === 1 ? "" : "s"}${read.length ? ` · ${read.length} read` : ""}`,
+        srcFor: (b) => bookCoverSrc(b, "L"),
+        title: shareTitle,
+        subtitleFor: shareSubtitleFor,
+        subtitle: shareSubtitleFor(list),
       },
     },
     {
@@ -343,7 +375,10 @@ function shareCardsForShelf(store) {
  *  just opened from the menu" rather than an internal redraw. Entering always
  *  starts alphabetical, as asked. */
 function render(container, store, opts) {
-  if (opts !== undefined) sorter.reset();
+  if (opts !== undefined) {
+    sorter.reset();
+    ratingFilter = null;
+  }
 
   const wrap = document.createElement("div");
 
@@ -370,17 +405,19 @@ function render(container, store, opts) {
   searchRow.className = "search-row";
   searchRow.innerHTML = `
     <input type="text" class="search-input" id="searchInput" placeholder="Search title or author..." value="${escapeHtml(searchQuery)}">
-    <button class="icon-btn ${sorter.isDefault ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
+    <button class="icon-btn ${sorter.isDefault && ratingFilter == null ? "" : "on"}" id="sortBtn" type="button" aria-label="Sort">${ICONS.sort}</button>
     <button class="icon-btn ${groupByAuthor ? "on" : ""}" id="authorBtn" type="button" aria-label="Group by author" aria-pressed="${groupByAuthor}">${ICONS.author}</button>
     <button class="scan-btn" id="scanBtn" type="button" aria-label="Scan barcode">${ICONS.camera}</button>
   `;
   wrap.appendChild(searchRow);
 
   // Only worth naming the order when it isn't the default one.
-  if (!sorter.isDefault && !groupByAuthor) {
+  if ((!sorter.isDefault || ratingFilter != null) && !groupByAuthor) {
     const note = document.createElement("p");
     note.className = "sort-note";
-    note.textContent = `Sorted by ${sorter.label()}`;
+    note.textContent =
+      (ratingFilter != null ? `${formatRating(ratingFilter)}★ only · ` : "") +
+      `Sorted by ${sorter.label()}`;
     wrap.appendChild(note);
   }
 
@@ -441,10 +478,16 @@ function render(container, store, opts) {
 /** Sort picker. A sheet rather than more chips in the header — it's a choice
  *  you make occasionally, and the header already carries three controls. */
 function openBookSortSheet(store, container) {
+  const pool = ownedBooks(store);
   openSortSheet(
     sorter,
     () => render(container, store),
-    "Books with nothing to sort on — no year, never finished, unrated — go to the end either way."
+    "Books with nothing to sort on — no year, never finished, unrated — go to the end either way.",
+    {
+      value: ratingFilter,
+      countFor: (v) => pool.filter((b) => normaliseRating(b.rating) === v).length,
+      onChange: (v) => { ratingFilter = v; },
+    }
   );
 }
 
@@ -1207,17 +1250,7 @@ function viewModeHtml(book, opts) {
 /** Reading-dates block: a summary line plus always-editable date inputs.
  *  Shown once a book is Reading or Read — a to-read book has nothing to date yet. */
 /** Renders a 1-5 star row. `interactive` makes each star a button. */
-function starsHtml(rating, interactive = false) {
-  const r = Number(rating) || 0;
-  const star = (filled) =>
-    `<svg viewBox="0 0 24 24" class="star ${filled ? "on" : ""}"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5-4.7-4.6 6.5-.95L12 2.6z"/></svg>`;
-  const items = [1, 2, 3, 4, 5].map((n) =>
-    interactive
-      ? `<button type="button" class="star-btn" data-rate="${n}" aria-label="${n} star${n === 1 ? "" : "s"}">${star(n <= r)}</button>`
-      : star(n <= r)
-  );
-  return `<span class="star-row">${items.join("")}</span>`;
-}
+
 
 /** Review + rating. Sits under the reading log, so it turns up once a book is
  *  actually in play — a To Read book has nothing to review yet. */
@@ -1233,7 +1266,7 @@ function reviewHtml(book) {
       </div>
 
       <div class="review-read" id="reviewRead">
-        ${book.rating ? `<div class="review-stars">${starsHtml(book.rating)}<span class="review-score">${book.rating}/5</span></div>` : ""}
+        ${book.rating ? `<div class="review-stars">${starsHtml(book.rating)}<span class="review-score">${formatRating(book.rating)}/5</span></div>` : ""}
         ${book.review && book.review.trim()
           ? `<p class="review-text">${escapeHtml(book.review)}</p>`
           : (book.rating ? "" : `<p class="review-empty">Not reviewed yet — tap the pencil to add one.</p>`)}
@@ -1244,6 +1277,7 @@ function reviewHtml(book) {
         <div class="review-rate-row">
           <span class="review-rate-label">Rating</span>
           ${starsHtml(book.rating, true)}
+          <span class="draft-score" id="draftScore">${book.rating ? formatRating(book.rating) + "/5" : ""}</span>
           <button type="button" class="clear-rating" id="clearRating">Clear</button>
         </div>
         <textarea id="reviewInput" class="review-input" rows="4" placeholder="What did you make of it?">${escapeHtml(book.review || "")}</textarea>
@@ -1474,14 +1508,8 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
   if (reviewEditBtn && reviewRead && reviewEdit) {
     // Local draft so tapping stars re-paints without writing to the store on
     // every tap — the save button commits.
-    let draftRating = book.rating || 0;
-
-    const paintStars = () => {
-      reviewEdit.querySelectorAll(".star-btn").forEach((btn) => {
-        const on = Number(btn.dataset.rate) <= draftRating;
-        btn.querySelector(".star").classList.toggle("on", on);
-      });
-    };
+    let draftRating = normaliseRating(book.rating);
+    const starRow = reviewEdit.querySelector(".star-row");
 
     reviewEditBtn.addEventListener("click", () => {
       const opening = reviewEdit.hidden;
@@ -1489,24 +1517,24 @@ function wireViewMode(sheet, book, store, container, opts = {}) {
       reviewRead.hidden = opening;
       reviewEditBtn.classList.toggle("open", opening);
       if (opening) {
-        paintStars();
+        paintStars(starRow, draftRating);
         makeClearable(reviewEdit.querySelector("#reviewInput"));
       }
     });
 
-    reviewEdit.querySelectorAll(".star-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const n = Number(btn.dataset.rate);
-        draftRating = draftRating === n ? 0 : n; // tapping the current star clears it
-        paintStars();
-      });
+    wireStars(starRow, draftRating, (value) => {
+      draftRating = value;
+      const score = reviewEdit.querySelector("#draftScore");
+      if (score) score.textContent = value ? `${formatRating(value)}/5` : "";
     });
 
     const clearBtn = sheet.querySelector("#clearRating");
     if (clearBtn) {
       clearBtn.addEventListener("click", () => {
         draftRating = 0;
-        paintStars();
+        paintStars(starRow, 0);
+        const score = reviewEdit.querySelector("#draftScore");
+        if (score) score.textContent = "";
       });
     }
 
