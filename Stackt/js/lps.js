@@ -16,7 +16,10 @@ import { openModal, updateModal, dismissLayer, openOverlay, escapeHtml, makeClea
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
 import { isScanSupported, startScanner } from "./barcode.js";
-import { lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl } from "./music.js";
+import {
+  lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl,
+  fetchTracklist, releasesInGroup, totalLength, formatLength,
+} from "./music.js";
 import { ICONS } from "./icons.js";
 import { createSorter, collator, yearValue, openSortSheet } from "./sorting.js";
 import { starsHtml, wireStars, paintStars, formatRating, normaliseRating } from "./stars.js";
@@ -602,6 +605,9 @@ function shareCardsForShelf(store) {
   const distinctArtists = new Set(owned.map((r) => r.creator || "Unknown")).size;
   const fiveStars = owned.filter((r) => r.rating === 5).length;
   const favourites = all.filter((r) => r.favourite).length;
+  const allTracks = owned.flatMap((r) => r.tracks || []);
+  const lovedSongs = allTracks.filter((t) => t.favourite).length;
+  const ratedSongs = allTracks.filter((t) => t.rating).length;
   const wishlist = all.filter((r) => shelfOf(r) === "wishlist").length;
   const lentOut = owned.filter(hasLoan).length;
   const totalCopies = owned.reduce((n, r) => n + (r.copies || []).length, 0);
@@ -621,6 +627,9 @@ function shareCardsForShelf(store) {
     ...maybe(distinctArtists > 1, { key: "artists", value: distinctArtists, label: "different artists" }),
     ...maybe(fiveStars, { key: "fivestar", value: fiveStars, label: "five-star records" }),
     ...maybe(favourites, { key: "faves", value: favourites, label: "favourites" }),
+    ...maybe(allTracks.length, { key: "songs", value: allTracks.length, label: "songs catalogued" }),
+    ...maybe(lovedSongs, { key: "lovedsongs", value: lovedSongs, label: "songs I love" }),
+    ...maybe(ratedSongs, { key: "ratedsongs", value: ratedSongs, label: "songs rated" }),
     ...maybe(oldest, { key: "oldest", value: oldest, label: "oldest pressing" }),
     ...maybe(newest && newest !== oldest, { key: "newest", value: newest, label: "newest pressing" }),
     ...maybe(mint, { key: "mint", value: mint, label: "in mint condition" }),
@@ -1055,6 +1064,321 @@ function reviewHtml(rec) {
   `;
 }
 
+// ---------- tracklist ----------
+
+/**
+ * What the tracks say about the record, as a number.
+ *
+ * Reported next to your own rating, never instead of it. An album isn't the
+ * mean of its songs — sequencing and the one track that makes the record
+ * matter more than arithmetic, and a partial average (three of twelve rated)
+ * is confidently wrong. Shown side by side, though, the gap between the two is
+ * the interesting part: the album that's better than its songs, or the one
+ * carried by a single cut.
+ */
+export function trackAverage(rec) {
+  const rated = (rec.tracks || []).filter((t) => t.rating);
+  if (!rated.length) return null;
+  const mean = rated.reduce((n, t) => n + Number(t.rating), 0) / rated.length;
+  return { mean: normaliseRating(mean), count: rated.length, of: (rec.tracks || []).length };
+}
+
+function trackRowHtml(t, i) {
+  const label = t.side ? `${String.fromCharCode(64 + Number(t.side))}${t.posOnSide || ""}` : t.pos;
+  return `
+    <div class="track-row" data-track="${i}">
+      <div class="track-line">
+        <span class="track-pos">${escapeHtml(String(label))}</span>
+        <span class="track-name">${escapeHtml(t.title)}</span>
+        ${t.ms ? `<span class="track-len">${formatLength(t.ms)}</span>` : ""}
+        <button type="button" class="track-fave ${t.favourite ? "on" : ""}"
+                data-fave="${i}" aria-pressed="${!!t.favourite}"
+                aria-label="Favourite this song">${ICONS.heart}</button>
+      </div>
+      <div class="track-rate" data-rate-for="${i}">${starsHtml(t.rating, true)}</div>
+    </div>
+  `;
+}
+
+function tracklistHtml(rec) {
+  const tracks = rec.tracks || [];
+  const avg = trackAverage(rec);
+  const total = totalLength(tracks);
+
+  // Sides are drawn as headers rather than repeated on every row — a double LP
+  // reads as A/B/C/D, not as twenty-four numbers in one column.
+  let rows = "";
+  let lastSide = null;
+  tracks.forEach((t, i) => {
+    if (t.side && t.side !== lastSide) {
+      lastSide = t.side;
+      const letter = String.fromCharCode(64 + Number(t.side));
+      rows += `<p class="track-side">Side ${letter}${t.sideLabel ? ` · ${escapeHtml(t.sideLabel)}` : ""}</p>`;
+    }
+    rows += trackRowHtml(t, i);
+  });
+
+  return `
+    <div class="track-block" id="trackBlock">
+      <div class="track-head">
+        <span class="track-title">Tracklist</span>
+        ${tracks.length
+          ? `<span class="track-runtime">${tracks.length} track${tracks.length === 1 ? "" : "s"}${total ? ` · ${formatLength(total)}` : ""}</span>`
+          : ""}
+        ${tracks.length ? `<button class="mini-edit" id="trackEditBtn" type="button" aria-label="Edit tracklist"><span class="btn-icon">${ICONS.edit}</span></button>` : ""}
+      </div>
+
+      ${avg ? `
+        <div class="rate-compare">
+          <span class="rate-compare-mine">You: ${rec.rating ? `${formatRating(rec.rating)}★` : "—"}</span>
+          <span class="rate-compare-sep">·</span>
+          <span class="rate-compare-tracks">Tracks: ${formatRating(avg.mean)}★</span>
+          <span class="rate-compare-count">(${avg.count} of ${avg.of} rated)</span>
+          ${rec.rating !== avg.mean ? `<button type="button" class="link-btn" id="adoptAvgBtn">Use ${formatRating(avg.mean)}★</button>` : ""}
+        </div>
+      ` : ""}
+
+      ${tracks.length ? `<div class="track-rows" id="trackRows">${rows}</div>` : `
+        <p class="track-empty">No tracklist yet. Fetch it from MusicBrainz, or type it in yourself.</p>
+      `}
+
+      <div class="track-actions">
+        ${tracks.length ? "" : `<button class="btn btn-secondary" id="getTracksBtn" type="button">Get tracklist</button>`}
+        <button class="link-btn" id="addTrackBtn" type="button">${tracks.length ? "Add a track" : "Type it in by hand"}</button>
+      </div>
+      <p class="settings-status" id="trackStatus"></p>
+    </div>
+  `;
+}
+
+/**
+ * Picks which pressing you own, then stores its tracklist.
+ *
+ * The two-step is unavoidable and worth the tap: Stackt files artwork against
+ * the release GROUP, which has no tracks, so all we usually know is the album.
+ * Guessing a pressing would attach the reissue's three bonus cuts to your 1957
+ * copy and never tell you. Track counts lead each row because that's the fact
+ * that identifies your sleeve.
+ */
+function openTracklistPicker(rec, store, container) {
+  openOverlay("cover-picker-backdrop", (overlay) => {
+    overlay.innerHTML = `
+      <div class="cover-picker">
+        <div class="cover-picker-head">
+          <h2>Which pressing?</h2>
+          <button class="lightbox-close" id="tpClose" type="button" aria-label="Close"><span class="btn-icon">${ICONS.close}</span></button>
+        </div>
+        <p class="cp-note" id="tpNote">Looking for pressings…</p>
+        <div class="tp-list" id="tpList"></div>
+      </div>
+    `;
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismissLayer(); });
+    overlay.querySelector("#tpClose").addEventListener("click", () => dismissLayer());
+
+    const note = overlay.querySelector("#tpNote");
+    const list = overlay.querySelector("#tpList");
+
+    const paint = (releases) => {
+      if (!releases.length) {
+        note.textContent =
+          "No pressings found for this record. You can still type the tracklist in by hand.";
+        return;
+      }
+      note.textContent = "Pick the one you're holding — the track count is usually the giveaway.";
+      list.innerHTML = releases
+        .map((r, i) => `
+          <button type="button" class="tp-row" data-i="${i}">
+            <span class="tp-main">${escapeHtml(r.title || rec.title)}</span>
+            <span class="tp-sub">${[
+              r.year,
+              r.country,
+              r.format,
+              r.trackCount ? `${r.trackCount} tracks` : null,
+              r.discCount > 1 ? `${r.discCount} discs` : null,
+              r.edition,
+            ].filter(Boolean).map(escapeHtml).join(" · ")}</span>
+          </button>
+        `)
+        .join("");
+
+      list.querySelectorAll(".tp-row").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const chosen = releases[Number(btn.dataset.i)];
+          note.textContent = "Fetching the tracklist…";
+          list.innerHTML = "";
+          const tracks = await fetchTracklist(chosen.mbid);
+          if (!tracks) {
+            // Order matters: paint() writes the note too, so explaining first
+            // and repainting second silently swallows the explanation — you'd
+            // tap a pressing, get nothing back, and be told to pick one again.
+            paint(releases);
+            note.textContent =
+              "That pressing has no tracklist filed on MusicBrainz. Try another, or type it in by hand.";
+            return;
+          }
+          // Numbered within each side, so a double LP reads A1…A6, B1…B6.
+          const perSide = {};
+          tracks.forEach((t) => {
+            if (!t.side) return;
+            perSide[t.side] = (perSide[t.side] || 0) + 1;
+            t.posOnSide = perSide[t.side];
+          });
+          store.updateItem(rec.id, { tracks, releaseMbid: chosen.mbid });
+          dismissLayer();
+          refreshDetail(store, container, rec.id);
+        });
+      });
+    };
+
+    (async () => {
+      // Best source first: a pressing we already know, then the album's other
+      // pressings, then a plain search. Each is one request, and MusicBrainz
+      // asks for no more than one a second.
+      let releases = [];
+      if (rec.rgid || rec.coverRgid) {
+        releases = await releasesInGroup(rec.rgid || rec.coverRgid);
+      }
+      if (!releases.length) {
+        releases = await searchReleases({ title: rec.title, creator: rec.creator });
+      }
+      // A pressing we already picked art from belongs at the top.
+      const known = rec.releaseMbid || rec.coverMbid;
+      if (known) {
+        const i = releases.findIndex((r) => r.mbid === known);
+        if (i > 0) releases.unshift(releases.splice(i, 1)[0]);
+      }
+      paint(releases.slice(0, 20));
+    })();
+  });
+}
+
+/** Adds or edits one track by hand — for private presses and bootlegs. */
+function openTrackEditor(rec, store, container, index = null) {
+  const existing = index != null ? (rec.tracks || [])[index] : null;
+  openOverlay("cover-picker-backdrop", (overlay) => {
+    overlay.innerHTML = `
+      <div class="cover-picker">
+        <div class="cover-picker-head">
+          <h2>${existing ? "Edit track" : "Add a track"}</h2>
+          <button class="lightbox-close" id="tkClose" type="button" aria-label="Close"><span class="btn-icon">${ICONS.close}</span></button>
+        </div>
+        <p class="cover-picker-label">Title</p>
+        <input type="text" id="tkTitle" placeholder="So What" value="${escapeHtml(existing ? existing.title : "")}">
+        <p class="cover-picker-label">Length <span class="field-hint">optional, m:ss</span></p>
+        <input type="text" id="tkLen" inputmode="numeric" placeholder="9:22"
+               value="${existing && existing.ms ? formatLength(existing.ms) : ""}">
+        <div class="track-actions">
+          <button class="btn btn-primary" id="tkSave" type="button">${existing ? "Save" : "Add"}</button>
+          ${existing ? `<button class="btn btn-secondary danger-btn" id="tkDelete" type="button">Remove</button>` : ""}
+        </div>
+      </div>
+    `;
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismissLayer(); });
+    overlay.querySelector("#tkClose").addEventListener("click", () => dismissLayer());
+
+    const titleInput = overlay.querySelector("#tkTitle");
+    setTimeout(() => titleInput.focus(), 60);
+
+    const commit = (tracks) => {
+      tracks.forEach((t, i) => { t.pos = i + 1; });
+      store.updateItem(rec.id, { tracks });
+      dismissLayer();
+      refreshDetail(store, container, rec.id);
+    };
+
+    overlay.querySelector("#tkSave").addEventListener("click", () => {
+      const title = titleInput.value.trim();
+      if (!title) return nudge(titleInput);
+      // "9:22" and "562" both mean something sensible; anything else is left
+      // blank rather than stored as a wrong number.
+      const raw = overlay.querySelector("#tkLen").value.trim();
+      let ms = null;
+      if (/^\d+:\d{1,2}$/.test(raw)) {
+        const [m, s] = raw.split(":").map(Number);
+        ms = (m * 60 + s) * 1000;
+      } else if (/^\d+$/.test(raw)) {
+        ms = Number(raw) * 1000;
+      }
+      const tracks = [...(rec.tracks || [])];
+      if (existing) tracks[index] = { ...existing, title, ms };
+      else tracks.push({ title, ms, rating: null, favourite: false });
+      commit(tracks);
+    });
+
+    const del = overlay.querySelector("#tkDelete");
+    if (del) {
+      del.addEventListener("click", () => {
+        const tracks = (rec.tracks || []).filter((_, i) => i !== index);
+        commit(tracks);
+      });
+    }
+  });
+}
+
+/** Per-song hearts and stars. Saved straight to the track, no Save button. */
+function wireTracklist(sheet, rec, store, container) {
+  const block = sheet.querySelector("#trackBlock");
+  if (!block) return;
+
+  const patchTrack = (i, patch) => {
+    const tracks = (rec.tracks || []).map((t, n) => (n === i ? { ...t, ...patch } : t));
+    store.updateItem(rec.id, { tracks });
+    rec.tracks = tracks; // keep the sheet's copy honest without a full repaint
+  };
+
+  block.querySelectorAll("[data-fave]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      bounceTap(btn);
+      const i = Number(btn.dataset.fave);
+      const on = !(rec.tracks[i] || {}).favourite;
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-pressed", String(on));
+      patchTrack(i, { favourite: on });
+    });
+  });
+
+  block.querySelectorAll("[data-rate-for]").forEach((row) => {
+    const i = Number(row.dataset.rateFor);
+    wireStars(row, (rec.tracks[i] || {}).rating, (value) => {
+      patchTrack(i, { rating: value || null });
+      // The comparison line is only meaningful once something is rated, and it
+      // has to move the moment a rating does — so this one repaints.
+      refreshDetail(store, container, rec.id);
+    });
+  });
+
+  const get = block.querySelector("#getTracksBtn");
+  if (get) get.addEventListener("click", () => {
+    bounceTap(get);
+    openTracklistPicker(rec, store, container);
+  });
+
+  const add = block.querySelector("#addTrackBtn");
+  if (add) add.addEventListener("click", () => openTrackEditor(rec, store, container));
+
+  const edit = block.querySelector("#trackEditBtn");
+  if (edit) edit.addEventListener("click", () => {
+    block.classList.toggle("editing");
+    block.querySelectorAll(".track-row").forEach((row) => {
+      if (row.dataset.wiredEdit) return;
+      row.dataset.wiredEdit = "1";
+      row.querySelector(".track-name").addEventListener("click", () => {
+        if (!block.classList.contains("editing")) return;
+        openTrackEditor(rec, store, container, Number(row.dataset.track));
+      });
+    });
+  });
+
+  const adopt = block.querySelector("#adoptAvgBtn");
+  if (adopt) adopt.addEventListener("click", () => {
+    const avg = trackAverage(rec);
+    if (!avg) return;
+    store.updateItem(rec.id, { rating: avg.mean, reviewDate: rec.reviewDate || today() });
+    refreshDetail(store, container, rec.id);
+  });
+}
+
 // ---------- detail ----------
 
 function openDetail(rec, store, container, opts = {}) {
@@ -1119,6 +1443,8 @@ function viewHtml(rec, opts) {
     ${meta ? `<p class="detail-meta">${escapeHtml(meta)}</p>` : ""}
 
     ${reviewHtml(rec)}
+
+    ${tracklistHtml(rec)}
 
     ${kind === "borrowed" ? borrowedBlockHtml(rec) : ""}
 
@@ -1373,6 +1699,7 @@ function wireView(sheet, rec, store, container, opts = {}) {
   if (tap) tap.addEventListener("click", () => openSleeveLightbox(rec));
 
   wireReview(sheet, rec, store, container);
+  wireTracklist(sheet, rec, store, container);
   wireBorrowed(sheet, rec, store, container);
 
   const gotCopy = sheet.querySelector("#gotCopyBtn");

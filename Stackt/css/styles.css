@@ -2327,3 +2327,157 @@ html, body {
 .pick-filters { margin-bottom: 12px; }
 .pick-filters .rating-chip { padding: 6px 11px; font-size: 12px; }
 .share-options .picker-search { margin-bottom: 10px; }
+
+/* ---------- tracklist ---------- */
+
+.track-block {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  background: #fff;
+}
+.track-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.track-title { font-weight: 800; font-size: 14px; }
+.track-runtime {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.55;
+  margin-left: auto;
+}
+.track-head .mini-edit { margin-left: 4px; }
+
+/* Your rating and the tracks' average, side by side. Deliberately equal
+   weight — neither is the "real" one, and the gap between them is the point. */
+.rate-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 2px dashed var(--ink);
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.rate-compare-sep { opacity: 0.4; }
+.rate-compare-count { font-weight: 600; opacity: 0.55; font-size: 11.5px; }
+.rate-compare .link-btn { margin-left: auto; font-size: 12px; }
+
+.track-side {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin: 12px 0 4px;
+}
+.track-rows { display: flex; flex-direction: column; }
+
+.track-row {
+  padding: 7px 0;
+  border-top: 1.5px solid rgba(26, 26, 46, 0.12);
+}
+.track-row:first-child { border-top: none; }
+
+.track-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.track-pos {
+  flex: 0 0 auto;
+  min-width: 22px;
+  font-size: 11.5px;
+  font-weight: 800;
+  opacity: 0.45;
+  font-variant-numeric: tabular-nums;
+}
+/* min-width:0 or a long title refuses to shrink and pushes the heart off the
+   right edge — the same flex trap the search input hit. */
+.track-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-len {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  opacity: 0.45;
+  font-variant-numeric: tabular-nums;
+}
+.track-fave {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 3px;
+  border: none;
+  background: none;
+  opacity: 0.3;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.track-fave svg { width: 100%; height: 100%; display: block; }
+.track-fave.on { opacity: 1; }
+.track-fave.on svg path { fill: var(--red-accent); stroke: var(--red-accent); }
+
+/* Song stars are smaller than the album's on purpose — they're a per-row
+   control, and at full size five of them own the whole card. */
+.track-rate { margin: 2px 0 0 30px; }
+.track-rate .star-row .star-wrap { width: 15px; height: 15px; }
+.track-rate .star-btn { width: 15px; height: 15px; }
+
+.track-block.editing .track-name {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.track-empty {
+  font-size: 12.5px;
+  opacity: 0.6;
+  margin: 4px 0 10px;
+  line-height: 1.5;
+}
+.track-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* the pressing picker */
+.tp-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.tp-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.tp-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.tp-main {
+  font-weight: 800;
+  font-size: 13.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-sub { font-size: 11.5px; font-weight: 600; opacity: 0.6; line-height: 1.4; }

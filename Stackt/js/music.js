@@ -39,6 +39,12 @@ function toRelease(r) {
     // find this album's cover" go away.
     rgid: (r["release-group"] || {}).id || null,
     country: r.country || null,
+    // How many tracks this pressing has, and on how many discs. It's the one
+    // fact that lets you tell your copy from the reissue with three bonus
+    // cuts, so the pressing picker leads with it.
+    trackCount: (r.media || []).reduce((n, m) => n + (m["track-count"] || 0), 0) || null,
+    discCount: (r.media || []).length || null,
+    format: format || null,
   };
 }
 
@@ -132,6 +138,93 @@ export function artCandidates(releases, max = 24) {
 export function coverArtUrl(id, size = 500, kind = "release") {
   if (!id) return null;
   return `https://coverartarchive.org/${kind}/${id}/front-${size}`;
+}
+
+// ---------- tracklists ----------
+
+/**
+ * Every pressing of an album, so you can say which one you're holding.
+ *
+ * This exists because of a distinction that matters here and nowhere else in
+ * the app: a release GROUP is "Blue Train, the album" and has no tracks at
+ * all — tracks belong to a specific pressing. Reissues add bonus cuts,
+ * Japanese pressings reorder sides, the CD runs longer than the LP. Stackt
+ * files artwork against the group (that's where art actually lives), so for
+ * most records we know the album but not the pressing, and picking one for
+ * you would quietly attach the wrong tracklist.
+ */
+export async function releasesInGroup(rgid, limit = 25) {
+  if (!rgid) return [];
+  try {
+    const res = await fetch(
+      `${MB}/release?release-group=${encodeURIComponent(rgid)}&fmt=json&limit=${limit}&inc=media&app=stackt`
+    );
+    const data = await res.json();
+    return (data.releases || []).map(toRelease).filter(Boolean);
+  } catch (err) {
+    console.warn("Could not list the pressings", err);
+    return [];
+  }
+}
+
+/** Total playing time of a shaped tracklist, in ms. Null if nothing is timed. */
+export function totalLength(tracks) {
+  const timed = (tracks || []).filter((t) => t.ms);
+  if (!timed.length) return null;
+  return timed.reduce((n, t) => n + t.ms, 0);
+}
+
+/** 214000 -> "3:34". Track times are the one place seconds matter. */
+export function formatLength(ms) {
+  if (!ms && ms !== 0) return "";
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * The tracklist for one specific pressing.
+ *
+ * Deliberately keeps three fields per track. The raw response also carries
+ * artist credits, recording MBIDs, ISRCs and relationship stubs — roughly ten
+ * times the bytes — and all of it would land in localStorage, which is the
+ * mistake the covers already taught us once.
+ *
+ * `side` is the medium's position, so a double LP keeps its sides apart
+ * instead of running 1–24 in one column.
+ */
+export async function fetchTracklist(releaseMbid) {
+  if (!releaseMbid) return null;
+  try {
+    const res = await fetch(
+      `${MB}/release/${encodeURIComponent(releaseMbid)}?inc=recordings+media&fmt=json&app=stackt`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const media = data.media || [];
+    const tracks = [];
+    media.forEach((medium, mi) => {
+      (medium.tracks || []).forEach((t) => {
+        tracks.push({
+          pos: tracks.length + 1,
+          side: media.length > 1 ? medium.position || mi + 1 : null,
+          // Only a real name ("Bonus disc"), never the format — "Side A ·
+          // Vinyl" on a vinyl record says nothing you can't already see.
+          sideLabel: media.length > 1 ? medium.title || null : null,
+          title: t.title || (t.recording && t.recording.title) || "Untitled",
+          ms: Number(t.length || (t.recording && t.recording.length)) || null,
+        });
+      });
+    });
+    return tracks.length ? tracks : null;
+  } catch (err) {
+    console.warn("Tracklist lookup failed", err);
+    return null;
+  }
 }
 
 /** Discogs is where vinyl prices actually live — linked out, not scraped. */
