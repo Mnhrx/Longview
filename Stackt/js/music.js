@@ -14,6 +14,100 @@
 
 const MB = "https://musicbrainz.org/ws/2";
 
+// ---------- pacing, and telling a refusal from an empty shelf ----------
+
+/**
+ * MusicBrainz allows one request per second per IP, and answers 503 when you
+ * exceed it. Two things made that bite:
+ *
+ *   * Nothing here checked res.ok, so a 503 fell through to `data.releases ||
+ *     []` and came back as "no results". The app then told you the album
+ *     didn't exist, when the server had simply said "not so fast". Tapping
+ *     again a second later worked, which is exactly what it looked like from
+ *     the outside: random.
+ *   * Two calls could fire back-to-back inside a single tap, so the app could
+ *     trip the limit by itself.
+ *
+ * Everything now goes through one queue that keeps calls at least MIN_GAP
+ * apart, and a 503 is retried rather than reported as emptiness. The limit is
+ * per IP, not per device — on mobile data you share one with everyone else
+ * behind the carrier's NAT — so being refused is normal and worth surviving
+ * quietly.
+ */
+const MIN_GAP_MS = 1100;
+let queue = Promise.resolve();
+let lastCallAt = 0;
+
+function paced(run) {
+  const next = queue.then(async () => {
+    const wait = MIN_GAP_MS - (Date.now() - lastCallAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastCallAt = Date.now();
+    return run();
+  });
+  // The queue must survive a rejection, or one failed lookup wedges every
+  // request after it for the life of the page.
+  queue = next.catch(() => {});
+  return next;
+}
+
+/** A failure worth telling the user apart from "nothing found". */
+export class LookupError extends Error {
+  constructor(message, { busy = false, status = 0 } = {}) {
+    super(message);
+    this.name = "LookupError";
+    this.busy = busy;
+    this.status = status;
+  }
+}
+
+/**
+ * One paced request, retrying while MusicBrainz is asking us to wait.
+ * `onBusy` fires before each retry so the UI can say what's happening rather
+ * than sitting there looking broken.
+ */
+async function mbFetch(path, { retries = 2, onBusy = null } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await paced(() => fetch(`${MB}${path}`));
+    } catch (err) {
+      throw new LookupError("Couldn't reach MusicBrainz.", { status: 0 });
+    }
+    if (res.ok) return res.json();
+
+    const busy = res.status === 503 || res.status === 429;
+    if (busy && attempt < retries) {
+      if (onBusy) onBusy(attempt + 1);
+      // Retry-After is in seconds when they send it; a beat over the rate
+      // limit when they don't.
+      const after = Number(res.headers.get("Retry-After"));
+      const waitMs = Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 5000) : 1200;
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    throw new LookupError(
+      busy ? "MusicBrainz is busy." : `MusicBrainz answered ${res.status}.`,
+      { busy, status: res.status }
+    );
+  }
+}
+
+/**
+ * Wraps a lookup for callers that would rather have an empty list than an
+ * exception. `strict` opts out — the tracklist picker uses it, because
+ * "couldn't ask" and "nothing there" need different words on screen.
+ */
+async function forgiving(fn, fallback, strict) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (strict) throw err;
+    console.warn("Lookup failed:", err);
+    return fallback;
+  }
+}
+
 /** Shapes one MusicBrainz release into the fields the LPs module stores. */
 function toRelease(r) {
   if (!r) return null;
@@ -63,21 +157,18 @@ function buildQuery({ title, creator, free }) {
 }
 
 /** Looks up a release by the barcode on the sleeve. */
-export async function lookupBarcode(barcode) {
-  try {
-    const res = await fetch(
-      `${MB}/release?query=barcode:${encodeURIComponent(barcode)}&fmt=json&limit=5&app=stackt`
+export async function lookupBarcode(barcode, { strict = false, onBusy = null } = {}) {
+  return forgiving(async () => {
+    const data = await mbFetch(
+      `/release?query=barcode:${encodeURIComponent(barcode)}&fmt=json&limit=5&app=stackt`,
+      { onBusy }
     );
-    const data = await res.json();
     const hit = (data.releases || [])[0];
     if (!hit) return null;
     const shaped = toRelease(hit);
     if (shaped) shaped.barcode = barcode;
     return shaped;
-  } catch (err) {
-    console.warn("Barcode lookup failed", err);
-    return null;
-  }
+  }, null, strict);
 }
 
 /**
@@ -85,20 +176,17 @@ export async function lookupBarcode(barcode) {
  * `{free}` for whatever someone typed into the picker's search box.
  * A plain string still works and is treated as free text.
  */
-export async function searchReleases(spec, limit = 25) {
+export async function searchReleases(spec, limit = 25, { strict = false, onBusy = null } = {}) {
   const shape = typeof spec === "string" ? { free: spec } : spec || {};
   const q = buildQuery(shape);
   if (!q) return [];
-  try {
-    const res = await fetch(
-      `${MB}/release?query=${encodeURIComponent(q)}&fmt=json&limit=${limit}&app=stackt`
+  return forgiving(async () => {
+    const data = await mbFetch(
+      `/release?query=${encodeURIComponent(q)}&fmt=json&limit=${limit}&app=stackt`,
+      { onBusy }
     );
-    const data = await res.json();
     return (data.releases || []).map(toRelease).filter(Boolean);
-  } catch (err) {
-    console.warn("Release search failed", err);
-    return [];
-  }
+  }, [], strict);
 }
 
 /**
@@ -153,18 +241,15 @@ export function coverArtUrl(id, size = 500, kind = "release") {
  * most records we know the album but not the pressing, and picking one for
  * you would quietly attach the wrong tracklist.
  */
-export async function releasesInGroup(rgid, limit = 25) {
+export async function releasesInGroup(rgid, limit = 25, { strict = false, onBusy = null } = {}) {
   if (!rgid) return [];
-  try {
-    const res = await fetch(
-      `${MB}/release?release-group=${encodeURIComponent(rgid)}&fmt=json&limit=${limit}&inc=media&app=stackt`
+  return forgiving(async () => {
+    const data = await mbFetch(
+      `/release?release-group=${encodeURIComponent(rgid)}&fmt=json&limit=${limit}&inc=media&app=stackt`,
+      { onBusy }
     );
-    const data = await res.json();
     return (data.releases || []).map(toRelease).filter(Boolean);
-  } catch (err) {
-    console.warn("Could not list the pressings", err);
-    return [];
-  }
+  }, [], strict);
 }
 
 /** Total playing time of a shaped tracklist, in ms. Null if nothing is timed. */
@@ -197,14 +282,13 @@ export function formatLength(ms) {
  * `side` is the medium's position, so a double LP keeps its sides apart
  * instead of running 1–24 in one column.
  */
-export async function fetchTracklist(releaseMbid) {
+export async function fetchTracklist(releaseMbid, { strict = false, onBusy = null } = {}) {
   if (!releaseMbid) return null;
-  try {
-    const res = await fetch(
-      `${MB}/release/${encodeURIComponent(releaseMbid)}?inc=recordings+media&fmt=json&app=stackt`
+  return forgiving(async () => {
+    const data = await mbFetch(
+      `/release/${encodeURIComponent(releaseMbid)}?inc=recordings+media&fmt=json&app=stackt`,
+      { onBusy }
     );
-    if (!res.ok) return null;
-    const data = await res.json();
     const media = data.media || [];
     const tracks = [];
     media.forEach((medium, mi) => {
@@ -221,10 +305,7 @@ export async function fetchTracklist(releaseMbid) {
       });
     });
     return tracks.length ? tracks : null;
-  } catch (err) {
-    console.warn("Tracklist lookup failed", err);
-    return null;
-  }
+  }, null, strict);
 }
 
 /** Discogs is where vinyl prices actually live — linked out, not scraped. */

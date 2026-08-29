@@ -1270,7 +1270,17 @@ html, body {
   font-weight: 600;
 }
 
-.star-row { display: inline-flex; gap: 2px; align-items: center; }
+/* Star size is ONE knob. It used to be four rules that had to agree — the
+   wrap, the svg, the filled copy's svg, and the interactive overrides — and
+   when the song rows asked for a smaller star only two of them were changed.
+   The artwork stayed at 30px inside a 15px box, so every star overflowed onto
+   the next and the tap targets no longer sat under the stars you could see. */
+.star-row {
+  --star-size: 18px;
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
 
 /* Each star is a hollow one with a filled copy laid over it, clipped to the
    fraction earned. The inner svg keeps its full width so the clip cuts the
@@ -1278,8 +1288,8 @@ html, body {
 .star-wrap {
   position: relative;
   display: block;
-  width: 18px;
-  height: 18px;
+  width: var(--star-size);
+  height: var(--star-size);
   flex: 0 0 auto;
 }
 .star-fill {
@@ -1289,11 +1299,11 @@ html, body {
   display: block;
   pointer-events: none;
 }
-.star-fill .star { width: 18px; }
+.star-fill .star { width: var(--star-size); }
 
 .star {
-  width: 18px;
-  height: 18px;
+  width: var(--star-size);
+  height: var(--star-size);
   display: block;
   fill: none;
   stroke: var(--ink);
@@ -1321,10 +1331,8 @@ html, body {
   padding: 0;
   line-height: 0;
 }
-.star-row.interactive { gap: 4px; }
-.star-row.interactive .star-wrap { width: 30px; height: 30px; }
-.star-row.interactive .star,
-.star-row.interactive .star-fill .star { width: 30px; height: 30px; stroke-width: 1.4; }
+.star-row.interactive { --star-size: 30px; gap: 4px; }
+.star-row.interactive .star { stroke-width: 1.4; }
 .star-half {
   position: absolute;
   top: -4px;
@@ -2431,11 +2439,11 @@ html, body {
 .track-fave.on { opacity: 1; }
 .track-fave.on svg path { fill: var(--red-accent); stroke: var(--red-accent); }
 
-/* Song stars are smaller than the album's on purpose — they're a per-row
-   control, and at full size five of them own the whole card. */
-.track-rate { margin: 2px 0 0 30px; }
-.track-rate .star-row .star-wrap { width: 15px; height: 15px; }
-.track-rate .star-btn { width: 15px; height: 15px; }
+/* Song stars are the app's normal interactive size. They were shrunk to 15px
+   at first, which left 8px-wide tap zones — unhittable with a thumb even once
+   they lined up. The row is ~280px wide and five stars plus gaps is ~166px,
+   so there was never a reason to shrink them. */
+.track-rate { margin: 3px 0 1px 30px; }
 
 .track-block.editing .track-name {
   text-decoration: underline dotted;

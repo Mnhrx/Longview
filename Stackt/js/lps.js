@@ -1206,7 +1206,16 @@ function openTracklistPicker(rec, store, container) {
           const chosen = releases[Number(btn.dataset.i)];
           note.textContent = "Fetching the tracklist…";
           list.innerHTML = "";
-          const tracks = await fetchTracklist(chosen.mbid);
+          let tracks = null;
+          try {
+            tracks = await fetchTracklist(chosen.mbid, { strict: true, onBusy: busyNote });
+          } catch (err) {
+            paint(releases);
+            note.textContent = err.busy
+              ? "MusicBrainz is still busy. Try that pressing again in a few seconds."
+              : "Couldn't reach MusicBrainz just now. Try again, or type the tracklist in by hand.";
+            return;
+          }
           if (!tracks) {
             // Order matters: paint() writes the note too, so explaining first
             // and repainting second silently swallows the explanation — you'd
@@ -1230,16 +1239,33 @@ function openTracklistPicker(rec, store, container) {
       });
     };
 
+    // Being refused is not the same as finding nothing, and saying "no
+    // pressings found" when the server was rate-limiting is how this looked
+    // random: it failed, you tapped again, it worked. strict:true lets the
+    // difference reach the screen, and onBusy says so while we wait it out.
+    const busyNote = () => {
+      note.textContent = "MusicBrainz is busy — trying again…";
+    };
+
     (async () => {
-      // Best source first: a pressing we already know, then the album's other
-      // pressings, then a plain search. Each is one request, and MusicBrainz
-      // asks for no more than one a second.
+      // Best source first: the album's other pressings, then a plain search.
+      // Both go through music.js's queue, which keeps requests a second apart
+      // so the app can't trip the limit on its own behalf.
       let releases = [];
-      if (rec.rgid || rec.coverRgid) {
-        releases = await releasesInGroup(rec.rgid || rec.coverRgid);
-      }
-      if (!releases.length) {
-        releases = await searchReleases({ title: rec.title, creator: rec.creator });
+      try {
+        if (rec.rgid || rec.coverRgid) {
+          releases = await releasesInGroup(rec.rgid || rec.coverRgid, 25,
+            { strict: true, onBusy: busyNote });
+        }
+        if (!releases.length) {
+          releases = await searchReleases({ title: rec.title, creator: rec.creator }, 25,
+            { strict: true, onBusy: busyNote });
+        }
+      } catch (err) {
+        note.textContent = err.busy
+          ? "MusicBrainz is still busy. Give it a few seconds and tap Get tracklist again."
+          : "Couldn't reach MusicBrainz just now. Check your connection, or type the tracklist in by hand.";
+        return;
       }
       // A pressing we already picked art from belongs at the top.
       const known = rec.releaseMbid || rec.coverMbid;
