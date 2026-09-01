@@ -14,6 +14,7 @@ import {
   getRecord, localUrl, rebuildUrl, remoteKey, liveUrlCount,
 } from "./covers.js";
 import { bookCoverSrc } from "./books.js";
+import { APP_VERSION, openGuide, openWhatsNew, openReleaseHistory, GUIDE } from "./help.js";
 import { recordCoverSrc } from "./lps.js";
 
 function today() {
@@ -63,6 +64,30 @@ function render(container, flash = null) {
         ${c.records.owned} owned · ${c.records.borrowed} borrowed · ${c.records.wishlist} wishlist
       </p>
       <p class="settings-note">Stored on this device · ${storedSize()}</p>
+    </div>
+
+    <div class="settings-card">
+      <p class="settings-heading">How to use Stackt</p>
+      <p class="settings-note">
+        A short guide to each part of the app. Open just the section you need —
+        it's as useful as a refresher as it is the first time.
+      </p>
+      <div class="guide-jump">
+        ${GUIDE.map(
+          (g) => `<button class="guide-chip" type="button" data-guide="${g.key}">${g.title}</button>`
+        ).join("")}
+      </div>
+      <button class="btn btn-secondary" id="guideBtn" type="button">Open the guide</button>
+    </div>
+
+    <div class="settings-card">
+      <p class="settings-heading">What's new</p>
+      <p class="settings-note">
+        You're on version ${APP_VERSION}. These notes pop up once when a new
+        version lands, and live here the rest of the time.
+      </p>
+      <button class="btn btn-secondary" id="whatsNewBtn" type="button">What's new in ${APP_VERSION}</button>
+      <button class="link-btn" id="releaseHistoryBtn" type="button">All release notes</button>
     </div>
 
     <div class="settings-card">
@@ -139,6 +164,7 @@ function render(container, flash = null) {
   container.innerHTML = "";
   container.appendChild(wrap);
 
+  wireHelp(wrap);
   wireBackup(wrap);
   wireStorage(wrap);
   wireCoverCheck(wrap);
@@ -252,6 +278,34 @@ function wireStorage(wrap) {
   });
 
   paint();
+}
+
+// ---------- guide + release notes ----------
+
+function wireHelp(wrap) {
+  const guideBtn = wrap.querySelector("#guideBtn");
+  if (guideBtn) guideBtn.addEventListener("click", () => {
+    bounceTap(guideBtn);
+    openGuide();
+  });
+
+  // The chips jump straight to one section, which is the whole point of
+  // "which module do I need a refresher on".
+  wrap.querySelectorAll("[data-guide]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      bounceTap(chip);
+      openGuide({ openKey: chip.dataset.guide });
+    });
+  });
+
+  const whatsNew = wrap.querySelector("#whatsNewBtn");
+  if (whatsNew) whatsNew.addEventListener("click", () => {
+    bounceTap(whatsNew);
+    openWhatsNew();
+  });
+
+  const history = wrap.querySelector("#releaseHistoryBtn");
+  if (history) history.addEventListener("click", () => openReleaseHistory());
 }
 
 // ---------- cover check ----------

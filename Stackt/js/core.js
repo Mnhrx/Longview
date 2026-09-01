@@ -326,7 +326,11 @@ export const router = {
       // snapshot of the previous screen first. Replaying our animation on top
       // is the "static, then re-animates" flash — so the menu sits still for
       // gesture-backs and animates for taps and fresh loads.
-      this.modules[view].render(container, store, { animate: !opts.viaGesture });
+      // opts is forwarded, so one module can hand another a parameter — a book
+      // detail sheet opening Words filtered to that book, say. `animate` is
+      // written last so a caller's stray value can't override the gesture
+      // handling above.
+      this.modules[view].render(container, store, { ...opts, animate: !opts.viaGesture });
       applyChrome(view, isHome, this.modules[view]);
     };
 

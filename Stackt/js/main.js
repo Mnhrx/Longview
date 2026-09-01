@@ -8,6 +8,8 @@ import { store, router } from "./core.js";
 import homeModule, { startMenuIntro } from "./home.js";
 import booksModule from "./books.js";
 import lpsModule from "./lps.js";
+import wordsModule from "./words.js";
+import { launchPrompt, openWhatsNew, markSeen } from "./help.js";
 import settingsModule from "./settings.js";
 import { makePlaceholder } from "./placeholder.js";
 import { bounceTap } from "./animations.js";
@@ -18,6 +20,7 @@ router.register("home", homeModule);
 router.register("books", booksModule);
 router.register("settings", settingsModule);
 router.register("lps", lpsModule);
+router.register("words", wordsModule);
 router.register("photos", makePlaceholder("photos", "Photos"));
 router.register("finance", makePlaceholder("finance", "Finance"));
 
@@ -113,6 +116,7 @@ function hideSplash() {
   if (!splash) {
     document.documentElement.classList.remove("splash-up");
     startMenuIntro();
+    showLaunchPrompt();
     return;
   }
   const MIN_MS = 500;
@@ -130,7 +134,32 @@ function hideSplash() {
     splash.remove();
     document.documentElement.classList.remove("splash-up");
     startMenuIntro();
+    showLaunchPrompt();
   }
+}
+
+/**
+ * The once-per-version popup.
+ *
+ * Held until the splash is gone and the menu has begun its intro, so it lands
+ * on a settled screen rather than fighting two animations. Only ever shows on
+ * the home screen — arriving straight into a section by hash means you came
+ * for something specific, and a changelog in the way of it is an interruption.
+ */
+function showLaunchPrompt() {
+  const prompt = launchPrompt();
+  if (!prompt) return;
+  if (router.current !== "home") {
+    markSeen(); // count it as seen rather than ambushing them next launch
+    return;
+  }
+  setTimeout(() => {
+    // Re-checked, not just checked once: the delay is long enough to tap a
+    // tile, and a changelog appearing on top of the section you just opened
+    // is worse than one that never appears.
+    if (router.current !== "home") return markSeen();
+    openWhatsNew({ firstRun: prompt === "first" });
+  }, 620);
 }
 
 const BOOT_STARTED = Date.now();

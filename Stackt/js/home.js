@@ -12,6 +12,7 @@ import { ICONS } from "./icons.js";
 const TILES = [
   { key: "books", label: "Books", bg: "var(--pink)", tone: "dark" },
   { key: "lps", label: "LPs", bg: "var(--purple)", tone: "dark" },
+  { key: "words", label: "Words", bg: "var(--yellow)", tone: "light" },
   { key: "photos", label: "Photos", bg: "var(--blue)", tone: "dark" },
   { key: "finance", label: "Finance", bg: "var(--mint)", tone: "light" },
 ];
@@ -98,6 +99,13 @@ function subtitleFor(key, store) {
     if (!owned && !borrowed) return "Tap to start";
     const main = `${owned} record${owned === 1 ? "" : "s"}`;
     return borrowed ? `${main} <span class="sub-accent">· ${borrowed} borrowed</span>` : main;
+  }
+  if (key === "words") {
+    const words = store.itemsByType("word");
+    if (!words.length) return "Tap to start";
+    const faves = words.filter((w) => w.favourite).length;
+    const main = `${words.length} word${words.length === 1 ? "" : "s"}`;
+    return faves ? `${main} <span class="sub-accent">· ${faves} loved</span>` : main;
   }
   return "Coming soon";
 }

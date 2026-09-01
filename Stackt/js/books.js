@@ -4,9 +4,9 @@
 // barcode scanner with a view/edit split on the detail screen.
 // ============================================
 
-import { openModal, updateModal, closeModal, dismissLayer, openOverlay, escapeHtml, makeClearable, debounce, wireDateField } from "./ui.js";
+import { openModal, updateModal, closeModal, dismissLayer, openOverlay, escapeHtml, makeClearable, debounce, wireDateField, isModalOpen } from "./ui.js";
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
-import { uid } from "./core.js";
+import { uid, router } from "./core.js";
 import { isScanSupported, startScanner, lookupIsbn, lookupGoogleBooksPrice, coverUrl, coverIdUrl, findCoverOptions } from "./barcode.js";
 import { ICONS } from "./icons.js";
 import { createSorter, collator, yearValue, titleSortKey, workKey, openSortSheet } from "./sorting.js";
@@ -1346,6 +1346,52 @@ function priceLinksHtml(book) {
 }
 
 
+/**
+ * Words you looked up while reading this book.
+ *
+ * The Words module already records which book each word belongs to; this is
+ * that same link read from the other end, so a book becomes a way into its own
+ * vocabulary instead of the two sitting side by side and never meeting. Only a
+ * few are listed — the sheet is long already, and the rest is one tap away.
+ */
+function bookWordsHtml(book, store) {
+  const words = store.get().items
+    .filter((it) => it.type === "word" && it.bookId === book.id)
+    .sort((a, b) => String(b.addedDate || "").localeCompare(String(a.addedDate || "")));
+  if (!words.length) return "";
+
+  const shown = words.slice(0, 4);
+  const firstDef = (w) => {
+    const sense = (w.senses || [])[0];
+    return (sense && sense.definition) || w.note || "";
+  };
+
+  return `
+    <div class="book-words">
+      <div class="review-head">
+        <span class="review-title">Words from this book</span>
+        <span class="book-words-count">${words.length}</span>
+      </div>
+      <div class="book-words-list">
+        ${shown
+          .map(
+            (w) => `
+          <div class="book-word">
+            <span class="book-word-term">${escapeHtml(w.word)}</span>
+            <span class="book-word-def">${escapeHtml(firstDef(w))}</span>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+      <button class="btn btn-accent block-btn" id="viewAllWordsBtn" type="button">
+        <span class="btn-icon">${ICONS.words}</span>
+        <span>${words.length > shown.length ? `View all ${words.length} words` : "Open in Words"}</span>
+      </button>
+    </div>
+  `;
+}
+
 // ---------- detail modal: view mode + edit mode ----------
 
 function openDetail(book, store, container, opts = {}) {
@@ -1361,7 +1407,7 @@ function paintDetail(sheet, book, store, container, opts = {}) {
   let mode = opts.mode === "edit" ? "edit" : "view";
 
   function draw() {
-    sheet.innerHTML = mode === "view" ? viewModeHtml(book, opts) : editModeHtml(book);
+    sheet.innerHTML = mode === "view" ? viewModeHtml(book, opts, store) : editModeHtml(book);
 
     const editBtn = sheet.querySelector("#toggleEditBtn");
     if (editBtn) {
@@ -1378,7 +1424,7 @@ function paintDetail(sheet, book, store, container, opts = {}) {
   draw();
 }
 
-function viewModeHtml(book, opts) {
+function viewModeHtml(book, opts, store) {
   const copies = book.copies || [];
   const owned = copies.length > 0;
 
@@ -1412,6 +1458,8 @@ function viewModeHtml(book, opts) {
 
     ${readingDatesHtml(book)}
     ${reviewHtml(book)}
+
+    ${bookWordsHtml(book, store)}
 
     ${shelfOf(book) === "borrowed" ? borrowedBlockHtml(book) : ""}
 
@@ -1628,6 +1676,21 @@ function editModeHtml(book) {
 
 function wireViewMode(sheet, book, store, container, opts = {}) {
   wireCover(sheet, book);
+
+  const viewWords = sheet.querySelector("#viewAllWordsBtn");
+  if (viewWords) {
+    viewWords.addEventListener("click", () => {
+      const go = () => router.navigate("words", { bookId: book.id });
+      // The sheet has to close first, and closing it is a history.back() —
+      // which is asynchronous. Navigating straight after it meant the popstate
+      // landed AFTER the navigation, found no layer left to absorb it, and
+      // dutifully sent us back to Books. So: close, let the pop be handled,
+      // then go.
+      if (!isModalOpen()) return go();
+      window.addEventListener("popstate", () => setTimeout(go, 0), { once: true });
+      dismissLayer();
+    });
+  }
 
   const faveBtn = sheet.querySelector("#faveBtn");
   if (faveBtn) {

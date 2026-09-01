@@ -1,9 +1,10 @@
 // ============================================
 // Minimal offline cache — app shell + data, cache-first with network fallback.
-// Bump CACHE_NAME whenever you deploy changes so old clients pick them up.
+// CACHE_NAME must match APP_VERSION in js/help.js — that pairing is what makes
+// a deploy replace the old files AND show the release notes once.
 // ============================================
 
-const CACHE_NAME = "stackt-v31";
+const CACHE_NAME = "stackt-3.0.1";
 const ASSETS = [
   "./",
   "./index.html",
@@ -22,6 +23,9 @@ const ASSETS = [
   "./js/stars.js",
   "./js/books.js",
   "./js/lps.js",
+  "./js/words.js",
+  "./js/help.js",
+  "./js/dictionary.js",
   "./js/music.js",
   "./js/barcode.js",
   "./js/placeholder.js",

@@ -51,6 +51,11 @@ export const ICONS = {
   // Author / signature mark.
   author: `<svg viewBox="0 0 48 48"><path d="M8 34c6-2 10-8 14-15s7-11 10-11 4 4 1 9-9 11-14 15-8 5-11 2z" ${S}/><line x1="8" y1="40" x2="40" y2="40" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/></svg>`,
 
+  // Words — an open book seen from above, two leaves either side of the spine.
+  // Deliberately unlike the `books` mark (three spines standing on a shelf):
+  // that one is a collection, this one is something you are reading INTO.
+  words: `<svg viewBox="0 0 48 48"><path d="M24 13c-4-3-9-4-15-3v25c6-1 11 0 15 3V13z" ${S}/><path d="M24 13c4-3 9-4 15-3v25c-6-1-11 0-15 3V13z" ${S}/><line x1="24" y1="13" x2="24" y2="38" stroke="#1A1A2E" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+
   // Heart — favouriting, deliberately unlike the star so the two never blur.
   heart: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linejoin="round"><path d="M24 41S6 30 6 18.5A9.5 9.5 0 0 1 24 14a9.5 9.5 0 0 1 18 4.5C42 30 24 41 24 41z"/></svg>`,
 

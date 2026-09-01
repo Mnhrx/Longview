@@ -1994,7 +1994,19 @@ html, body {
 
 /* The × lives inside the field's right edge. iOS Safari never renders the
    native type="search" clear button, so this is ours. */
-.input-wrap { position: relative; display: flex; align-items: stretch; }
+/* Sized as a flex child, because that's what it becomes: makeClearable wraps
+   the field in place, so in a flex row (the search rows, the lookup row) THIS
+   is the item that has to shrink, not the <input> inside it. Without these two
+   the wrapper holds the input's intrinsic ~20-character width and pushes
+   whatever shares its row off the screen — the field looked right and the
+   button beside it was simply gone. */
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .input-wrap > input { flex: 1; min-width: 0; }
 .input-wrap.has-value > input { padding-right: 40px; }
 
@@ -2489,3 +2501,492 @@ html, body {
   white-space: nowrap;
 }
 .tp-sub { font-size: 11.5px; font-weight: 600; opacity: 0.6; line-height: 1.4; }
+
+/* ---------- words ---------- */
+
+.word-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.word-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  background: #fff;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.word-card:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+
+.word-card-head { display: flex; align-items: center; gap: 8px; }
+.word-term {
+  font-weight: 800;
+  font-size: 17px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.word-fave-mark { width: 16px; height: 16px; margin-left: auto; flex: 0 0 auto; }
+.word-fave-mark svg { width: 100%; height: 100%; display: block; }
+.word-fave-mark svg path { fill: var(--red-accent); stroke: var(--red-accent); }
+
+.word-meta {
+  font-size: 11.5px;
+  font-weight: 700;
+  opacity: 0.5;
+  margin: 2px 0 0;
+  font-style: italic;
+}
+/* Two lines of meaning on the card. The rest is one tap away, and a card that
+   grows to fit a long Wiktionary sense stops being scannable. */
+.word-def {
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.word-from {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  opacity: 0.45;
+  margin: 8px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.word-group { width: 100%; text-align: left; background: none; border: none; padding: 0; }
+
+/* ---- the lookup screen ---- */
+
+/* Title and "My words" on one line. The title takes the slack so the button
+   sits hard against the right edge at every width. */
+.word-top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.word-top-row .view-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+
+/* .btn is width:100% by design (most buttons here are full-width blocks), so
+   any button sharing a row has to say otherwise — flex:0 0 auto alone honours
+   that 100% as its basis and blows the row out to twice the screen. */
+.library-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  margin-top: 0;          /* .btn-secondary adds a top margin meant for stacks */
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.library-btn .btn-icon { width: 16px; height: 16px; flex: 0 0 auto; }
+.library-btn .btn-icon svg { width: 100%; height: 100%; display: block; }
+
+/* The field and its button share a row and a height. min-width:0 on the input
+   or it refuses to shrink below ~20 characters and shoves the button off the
+   right edge — the same flex trap the search row hit. */
+.word-lookup-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 6px;
+}
+.word-lookup-row .search-input,
+.word-lookup-row > .input-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 16px; /* under 16px and iOS zooms the viewport on focus */
+}
+.lookup-btn {
+  flex: 0 0 auto;
+  width: auto;            /* see the note on .library-btn */
+  white-space: nowrap;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Full-width actions read as "this is the next thing to do". */
+.block-btn { display: block; width: 100%; margin-top: 4px; }
+
+.lookup-idle {
+  text-align: center;
+  padding: 28px 12px 8px;
+  opacity: 0.85;
+}
+.lookup-idle .empty-icon { width: 46px; height: 46px; display: inline-block; }
+.lookup-idle .empty-text { margin: 12px auto 14px; max-width: 30ch; line-height: 1.5; }
+
+/* ---- book chips ---- */
+
+.book-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* Two chips share a row on a phone; one long title wraps to its own. Basis is
+   a percentage rather than a fixed width so nothing overflows at 320px. */
+.book-chip {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px;
+  text-align: left;
+  background: #fff;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.book-chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.book-chip.on { background: var(--yellow); }
+.book-chip-title {
+  font-weight: 800;
+  font-size: 13px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-chip-sub {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.55;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-preview {
+  border: 2px dashed var(--ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 10px 0 4px;
+  background: #fff;
+}
+.word-preview-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.word-ipa { font-size: 12.5px; font-weight: 600; opacity: 0.55; }
+
+.word-senses { margin-bottom: 14px; }
+.sense { padding: 10px 0; border-top: 1.5px solid rgba(26, 26, 46, 0.12); }
+.sense:first-child { border-top: none; padding-top: 4px; }
+.sense-pos {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 7px;
+  margin-bottom: 5px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+}
+.sense-def { font-size: 14px; line-height: 1.5; margin: 0; }
+.sense-examples {
+  margin: 7px 0 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-style: italic;
+  opacity: 0.72;
+}
+.sense-examples li { margin-bottom: 3px; }
+.sense-syn { font-size: 12px; font-weight: 700; opacity: 0.55; margin: 7px 0 0; }
+.word-empty-def { font-size: 13px; opacity: 0.6; margin: 6px 0; }
+
+.word-source {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.word-added { font-size: 11.5px; font-weight: 700; opacity: 0.45; margin: 12px 0 0; }
+
+/* the folder chip */
+.folder-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: #fff;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 var(--ink);
+  text-align: left;
+}
+.folder-chip:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.folder-chip-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 800;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-chip-change {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+}
+.folder-hint { font-size: 11.5px; opacity: 0.55; margin: 6px 0 0; }
+
+.tp-row.on { background: var(--yellow); }
+
+/* ---------- quotes under a definition ---------- */
+
+.sense-quotes { margin: 8px 0 0; }
+.sense-quote {
+  margin: 0 0 7px;
+  padding: 0 0 0 10px;
+  border-left: 3px solid var(--yellow);
+}
+.sense-quote:last-child { margin-bottom: 0; }
+.sense-quote-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-style: italic;
+  opacity: 0.82;
+}
+.sense-quote-ref {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  opacity: 0.5;
+}
+
+/* ---------- words on a book's detail sheet ---------- */
+
+.book-words {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  background: #fff;
+}
+.book-words-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 9px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+}
+.book-words-list { margin: 8px 0 4px; }
+.book-word {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1.5px solid rgba(26, 26, 46, 0.1);
+}
+.book-word:first-child { border-top: none; }
+.book-word-term { flex: 0 0 auto; font-weight: 800; font-size: 13.5px; }
+/* min-width:0 so a long definition ellipsises instead of pushing the row wide */
+.book-word-def {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- grouping words by book ---------- */
+
+.book-word-list { display: flex; flex-direction: column; gap: 10px; }
+.book-word-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: #fff;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.book-word-row:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.bwr-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bwr-title {
+  font-weight: 800;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bwr-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bwr-peek {
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.62;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bwr-count {
+  flex: 0 0 auto;
+  min-width: 30px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 3px 9px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+}
+
+/* ---------- accent button ---------- */
+
+/* A primary-weight action in the app's yellow, for places where the blue
+   primary would compete with something more important on the same screen. */
+.btn-accent {
+  background: var(--yellow);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-accent .btn-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+.btn-accent .btn-icon svg { width: 100%; height: 100%; display: block; }
+
+/* ---------- what's new ---------- */
+
+.release-version {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin: 0 0 4px;
+}
+.release-title { font-size: 17px; font-weight: 800; margin: 0 0 12px; }
+.release-blurb { font-size: 13.5px; line-height: 1.55; margin: 0 0 14px; opacity: 0.8; }
+
+.release-highlights {
+  margin: 0 0 16px;
+  padding: 12px 14px 12px 30px;
+  border: 2px dashed var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.release-highlights li { margin-bottom: 7px; }
+.release-highlights li:last-child { margin-bottom: 0; }
+
+.release-notes {
+  margin: 6px 0 16px;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  opacity: 0.82;
+}
+.release-notes li { margin-bottom: 5px; }
+.release-entry {
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid rgba(26, 26, 46, 0.12);
+}
+.release-entry:last-child { border-bottom: none; margin-bottom: 0; }
+
+.wn-actions { display: flex; flex-direction: column; gap: 0; margin-top: 4px; }
+.wn-actions .btn { margin-top: 10px; }
+
+/* ---------- the guide ---------- */
+
+.guide-jump { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 4px; }
+.guide-chip {
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.guide-chip:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+
+.guide-sections { display: flex; flex-direction: column; gap: 10px; }
+.guide-section {
+  border: var(--border-w) solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+.guide-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+}
+.guide-section.open .guide-head { background: var(--yellow); }
+.guide-icon { width: 22px; height: 22px; flex: 0 0 auto; }
+.guide-icon svg { width: 100%; height: 100%; display: block; }
+.guide-title { flex: 1 1 auto; min-width: 0; font-weight: 800; font-size: 14.5px; }
+
+/* A chevron drawn from two borders — no extra icon to keep in step. */
+.guide-chevron {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid var(--ink);
+  border-bottom: 2.5px solid var(--ink);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.2s var(--spring);
+}
+.guide-section.open .guide-chevron { transform: rotate(-135deg) translate(-2px, -2px); }
+
+/* Collapsed by height so it can animate; the closed state is display-free so
+   the text inside is still there for a page search. */
+.guide-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.28s ease;
+}
+.guide-section.open .guide-body { max-height: 1200px; }
+.guide-step { padding: 0 14px 12px; }
+.guide-section.open .guide-step:first-child { padding-top: 12px; }
+.guide-step-title { margin: 0 0 3px; font-weight: 800; font-size: 13px; }
+.guide-step-body { margin: 0; font-size: 13px; line-height: 1.55; opacity: 0.78; }
