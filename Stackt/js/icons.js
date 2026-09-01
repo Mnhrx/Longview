@@ -15,7 +15,12 @@ export const ICONS = {
 
   photos: `<svg viewBox="0 0 48 48"><rect x="9" y="12" width="26" height="22" rx="3" ${S} transform="rotate(-7 22 23)"/><rect x="13" y="14" width="26" height="22" rx="3" ${S} transform="rotate(6 26 25)"/><circle cx="26" cy="25" r="5" fill="none" stroke="#1A1A2E" stroke-width="2.5"/></svg>`,
 
-  finance: `<svg viewBox="0 0 48 48"><rect x="7" y="27" width="8" height="13" rx="2" ${S}/><rect x="20" y="18" width="8" height="22" rx="2" ${S}/><rect x="33" y="8" width="8" height="32" rx="2" ${S}/></svg>`,
+  // Wishlist — a tag with its hole, the thing that hangs off a price.
+  wishlist: `<svg viewBox="0 0 48 48"><path d="M24 6H40a2 2 0 0 1 2 2v16L23 43a2 2 0 0 1-2.8 0L5 27.8a2 2 0 0 1 0-2.8L24 6z" ${S}/><circle cx="34" cy="14" r="3.4" fill="#1A1A2E"/></svg>`,
+
+  // The old bars. Kept so anything still asking for `ledger` or `finance`
+  // gets a mark rather than a blank.
+  ledger: `<svg viewBox="0 0 48 48"><rect x="7" y="27" width="8" height="13" rx="2" ${S}/><rect x="20" y="18" width="8" height="22" rx="2" ${S}/><rect x="33" y="8" width="8" height="32" rx="2" ${S}/></svg>`,
 
   // Scan — four viewfinder corners with a sweep line through the middle.
   // Abstract and minimal: it says "scan", not "camera hardware".
@@ -67,6 +72,9 @@ export const ICONS = {
 };
 
 /** Wraps an icon in a sized span. `size` is any CSS length. */
+// Old name, same mark.
+ICONS.finance = ICONS.ledger;
+
 export function icon(name, size = "24px") {
   return `<span class="icon" style="width:${size};height:${size}">${ICONS[name] || ""}</span>`;
 }

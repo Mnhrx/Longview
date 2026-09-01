@@ -15,6 +15,7 @@
 import { openModal, updateModal, dismissLayer, openOverlay, escapeHtml, makeClearable, debounce, wireDateField } from "./ui.js";
 import { confettiBurst, bounceTap, nudge } from "./animations.js";
 import { uid } from "./core.js";
+import { askWhatYouPaid } from "./purchase.js";
 import { isScanSupported, startScanner } from "./barcode.js";
 import {
   lookupBarcode, searchReleases, artCandidates, coverArtUrl, discogsUrl,
@@ -1491,6 +1492,16 @@ function viewHtml(rec, opts) {
   `;
 }
 
+/** How this copy landed against the price you'd noted. See books.js. */
+function paidVerdict(copy) {
+  if (!copy || copy.paid == null || copy.expected == null) return "";
+  const diff = Number(copy.expected) - Number(copy.paid);
+  if (Math.abs(diff) < 0.005) return "";
+  return diff > 0
+    ? `<span class="verdict under">$${diff.toFixed(2)} under</span>`
+    : `<span class="verdict over">$${Math.abs(diff).toFixed(2)} over</span>`;
+}
+
 function copyRowHtml(copy) {
   const onLoan = !!copy.currentLoan;
   const loan = copy.currentLoan;
@@ -1508,6 +1519,15 @@ function copyRowHtml(copy) {
         <button class="mini-edit" type="button" aria-label="Edit copy"><span class="btn-icon">${ICONS.edit}</span></button>
       </div>
 
+      <!-- The price is its own control. It used to live behind the pencil with
+           the dates, which meant a typo could only be fixed by moving the item
+           back to the wishlist and out again. -->
+      <button class="copy-price ${copy.paid != null ? "set" : ""}" type="button" data-price-for="${copy.id}">
+        ${copy.paid != null
+          ? `<span class="cp-amount">$${Number(copy.paid).toFixed(2)}</span>${paidVerdict(copy)}`
+          : `<span class="cp-add">Add what you paid</span>`}
+      </button>
+
       <div class="condition-row">
         ${CONDITIONS.map((c) => `
           <button type="button" class="cond-btn ${copy.condition === c.key ? "active" : ""}" data-cond="${c.key}" title="${c.label}">${c.short}</button>
@@ -1520,6 +1540,7 @@ function copyRowHtml(copy) {
             <span>Added to shelf</span>
             <input type="date" class="copy-acquired" value="${copy.acquiredDate || ""}">
           </label>
+
         </div>
         ${onLoan ? `
           <label class="date-field">
@@ -1731,12 +1752,25 @@ function wireView(sheet, rec, store, container, opts = {}) {
   const gotCopy = sheet.querySelector("#gotCopyBtn");
   if (gotCopy) {
     gotCopy.addEventListener("click", () => {
-      store.updateItem(rec.id, {
-        copies: [{ id: uid(), acquiredDate: today(), condition: null, currentLoan: null, history: [] }],
-        price: null,
-        priceCheckedDate: null,
+      // Asked, not assumed — see the note in purchase.js. A preloved copy
+      // found cheap is exactly the case worth recording, and carrying the
+      // benchmark across silently would erase it.
+      askWhatYouPaid({
+        title: rec.title,
+        benchmark: rec.price != null ? Number(rec.price) : null,
+        checkedDate: rec.priceCheckedDate,
+        onDone: ({ paid, expected }) => {
+          store.updateItem(rec.id, {
+            copies: [{
+              id: uid(), acquiredDate: today(), condition: null,
+              currentLoan: null, history: [], paid, expected,
+            }],
+            price: null,
+            priceCheckedDate: null,
+          });
+          refreshDetail(store, container, rec.id);
+        },
       });
-      refreshDetail(store, container, rec.id);
     });
   }
 
@@ -1785,6 +1819,22 @@ function wireCopies(sheet, rec, store, container, opts) {
     wireDateField(acquired, () =>
       patchCopies((cc) => ({ ...cc, acquiredDate: acquired.value || null }))
     );
+
+    // Opens the same sheet you saw at the till, with both numbers editable.
+    // See the matching note in books.js.
+    const priceBtn = row.querySelector("[data-price-for]");
+    if (priceBtn) {
+      priceBtn.addEventListener("click", () => {
+        bounceTap(priceBtn);
+        askWhatYouPaid({
+          title: rec.title,
+          benchmark: c.expected != null ? Number(c.expected) : null,
+          paid: c.paid != null ? Number(c.paid) : null,
+          editing: true,
+          onDone: ({ paid, expected }) => patchCopies((cc) => ({ ...cc, paid, expected })),
+        });
+      });
+    }
 
     const inlineForm = row.querySelector(".lend-inline-form");
     const lendBtn = row.querySelector(".lend-trigger");
@@ -1969,7 +2019,12 @@ function wireShelfSwitcher(sheet, item, store, container, kindLabel) {
         return;
       }
 
-      const patch = { copies: [], borrowed: null, price: null, priceCheckedDate: null };
+      // Stamped when it becomes a want, so "wanted 8 months" is measured from
+      // when you started wanting it rather than when the item first appeared.
+      const patch = {
+        copies: [], borrowed: null, price: null, priceCheckedDate: null,
+        wantedSince: today(),
+      };
       if (to === "library") {
         patch.copies = copies.length
           ? copies

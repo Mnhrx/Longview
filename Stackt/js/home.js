@@ -6,6 +6,7 @@
 // ============================================
 
 import { router } from "./core.js";
+import { potOf } from "./wishlist.js";
 import { bounceTap } from "./animations.js";
 import { ICONS } from "./icons.js";
 
@@ -14,7 +15,7 @@ const TILES = [
   { key: "lps", label: "LPs", bg: "var(--purple)", tone: "dark" },
   { key: "words", label: "Words", bg: "var(--yellow)", tone: "light" },
   { key: "photos", label: "Photos", bg: "var(--blue)", tone: "dark" },
-  { key: "finance", label: "Finance", bg: "var(--mint)", tone: "light" },
+  { key: "wishlist", label: "Wishlist", bg: "var(--mint)", tone: "light" },
 ];
 
 function render(container, store, opts = {}) {
@@ -99,6 +100,33 @@ function subtitleFor(key, store) {
     if (!owned && !borrowed) return "Tap to start";
     const main = `${owned} record${owned === 1 ? "" : "s"}`;
     return borrowed ? `${main} <span class="sub-accent">· ${borrowed} borrowed</span>` : main;
+  }
+  if (key === "wishlist") {
+    const wanted = store.get().items.filter(
+      (i) => (i.type === "book" || i.type === "lp") && !(i.copies || []).length && !i.borrowed
+    );
+    if (!wanted.length) return "Tap to start";
+    const label = `${wanted.length} wanted`;
+    const budget = Number((store.get().budget || {}).monthly) || 0;
+    if (!budget) return `${label} <span class="sub-accent">· set a budget</span>`;
+
+    // The same running balance the module works from, so the tile can't
+    // disagree with the screen behind it.
+    let pot = potOf(store);
+    if (pot < 0) {
+      const amount = `$${Math.abs(pot) >= 1000
+        ? Math.round(Math.abs(pot)).toLocaleString()
+        : Math.abs(pot).toFixed(0)}`;
+      return `${label} <span class="sub-accent">· ${amount} overdrawn</span>`;
+    }
+    const priced = wanted.filter((i) => i.price != null).map((i) => Number(i.price));
+    let now = 0;
+    priced.sort((a, b) => a - b).forEach((p) => {
+      if (pot >= p) { pot -= p; now++; }
+    });
+    return now
+      ? `${label} <span class="sub-accent">· ${now} within reach</span>`
+      : label;
   }
   if (key === "words") {
     const words = store.itemsByType("word");

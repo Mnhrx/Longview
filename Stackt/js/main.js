@@ -9,6 +9,7 @@ import homeModule, { startMenuIntro } from "./home.js";
 import booksModule from "./books.js";
 import lpsModule from "./lps.js";
 import wordsModule from "./words.js";
+import wishlistModule from "./wishlist.js";
 import { launchPrompt, openWhatsNew, markSeen } from "./help.js";
 import settingsModule from "./settings.js";
 import { makePlaceholder } from "./placeholder.js";
@@ -22,7 +23,7 @@ router.register("settings", settingsModule);
 router.register("lps", lpsModule);
 router.register("words", wordsModule);
 router.register("photos", makePlaceholder("photos", "Photos"));
-router.register("finance", makePlaceholder("finance", "Finance"));
+router.register("wishlist", wishlistModule);
 
 async function boot() {
   await store.init();

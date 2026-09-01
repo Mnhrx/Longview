@@ -16,7 +16,7 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { ICONS } from "./icons.js";
 
-export const APP_VERSION = "3.0.1";
+export const APP_VERSION = "3.4.0";
 
 /** Where the last-seen version is remembered, so the popup shows once. */
 const SEEN_KEY = "stackt-seen-version";
@@ -27,6 +27,81 @@ const SEEN_KEY = "stackt-seen-version";
  * who wants to know what's different, not a commit log.
  */
 export const RELEASES = [
+  {
+    version: "3.4.0",
+    date: "September 2026",
+    title: "The budget pushes back",
+    highlights: [
+      "What you buy now comes off the budget, so going over shows as overdrawn instead of being ignored.",
+      "An overdrawn balance slides the whole plan later, which is the budget actually doing its job.",
+      "The price on a copy is tappable — fix a wrong one without moving the item back to the wishlist.",
+    ],
+    notes: [
+      "Before this, a bargain that blew the budget still showed green: the app only compared what you paid to the price you'd noted, and never to what you could afford. Those are different questions.",
+      "The balance is a running pot, not a calendar-month comparison — saving for four months and then spending it isn't overspending, and a month-by-month check would have called it that.",
+      "Changing the budget keeps the balance you're on and starts accruing at the new rate from that day, rather than recalculating your history at a rate you only just chose.",
+      "Tapping the price on a copy reopens the sheet from the till, with both the noted price and what you paid editable.",
+      "The price used to be buried behind the pencil next to the dates, which is why a typo meant a round trip through the wishlist.",
+    ],
+  },
+  {
+    version: "3.3.0",
+    date: "September 2026",
+    title: "A plan, not a report",
+    highlights: [
+      "Set one monthly budget and the wishlist becomes a schedule — what you can get now, and when the rest arrive.",
+      "Unspent budget rolls over, so the expensive ones do eventually come round.",
+      "Everything about past spending is gone. No more filling in what a paperback cost you in 2019.",
+    ],
+    notes: [
+      "The plan is simulated month by month rather than dividing by the budget — lumpy prices push things later than the arithmetic suggests, and dividing hid that.",
+      "Longest-wanted goes first; tap any item to pin it as next instead, or switch to cheapest-first.",
+      "The queue holds rather than skipping ahead, so cheap things can't keep eating the budget while the one you've wanted for a year never arrives.",
+      "It still tells you what jumping the queue would cost.",
+      "Wants with no price are listed separately — a guess there would corrupt every date below it.",
+      "Noted price against what you actually paid is now a side-by-side chart.",
+      "Removed: total spent, the month and year figures, the twelve-month spending chart, and the fill-in-what-you-paid list.",
+    ],
+  },
+  {
+    version: "3.2.0",
+    date: "September 2026",
+    title: "The hunt",
+    highlights: [
+      "The Ledger is now a Wishlist — what you want, and how well you bought it.",
+      "Note a price before you buy; when you find it cheaper, the difference is counted.",
+      "Overs are counted the same as unders, so the net figure is worth believing.",
+    ],
+    notes: [
+      "The price you note is a benchmark you set before knowing what you'd pay — which is what makes beating it a real result, unlike beating a budget you can quietly raise.",
+      "Buying something off the wishlist now asks what you actually paid, with the noted price shown beside it.",
+      "Both numbers are kept on the copy, so editing a price later can't rewrite what you saved.",
+      "Wants are ordered by how long you've wanted them, and priced in weeks at your usual rate.",
+      "Deleting a priced want without buying it is tallied as something you decided against.",
+      "The twelve-month chart stays, with your usual month marked across it.",
+      "A benchmark older than four months is flagged before it's trusted.",
+      "No 'total saved' anywhere — a figure that only ever grows is one that stops meaning anything.",
+    ],
+  },
+  {
+    version: "3.1.0",
+    date: "September 2026",
+    title: "The Ledger",
+    highlights: [
+      "A Ledger: what your collection has cost, month by month.",
+      "What you paid is now kept on each copy — it used to be thrown away the moment you bought something.",
+      "A fill-in list for everything you already own.",
+    ],
+    notes: [
+      "Finance is now Ledger. It records what you spent; it was never going to be a budgeting app, and the old name promised one.",
+      "A wishlist price becomes what you paid when the item joins your shelf, instead of being deleted.",
+      "Each copy carries its own price, so two copies of the same record can differ.",
+      "Spending is split between books and records, with the last twelve months as a chart.",
+      "Totals say how many copies they cover, so a partial total never pretends to be complete.",
+      "The wishlist total shows what finishing it would cost.",
+      "No valuation of what things are worth now — that needs live market data a private app can't get, so the Discogs and Kinokuniya links remain the honest answer.",
+    ],
+  },
   {
     version: "3.0.1",
     date: "September 2026",
@@ -122,6 +197,25 @@ export const GUIDE = [
       ["Choose what goes in", "Tap Choose to pick individual books or records. There's a search box and filters for rating, favourites and author."],
       ["Two shapes", "Square for a post, tall for a story."],
       ["Share one thing", "Books and records have their own share icon, and a reviewed book can share the review as a card."],
+    ],
+  },
+  {
+    key: "wishlist",
+    title: "Wishlist",
+    icon: "wishlist",
+    steps: [
+      ["Set a budget", "One number: what you can put aside each month. The wishlist turns into a schedule — what's within reach now, and which month the rest come round."],
+      ["It saves up", "Unspent budget carries over, so something costing more than a month's budget still arrives; it just takes a few months."],
+      ["And it keeps count", "What you buy through the app comes off the balance. Spend more than you have and it shows as overdrawn, and everything on the plan slides later until you've caught up."],
+      ["Fixing a price", "Tap the price on any copy to correct what you paid — or the price you'd noted, if that was the wrong one."],
+      ["Note the price first", "Add something to your wishlist with the price you found online. That number is the point: it's what you're trying to beat."],
+      ["Then go hunting", "Find it cheaper — a secondhand copy, a good preloved pressing — and the difference is counted when you add it to your shelf."],
+      ["It asks what you paid", "Tapping I got a copy shows the price you'd noted and asks what it actually cost. One tap, and the win is recorded while you remember it."],
+      ["It counts the overs too", "Pay more than you noted and it says so. A tally that only ever congratulates you isn't one you'd believe."],
+      ["Wanted since", "The queue runs longest-wanted first. Tap one to pin it as next, or switch the whole list to cheapest-first."],
+      ["It won't skip ahead", "The plan waits rather than buying cheaper things out of turn — otherwise the expensive record you've wanted all year never arrives. It does tell you what jumping would cost."],
+      ["Talked yourself out of it", "Delete a priced want without buying it and it's tallied separately — decisions you made, which isn't quite the same as money saved."],
+      ["What it won't tell you", "What your collection is worth now. That needs live market prices this app can't fetch, and a stale valuation is worse than none — the Discogs and Kinokuniya links are there for that."],
     ],
   },
   {

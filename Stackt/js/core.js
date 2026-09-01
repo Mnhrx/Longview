@@ -17,11 +17,9 @@ export function uid() {
 
 export const store = {
   state: {
-    items: [],           // books, lps, photos all live here (type: field)
-    finance: {
-      balance: 0,
-      spendingLog: [],    // { id, date, amount, note, itemId }
-    },
+    items: [],           // books, lps, words, photos all live here (type: field)
+    declined: [],        // priced wants you deleted without buying
+    budget: {},          // { monthly, setAside, order, pinned } — the wishlist plan
   },
   listeners: [],
 
@@ -182,8 +180,38 @@ export const store = {
     });
   },
 
+  /**
+   * Deleting a priced wishlist item is a decision, so it's recorded.
+   *
+   * It's the only thing the Wishlist module can't read off an item, because
+   * the item is about to stop existing. Kept deliberately small — a name and
+   * a number — and honest about what it is: things you decided against, which
+   * is not quite the same as money saved. You might have lost interest, or
+   * bought it somewhere the app never saw.
+   */
   removeItem(id) {
-    this.update({ items: this.state.items.filter((it) => it.id !== id) });
+    const item = this.state.items.find((it) => it.id === id);
+    const wasAWant =
+      item &&
+      (item.type === "book" || item.type === "lp") &&
+      !(item.copies || []).length &&
+      !item.borrowed &&
+      item.price != null;
+
+    const patch = { items: this.state.items.filter((it) => it.id !== id) };
+    if (wasAWant) {
+      patch.declined = [
+        {
+          id: uid(),
+          title: item.title,
+          type: item.type,
+          price: Number(item.price),
+          date: new Date().toISOString().slice(0, 10),
+        },
+        ...(this.state.declined || []),
+      ].slice(0, 200); // a tally, not an archive
+    }
+    this.update(patch);
   },
 
   itemsByType(type) {
@@ -196,17 +224,6 @@ export const store = {
     return this.state.items.find((it) => it.type === type && it.isbn === isbn) || null;
   },
 
-  logSpend(amount, note, itemId = null) {
-    const entry = { id: uid(), date: new Date().toISOString().slice(0, 10), amount, note, itemId };
-    this.update({
-      finance: {
-        ...this.state.finance,
-        balance: this.state.finance.balance - amount,
-        spendingLog: [entry, ...this.state.finance.spendingLog],
-      },
-    });
-    return entry;
-  },
 
   /** Everything worth keeping, in a versioned envelope so a future build can
    *  recognise and migrate an older backup. */
@@ -248,9 +265,13 @@ export const store = {
     const incoming = bundle.state;
     if (!incoming || !Array.isArray(incoming.items)) throw new Error("That backup is missing its library.");
 
+    // A v1/v2 backup may carry a `finance` block. It held a balance and a
+    // spending log that nothing ever wrote to, so it is read and dropped
+    // rather than carried forward.
     this.state = {
       items: incoming.items,
-      finance: incoming.finance || { balance: 0, spendingLog: [] },
+      declined: Array.isArray(incoming.declined) ? incoming.declined : [],
+      budget: incoming.budget && typeof incoming.budget === "object" ? incoming.budget : {},
     };
     this.save();
 
@@ -278,7 +299,7 @@ export const store = {
     // Take the photos with it — a reset that leaves 40MB of orphaned images
     // behind isn't a reset.
     for (const item of this.state.items) await deleteBlob(ownKey(item.id));
-    this.state = { items: [], finance: { balance: 0, spendingLog: [] } };
+    this.state = { items: [], declined: [], budget: {} };
     this.save();
     this.listeners.forEach((fn) => fn(this.state));
   },
