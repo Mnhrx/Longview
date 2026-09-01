@@ -23,6 +23,23 @@
 
 * { box-sizing: border-box; }
 
+/* iOS Safari renders <button> text in the system blue whenever no color is
+   declared — the UA stylesheet's own value, not an inherited one. That bit us
+   twice (the wordmark, then the budget card) because Chromium falls back to
+   black instead, so the bug is invisible on desktop and only ever reported
+   from a phone.
+   Fixing it per-selector means fixing it again for every custom button added
+   later, so it is declared once here at element specificity, which any class
+   rule overrides. The fill follows currentColor rather than a fixed ink, so
+   .btn-primary's white text needs no companion declaration — and the same on
+   descendants stops an explicit fill inheriting past a child that sets its
+   own color, which is what used to turn the logo dot black. */
+button {
+  color: var(--ink);
+  -webkit-text-fill-color: currentColor;
+}
+button * { -webkit-text-fill-color: currentColor; }
+
 /* ---------- shared shimmer (cover-loading placeholder) ---------- */
 .shimmer { position: relative; overflow: hidden; }
 .shimmer::after {
@@ -1518,6 +1535,30 @@ html, body {
 }
 .cover-picker-note { font-size: 13px; opacity: 0.6; margin: 0; }
 
+/* An input dropped straight into a sheet, with no .field wrapper around it,
+   used to render as a bare UA textbox: hairline border, square corners, 13px
+   text that made iOS zoom on focus. The track editor was the one place that
+   showed, but it was the sheet's gap rather than that editor's mistake, so
+   the styling lives here and any future sheet input inherits it.
+   Direct children only — .paid-input-row and .picker-search wrap their own
+   inputs and style them differently. */
+.cover-picker > input {
+  width: 100%;
+  padding: 12px 14px;
+  margin: 0 0 16px;
+  border-radius: 14px;
+  border: var(--border-w) solid var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+.cover-picker > input:focus {
+  outline: 3px solid var(--yellow);
+  outline-offset: 1px;
+}
+
 /* Escape hatch: when the catalogued title isn't what's printed on the thing in
    your hands, type what is. */
 .picker-search {
@@ -2492,15 +2533,53 @@ html, body {
   box-shadow: 3px 3px 0 var(--ink);
 }
 .tp-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+/* The title ellipsises, the badge must not — so the clipping moved onto an
+   inner span and .tp-main became the row that holds both. */
 .tp-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 800;
   font-size: 13.5px;
   max-width: 100%;
+}
+.tp-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tp-sub { font-size: 11.5px; font-weight: 600; opacity: 0.6; line-height: 1.4; }
+
+/* Changing pressings is only reachable under the pencil — see the note in
+   lps.js. Hidden rather than absent so the tracklist doesn't reflow when the
+   pencil is tapped. */
+.track-edit-actions { display: none; margin-top: 10px; }
+.track-block.editing .track-edit-actions { display: block; }
+
+.cp-warn {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--yellow);
+}
+.tp-row.current { background: var(--yellow); }
+.tp-current {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 9.5px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  vertical-align: middle;
+}
 
 /* ---------- words ---------- */
 
@@ -3241,6 +3320,11 @@ html, body {
   border-radius: 14px;
   box-shadow: 3px 3px 0 var(--ink);
 }
+/* Both row kinds open a sheet now, so both need to look pressable. */
+.want-row { cursor: pointer; }
+.want-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.plan-row { cursor: pointer; }
+
 .wr-icon { width: 20px; height: 20px; flex: 0 0 auto; opacity: 0.6; }
 .wr-icon svg { width: 100%; height: 100%; display: block; }
 .wr-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -3268,6 +3352,21 @@ html, body {
   white-space: nowrap;
 }
 .wr-price { flex: 0 0 auto; font-weight: 900; font-size: 15px; }
+
+/* the wishlist item sheet */
+.ws-sub {
+  font-size: 12.5px;
+  font-weight: 700;
+  opacity: 0.6;
+  margin: -4px 0 16px;
+}
+.ws-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
 
 /* Your usual month, drawn across the chart. */
 .ledger-chart { position: relative; }

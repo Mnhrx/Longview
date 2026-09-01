@@ -1147,9 +1147,59 @@ function tracklistHtml(rec) {
         ${tracks.length ? "" : `<button class="btn btn-secondary" id="getTracksBtn" type="button">Get tracklist</button>`}
         <button class="link-btn" id="addTrackBtn" type="button">${tracks.length ? "Add a track" : "Type it in by hand"}</button>
       </div>
+
+      ${tracks.length ? `
+        <div class="track-edit-actions">
+          <button class="link-btn" id="changePressingBtn" type="button">Wrong pressing? Pick another</button>
+        </div>
+      ` : ""}
       <p class="settings-status" id="trackStatus"></p>
     </div>
   `;
+}
+
+/**
+ * Moves ratings and hearts from an old tracklist onto a new one, matching on
+ * title. Mutates `next` and reports what landed and what didn't.
+ *
+ * Loose matching on purpose: the same song is filed as "So What", "So What
+ * (Remastered)" and "So What - 2019 Mix" across three pressings, and a strict
+ * comparison would drop every rating you'd given. A false match costs you one
+ * misplaced star; a missed one costs you the rating entirely, so this errs
+ * towards matching.
+ */
+function trackKey(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, "")   // (remastered), [bonus track]
+    .replace(/\s+-\s+.*$/, "")               // - 2019 mix
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function carryRatings(prev, next) {
+  const rated = prev.filter((t) => t.rating != null || t.favourite);
+  if (!rated.length) return { moved: 0, lost: 0 };
+
+  const bank = new Map();
+  rated.forEach((t) => {
+    const k = trackKey(t.title);
+    if (k && !bank.has(k)) bank.set(k, t);
+  });
+
+  // One old rating can only land once, so a pressing that repeats a title
+  // (a reprise, a live take) doesn't multiply the star across both.
+  const claimed = new Set();
+  next.forEach((t) => {
+    const k = trackKey(t.title);
+    if (!k || claimed.has(k)) return;
+    const old = bank.get(k);
+    if (!old) return;
+    claimed.add(k);
+    if (old.rating != null) t.rating = old.rating;
+    if (old.favourite) t.favourite = true;
+  });
+
+  return { moved: claimed.size, lost: bank.size - claimed.size };
 }
 
 /**
@@ -1160,15 +1210,24 @@ function tracklistHtml(rec) {
  * Guessing a pressing would attach the reissue's three bonus cuts to your 1957
  * copy and never tell you. Track counts lead each row because that's the fact
  * that identifies your sleeve.
+ *
+ * Reopened with replacing:true when a pressing was already chosen and turned
+ * out to be the wrong one — a deluxe edition's bonus cuts attached to a plain
+ * copy, say. That case has to say out loud that it overwrites the tracklist,
+ * because the per-song ratings live on those track objects.
  */
-function openTracklistPicker(rec, store, container) {
+function openTracklistPicker(rec, store, container, { replacing = false } = {}) {
   openOverlay("cover-picker-backdrop", (overlay) => {
     overlay.innerHTML = `
       <div class="cover-picker">
         <div class="cover-picker-head">
-          <h2>Which pressing?</h2>
+          <h2>${replacing ? "Change pressing" : "Which pressing?"}</h2>
           <button class="lightbox-close" id="tpClose" type="button" aria-label="Close"><span class="btn-icon">${ICONS.close}</span></button>
         </div>
+        ${replacing ? `
+          <p class="cp-warn">This replaces the ${(rec.tracks || []).length} tracks you have now.
+          Ratings and hearts move across wherever the song titles match.</p>
+        ` : ""}
         <p class="cp-note" id="tpNote">Looking for pressings…</p>
         <div class="tp-list" id="tpList"></div>
       </div>
@@ -1188,8 +1247,11 @@ function openTracklistPicker(rec, store, container) {
       note.textContent = "Pick the one you're holding — the track count is usually the giveaway.";
       list.innerHTML = releases
         .map((r, i) => `
-          <button type="button" class="tp-row" data-i="${i}">
-            <span class="tp-main">${escapeHtml(r.title || rec.title)}</span>
+          <button type="button" class="tp-row${r.mbid && r.mbid === rec.releaseMbid ? " current" : ""}" data-i="${i}">
+            <span class="tp-main">
+              <span class="tp-name">${escapeHtml(r.title || rec.title)}</span>
+              ${r.mbid && r.mbid === rec.releaseMbid ? `<span class="tp-current">Current</span>` : ""}
+            </span>
             <span class="tp-sub">${[
               r.year,
               r.country,
@@ -1233,9 +1295,24 @@ function openTracklistPicker(rec, store, container) {
             perSide[t.side] = (perSide[t.side] || 0) + 1;
             t.posOnSide = perSide[t.side];
           });
+          // Swapping pressings must not silently bin what you'd rated. Titles
+          // are the only stable handle across two pressings — positions shift
+          // the moment a bonus track lands mid-sleeve — so they're matched
+          // loosely, and whatever finds no home is counted and reported rather
+          // than disappearing.
+          const carried = carryRatings(rec.tracks || [], tracks);
+
           store.updateItem(rec.id, { tracks, releaseMbid: chosen.mbid });
           dismissLayer();
           refreshDetail(store, container, rec.id);
+          if (carried.moved || carried.lost) {
+            const status = document.querySelector("#modalRoot #trackStatus");
+            if (status) {
+              status.textContent = carried.lost
+                ? `Carried ${carried.moved} rating${carried.moved === 1 ? "" : "s"} across. ${carried.lost} didn't match a song on this pressing.`
+                : `Carried ${carried.moved} rating${carried.moved === 1 ? "" : "s"} across.`;
+            }
+          }
         });
       });
     };
@@ -1383,6 +1460,16 @@ function wireTracklist(sheet, rec, store, container) {
 
   const add = block.querySelector("#addTrackBtn");
   if (add) add.addEventListener("click", () => openTrackEditor(rec, store, container));
+
+  // Kept behind the pencil rather than beside "Add a track": picking a
+  // pressing is a once-per-record decision, and a button that overwrites the
+  // whole tracklist has no business sitting under your thumb while you're
+  // rating songs.
+  const change = block.querySelector("#changePressingBtn");
+  if (change) change.addEventListener("click", () => {
+    bounceTap(change);
+    openTracklistPicker(rec, store, container, { replacing: true });
+  });
 
   const edit = block.querySelector("#trackEditBtn");
   if (edit) edit.addEventListener("click", () => {

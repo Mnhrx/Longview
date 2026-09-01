@@ -20,7 +20,8 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { bounceTap, nudge } from "./animations.js";
 import { ICONS } from "./icons.js";
-import { outcome } from "./purchase.js";
+import { outcome, askWhatYouPaid, parseAmount } from "./purchase.js";
+import { uid } from "./core.js";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
                 "August", "September", "October", "November", "December"];
@@ -272,7 +273,7 @@ function planHtml(store) {
       lastMonth = r.month;
       return `
       ${head}
-      <div class="plan-row ${budget.pinned === r.id ? "pinned" : ""}" data-want="${escapeHtml(r.id)}">
+      <div class="plan-row ${budget.pinned === r.id ? "pinned" : ""}" data-want="${escapeHtml(r.id)}" data-month="${r.month == null ? "" : r.month}">
         <span class="wr-icon">${r.type === "book" ? ICONS.books : ICONS.lps}</span>
         <span class="wr-main">
           <span class="wr-title">${escapeHtml(r.title)}</span>
@@ -354,7 +355,7 @@ function planHtml(store) {
                <span class="wr-icon">${w.type === "book" ? ICONS.books : ICONS.lps}</span>
                <span class="wr-main">
                  <span class="wr-title">${escapeHtml(w.title)}</span>
-                 <span class="wr-meta">Can't be planned without a price</span>
+                 <span class="wr-meta">Tap to add a price</span>
                </span>
                <span class="wr-price">—</span>
              </div>`
@@ -396,6 +397,138 @@ function planHtml(store) {
          </p>`
       : ""}
   `;
+}
+
+/** Closes the sheet that's open, then runs `fn` once the browser has actually
+ *  popped it. dismissLayer() goes through history.back(), which is async — do
+ *  the next thing immediately and the pending popstate lands on it instead. */
+function afterClose(fn) {
+  window.addEventListener("popstate", () => setTimeout(fn, 0), { once: true });
+  dismissLayer();
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * One wishlist row, opened.
+ *
+ * The reason this exists: buying something you'd been planning for meant
+ * leaving the planner, finding the item in Books or Records, and marking it
+ * there — so the screen that told you when you could afford it was the one
+ * screen that couldn't record that you had. Everything here routes through the
+ * same store calls those modules make, so a purchase recorded from the planner
+ * and one recorded from a detail sheet are indistinguishable afterwards.
+ *
+ * The noted price is editable in place rather than behind another sheet,
+ * because "I typed 40 and meant 400" is the common case and it shouldn't cost
+ * three taps to fix.
+ */
+function openWantSheet(item, store, { month = undefined, pinned = false }, onDone) {
+  openOverlay("cover-picker-backdrop", (overlay) => {
+    const priced = item.price != null;
+    overlay.innerHTML = `
+      <div class="cover-picker">
+        <div class="cover-picker-head">
+          <h2>${escapeHtml(item.title)}</h2>
+          <button class="lightbox-close" id="wsClose" type="button" aria-label="Close"><span class="btn-icon">${ICONS.close}</span></button>
+        </div>
+        <p class="ws-sub">
+          ${escapeHtml(item.creator || (item.type === "book" ? "Book" : "Record"))}${
+            month === 0
+              ? " · within reach now"
+              : month == null
+              ? ""
+              : ` · ${escapeHtml(monthLabel(month))}`
+          }
+        </p>
+
+        <p class="cover-picker-label">Price you noted</p>
+        <div class="paid-input-row small">
+          <span class="paid-currency">$</span>
+          <input type="number" step="0.01" inputmode="decimal" id="wsPrice"
+                 value="${priced ? Number(item.price).toFixed(2) : ""}"
+                 placeholder="0.00" aria-label="Price you noted">
+        </div>
+        <p class="settings-note">
+          This is what the plan runs on, and what you'll be measured against
+          when you buy it.
+        </p>
+
+        <button class="btn btn-primary block-btn" id="wsGot" type="button">I got this</button>
+        <button class="btn btn-secondary block-btn" id="wsSave" type="button">Save price</button>
+        <div class="ws-links">
+          <button class="link-btn" id="wsPin" type="button">${
+            pinned ? "Clear pin" : "Get this one next"
+          }</button>
+          <button class="link-btn danger-btn" id="wsRemove" type="button">Remove from wishlist</button>
+        </div>
+      </div>
+    `;
+
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismissLayer(); });
+    overlay.querySelector("#wsClose").addEventListener("click", () => dismissLayer());
+
+    const priceInput = overlay.querySelector("#wsPrice");
+    /** Whatever is in the box right now — a correction typed and not yet
+     *  saved still counts, otherwise "I got this" would measure you against
+     *  the number you just fixed. */
+    const typedPrice = () => parseAmount(priceInput.value);
+
+    overlay.querySelector("#wsSave").addEventListener("click", () => {
+      const p = typedPrice();
+      if (p == null || p <= 0) return nudge(priceInput);
+      store.updateItem(item.id, { price: p, priceCheckedDate: todayStr() });
+      dismissLayer();
+      onDone();
+    });
+
+    overlay.querySelector("#wsGot").addEventListener("click", () => {
+      const benchmark = typedPrice();
+      afterClose(() => {
+        askWhatYouPaid({
+          title: item.title,
+          benchmark: benchmark != null && benchmark > 0 ? benchmark : null,
+          checkedDate: item.priceCheckedDate,
+          onDone: ({ paid, expected }) => {
+            // Books carry no condition field and records do — each module's
+            // own shape, so a copy made here looks like one made there.
+            const copy = item.type === "lp"
+              ? { id: uid(), acquiredDate: todayStr(), condition: null,
+                  currentLoan: null, history: [], paid, expected }
+              : { id: uid(), acquiredDate: todayStr(),
+                  currentLoan: null, history: [], paid, expected };
+            store.updateItem(item.id, {
+              copies: [...(item.copies || []), copy],
+              price: null,
+              priceCheckedDate: null,
+            });
+            // Buying the pinned item satisfies the pin; leaving it set would
+            // hold a place in the queue for something already on the shelf.
+            if (budgetOf(store).pinned === item.id) saveBudget(store, { pinned: null });
+            onDone();
+          },
+        });
+      });
+    });
+
+    overlay.querySelector("#wsPin").addEventListener("click", () => {
+      saveBudget(store, { pinned: pinned ? null : item.id });
+      dismissLayer();
+      onDone();
+    });
+
+    overlay.querySelector("#wsRemove").addEventListener("click", () => {
+      if (!window.confirm(`Remove ${item.title} from your wishlist?`)) return;
+      // removeItem files a priced want into `declined` on its own — deciding
+      // against something is data, not an absence.
+      store.removeItem(item.id);
+      if (budgetOf(store).pinned === item.id) saveBudget(store, { pinned: null });
+      dismissLayer();
+      onDone();
+    });
+  });
 }
 
 /** Two numbers, and nothing else to fill in. */
@@ -505,13 +638,24 @@ function render(container, store) {
     redraw();
   });
 
-  // Tapping a planned item pins it as next, or unpins it.
+  // Tapping a row opens it. This used to pin and unpin instead — one hidden
+  // gesture, no label, and it silently reshuffled the plan. Worse, it was the
+  // only thing a row could do, so recording a purchase meant leaving the
+  // planner for the module the item happened to live in. Pinning still exists;
+  // it's a labelled button inside the sheet now.
   wrap.querySelectorAll("[data-want]").forEach((row) => {
     row.addEventListener("click", () => {
       bounceTap(row);
       const id = row.dataset.want;
-      saveBudget(store, { pinned: budgetOf(store).pinned === id ? null : id });
-      redraw();
+      const item = store.get().items.find((it) => it.id === id);
+      if (!item) return redraw();
+      const month = row.dataset.month === "" || row.dataset.month == null
+        ? undefined
+        : Number(row.dataset.month);
+      openWantSheet(item, store, {
+        month: Number.isFinite(month) ? month : undefined,
+        pinned: budgetOf(store).pinned === id,
+      }, redraw);
     });
   });
 }

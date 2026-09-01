@@ -4,7 +4,7 @@
 // a deploy replace the old files AND show the release notes once.
 // ============================================
 
-const CACHE_NAME = "stackt-3.4.0";
+const CACHE_NAME = "stackt-3.5.0";
 const ASSETS = [
   "./",
   "./index.html",

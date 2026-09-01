@@ -16,7 +16,7 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { ICONS } from "./icons.js";
 
-export const APP_VERSION = "3.4.0";
+export const APP_VERSION = "3.5.0";
 
 /** Where the last-seen version is remembered, so the popup shows once. */
 const SEEN_KEY = "stackt-seen-version";
@@ -27,6 +27,25 @@ const SEEN_KEY = "stackt-seen-version";
  * who wants to know what's different, not a commit log.
  */
 export const RELEASES = [
+  {
+    version: "3.5.0",
+    date: "September 2026",
+    title: "Fixing it where you found it",
+    highlights: [
+      "Tap anything on the wishlist to open it — mark it as bought, and say what you paid, without leaving the planner.",
+      "Picked the wrong pressing? The tracklist can be swapped now, and your song ratings come across with it.",
+      "Buttons that came out bright blue on iPhone are black again.",
+    ],
+    notes: [
+      "Marking something as bought from the wishlist records it exactly as marking it from Books or Records does — same copy, same benchmark, same effect on the balance.",
+      "A wrongly-typed price is editable in the same sheet, so a 40 that should have been 400 costs one tap rather than a trip through another module.",
+      "Pinning an item as next is a labelled button now instead of an unmarked tap on the row, which used to reshuffle the plan without saying so.",
+      "Buying the pinned item clears the pin, and removing a priced want still records that you decided against it.",
+      "Changing a pressing warns first, shows which one you have now, and carries ratings and hearts across by song title — then says how many didn't match.",
+      "The track title and length boxes were bare browser textboxes; they now match every other field in the app, and no longer make iOS zoom in when you tap them.",
+      "The blue text was iOS Safari's default for any button with no colour set. It's now set once for every button rather than one selector at a time, so it can't come back on the next thing that gets added.",
+    ],
+  },
   {
     version: "3.4.0",
     date: "September 2026",
@@ -172,6 +191,7 @@ export const GUIDE = [
       ["Add by barcode or by hand", "Same as books. Sleeve art comes from the Cover Art Archive; if the automatic one is wrong, Change art lets you pick or photograph your own."],
       ["Condition", "Each copy can be graded Mint through Good. You can sort the shelf by it."],
       ["Tracklists", "Open a record and tap Get tracklist. It asks which pressing you own — the track count is usually what tells them apart — and remembers your answer."],
+      ["Wrong pressing", "Tap the pencil on the tracklist and choose Wrong pressing? Pick another. It shows which one you picked before, and ratings you've already given move across wherever the song titles match."],
       ["Rating songs", "Every track has stars and a heart. Your album rating stays your own; the track average is shown next to it so you can see where they disagree."],
       ["Prices", "Stackt links out to Discogs rather than quoting a price, because a price it stored would be wrong within a week."],
     ],
@@ -207,12 +227,13 @@ export const GUIDE = [
       ["Set a budget", "One number: what you can put aside each month. The wishlist turns into a schedule — what's within reach now, and which month the rest come round."],
       ["It saves up", "Unspent budget carries over, so something costing more than a month's budget still arrives; it just takes a few months."],
       ["And it keeps count", "What you buy through the app comes off the balance. Spend more than you have and it shows as overdrawn, and everything on the plan slides later until you've caught up."],
+      ["Tap any row", "Opening an item from the wishlist is how you mark it as bought, say what you paid, fix a wrong price, pin it as next, or drop it. You never have to go and find it in Books or Records to do that."],
       ["Fixing a price", "Tap the price on any copy to correct what you paid — or the price you'd noted, if that was the wrong one."],
       ["Note the price first", "Add something to your wishlist with the price you found online. That number is the point: it's what you're trying to beat."],
       ["Then go hunting", "Find it cheaper — a secondhand copy, a good preloved pressing — and the difference is counted when you add it to your shelf."],
       ["It asks what you paid", "Tapping I got a copy shows the price you'd noted and asks what it actually cost. One tap, and the win is recorded while you remember it."],
       ["It counts the overs too", "Pay more than you noted and it says so. A tally that only ever congratulates you isn't one you'd believe."],
-      ["Wanted since", "The queue runs longest-wanted first. Tap one to pin it as next, or switch the whole list to cheapest-first."],
+      ["Wanted since", "The queue runs longest-wanted first. Open one and choose Get this one next to pin it, or switch the whole list to cheapest-first."],
       ["It won't skip ahead", "The plan waits rather than buying cheaper things out of turn — otherwise the expensive record you've wanted all year never arrives. It does tell you what jumping would cost."],
       ["Talked yourself out of it", "Delete a priced want without buying it and it's tallied separately — decisions you made, which isn't quite the same as money saved."],
       ["What it won't tell you", "What your collection is worth now. That needs live market prices this app can't fetch, and a stale valuation is worse than none — the Discogs and Kinokuniya links are there for that."],
