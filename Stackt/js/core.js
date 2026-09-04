@@ -17,7 +17,7 @@ export function uid() {
 
 export const store = {
   state: {
-    items: [],           // books, lps, words, photos all live here (type: field)
+    items: [],           // books, lps, words and places all live here (type: field)
     declined: [],        // priced wants you deleted without buying
     budget: {},          // { monthly, setAside, order, pinned } — the wishlist plan
   },
@@ -298,7 +298,11 @@ export const store = {
   async resetAll() {
     // Take the photos with it — a reset that leaves 40MB of orphaned images
     // behind isn't a reset.
-    for (const item of this.state.items) await deleteBlob(ownKey(item.id));
+    //
+    // Every stored photo, not one per item: a place files a picture per dish
+    // as well as its own, so walking the items would leave most of them
+    // behind. The blob store already knows which records are yours.
+    for (const rec of await allOwnRecords()) await deleteBlob(rec.key);
     this.state = { items: [], declined: [], budget: {} };
     this.save();
     this.listeners.forEach((fn) => fn(this.state));

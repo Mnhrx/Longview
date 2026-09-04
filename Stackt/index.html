@@ -17,6 +17,11 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.json">
 
+<!-- Leaflet's stylesheet, vendored (BSD-2-Clause — js/vendor/leaflet-LICENSE.txt).
+     Linked rather than injected on demand because a map that arrives unstyled
+     for a frame looks broken. It's 15KB and the worker caches it. The library
+     itself IS loaded lazily — see js/mapper.js. -->
+<link rel="stylesheet" href="css/leaflet.css">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>

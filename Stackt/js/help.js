@@ -16,7 +16,7 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { ICONS } from "./icons.js";
 
-export const APP_VERSION = "3.5.0";
+export const APP_VERSION = "4.1.0";
 
 /** Where the last-seen version is remembered, so the popup shows once. */
 const SEEN_KEY = "stackt-seen-version";
@@ -27,6 +27,48 @@ const SEEN_KEY = "stackt-seen-version";
  * who wants to know what's different, not a commit log.
  */
 export const RELEASES = [
+  {
+    version: "4.1.0",
+    date: "September 2026",
+    title: "Which shop was the cheap one?",
+    highlights: [
+      "Price hunt: note what each shop charges for the same thing, and the cheapest is worked out and marked for you.",
+      "Locations are a real map now — use where you are, or drag the pin to where the place actually is.",
+      "Food has changed colour, and the examples are food you'd actually eat.",
+    ],
+    notes: [
+      "Open anything on your wishlist and add a shop: who, where, how much, and when you saw it. Add as many as you visited.",
+      "The list sorts cheapest first and each row shows what it costs you over the best price, so you're comparing the decision rather than doing subtraction.",
+      "The saving is measured against the SECOND cheapest, not the dearest — the dearest was never the choice you were going to make.",
+      "The cheapest quote becomes the price the plan runs on, so the schedule and the noted-versus-paid comparison follow the hunt without you doing anything.",
+      "Correct a price and the order re-sorts; remove the winner and the next one takes over. Buying it clears the hunt.",
+      "A shop can be pinned on the map too, because \"the one in Mid Valley\" stops meaning anything three months later.",
+      "The map is OpenStreetMap and it's drawn on your phone; nothing about where you are is sent anywhere. The map images need a connection, but the pin works without one.",
+      "Food's colour is now magenta.",
+    ],
+  },
+  {
+    version: "4.0.0",
+    date: "September 2026",
+    title: "Food, and what Stackt is now",
+    highlights: [
+      "A new Food section: places you've eaten, the dishes there, and whether you'd go back.",
+      "A photo and a name is a whole entry. Everything else — the rating, the dishes, what you spent — waits until you feel like it.",
+      "Stackt isn't only a library any more. It's what you've read, heard, learned and eaten.",
+    ],
+    notes: [
+      "Open a place and its best dishes are at the top, because \"what do I order here again\" is the question you opened it to answer.",
+      "Dishes belong to the place rather than to one visit, so \"their rendang is a 5\" stays true however many times you go.",
+      "Tags are tappable and fixed rather than typed, which is what makes them the one thing you can filter the shelf by later.",
+      "Writing gives you questions to answer instead of an empty box — first impression, the pricing, the service, who you'd bring.",
+      "Sort by longest-since-visited to answer \"where tonight\" out of your own history.",
+      "A want-to-try list sits on the same shelf, with no prices and no planning. One tap moves a place across once you've been.",
+      "Your phone can stamp where you are, so a stall that appears on no map still gets a location. Nothing is sent anywhere, and you can open the place in Maps later.",
+      "Meal photos are shrunk on the way in, the same as covers, and travel in your backups.",
+      "What you spend on a meal is kept well away from the wishlist budget — that pot is for things you're saving up for.",
+      "The Photos tile is gone. It said \"coming soon\" for six versions and never had a job; photos now live inside food entries, doing one.",
+    ],
+  },
   {
     version: "3.5.0",
     date: "September 2026",
@@ -165,8 +207,9 @@ export const GUIDE = [
     icon: "books",
     steps: [
       ["The home screen is the menu", "Each tile is a section. Tap one to open it full screen; the arrow at the top left brings you back."],
-      ["The + adds things", "It appears in the sections where adding makes sense — Books and Records."],
-      ["Everything stays on this phone", "There's no account and no server. Your library lives in this browser, which is why the backup in Settings matters."],
+      ["The + adds things", "It appears in the sections where adding makes sense — Books, Records and Food."],
+      ["What Stackt is for", "Things you've read, heard, learned and eaten. Books and Records are what you own; Words is what you've looked up; Food is where you've been and what you thought of it."],
+      ["Everything stays on this phone", "There's no account and no server. All of it lives in this browser, which is why the backup in Settings matters."],
       ["Add it to your home screen", "In Safari, Share → Add to Home Screen. It then opens like an app and works offline."],
     ],
   },
@@ -220,6 +263,25 @@ export const GUIDE = [
     ],
   },
   {
+    key: "food",
+    title: "Food",
+    icon: "food",
+    steps: [
+      ["A photo and a name is enough", "Tap +, photograph what you're eating, type where you are, save. That's a finished entry — nothing else is ever required, and nothing goes red for being empty."],
+      ["The rest can wait", "Open the place later and add the rating, the dishes, what you spent, whatever you want to say. On the sofa, next morning, or never."],
+      ["Dishes are the point", "Add what you ate, give it stars and a heart. They're listed best-first, so opening a place answers \"what do I order here again\" without scrolling."],
+      ["A dish belongs to the place", "Not to one evening. Rate the rendang once and it stays rated however many times you go back."],
+      ["Tags, not just writing", "Tap words like cheap, spicy or long queue. They're the only part you can filter the shelf by afterwards — a paragraph can't answer \"everything spicy I rated 4 or more\"."],
+      ["It gives you questions", "Writing a note offers things to answer — first impression, the pricing, the service, who you'd bring. Answer one, ignore the rest."],
+      ["Where tonight?", "Sort by Last visited, longest ago first: somewhere you liked and haven't been to lately. Your own history, not a review site's."],
+      ["Want to try", "The second tab. Add a place you haven't been to yet, and tap I've been now once you go — it moves across and records the visit."],
+      ["Put it on the map", "Use your location while you're standing there, or drag the pin to where the place actually is — handy for the stall you're remembering from this morning. Nothing about where you are is sent anywhere, and you get an Open in Maps link on the place."],
+      ["No signal, no problem", "The map pictures need a connection, but the pin doesn't. You can still place somewhere with no bars; you just won't see the streets."],
+      ["Your money stays separate", "What a meal cost is recorded on the visit and kept away from the Wishlist budget. That pot is for things you're saving up for, and dinner coming out of it would make the plan meaningless."],
+      ["Photos are shrunk", "Every picture is re-encoded smaller on the way in, the same as covers, and goes with your backup. Settings shows how much room they're taking."],
+    ],
+  },
+  {
     key: "wishlist",
     title: "Wishlist",
     icon: "wishlist",
@@ -228,6 +290,10 @@ export const GUIDE = [
       ["It saves up", "Unspent budget carries over, so something costing more than a month's budget still arrives; it just takes a few months."],
       ["And it keeps count", "What you buy through the app comes off the balance. Spend more than you have and it shows as overdrawn, and everything on the plan slides later until you've caught up."],
       ["Tap any row", "Opening an item from the wishlist is how you mark it as bought, say what you paid, fix a wrong price, pin it as next, or drop it. You never have to go and find it in Books or Records to do that."],
+      ["Price hunt", "Been round four shops? Add each one — who, where, how much, when you saw it. They're listed cheapest first with the best marked, and each row shows what it would cost you over that best price."],
+      ["It picks the price for you", "The cheapest quote becomes the price the plan runs on. Correct one and the order re-sorts; delete the winner and the next takes over. You never keep two numbers in step by hand."],
+      ["Cheaper than what?", "The saving is against the second cheapest, not the dearest. Comparing to the dearest would flatter you with a price you were never going to pay."],
+      ["Pin the shop", "A shop can go on the map, because \"the one in Mid Valley\" stops meaning anything three months later."],
       ["Fixing a price", "Tap the price on any copy to correct what you paid — or the price you'd noted, if that was the wrong one."],
       ["Note the price first", "Add something to your wishlist with the price you found online. That number is the point: it's what you're trying to beat."],
       ["Then go hunting", "Find it cheaper — a secondhand copy, a good preloved pressing — and the difference is counted when you add it to your shelf."],

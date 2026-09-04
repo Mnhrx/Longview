@@ -14,7 +14,7 @@ const TILES = [
   { key: "books", label: "Books", bg: "var(--pink)", tone: "dark" },
   { key: "lps", label: "LPs", bg: "var(--purple)", tone: "dark" },
   { key: "words", label: "Words", bg: "var(--yellow)", tone: "light" },
-  { key: "photos", label: "Photos", bg: "var(--blue)", tone: "dark" },
+  { key: "food", label: "Food", bg: "var(--food)", tone: "dark" },
   { key: "wishlist", label: "Wishlist", bg: "var(--mint)", tone: "light" },
 ];
 
@@ -22,10 +22,20 @@ function render(container, store, opts = {}) {
   const wrap = document.createElement("div");
   wrap.className = "home-screen";
 
+  // "Your Library" was right for three shelves of things you own. Food is
+  // neither owned nor a shelf, and calling a plate of nasi lemak part of
+  // your library would be the app lying about what it is. What actually
+  // connects all four is that you were there and want to remember it — so the
+  // heading names the app and the line underneath says the rest.
   const title = document.createElement("p");
   title.className = "view-title";
-  title.textContent = "Your Library";
+  title.textContent = "Your Stackt";
   wrap.appendChild(title);
+
+  const sub = document.createElement("p");
+  sub.className = "home-sub";
+  sub.textContent = "Read, heard, learned, eaten.";
+  wrap.appendChild(sub);
 
   const grid = document.createElement("div");
   grid.className = "home-grid";
@@ -134,6 +144,18 @@ function subtitleFor(key, store) {
     const faves = words.filter((w) => w.favourite).length;
     const main = `${words.length} word${words.length === 1 ? "" : "s"}`;
     return faves ? `${main} <span class="sub-accent">· ${faves} loved</span>` : main;
+  }
+  if (key === "food") {
+    const places = store.itemsByType("place");
+    const been = places.filter((p) => !p.wantToTry);
+    const toTry = places.length - been.length;
+    if (!places.length) return "Tap to start";
+    // Places you've been is the headline; the to-try list is the nudge, so it
+    // reads the same way "borrowed" does on Books.
+    const main = `${been.length} place${been.length === 1 ? "" : "s"}`;
+    return toTry
+      ? `${main} <span class="sub-accent">· ${toTry} to try</span>`
+      : main;
   }
   return "Coming soon";
 }

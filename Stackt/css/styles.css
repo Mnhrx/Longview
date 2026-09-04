@@ -10,6 +10,9 @@
   --yellow: #FFC738;
   --mint: #00D9A3;
   --purple: #8B5CF6;
+  /* The Food module's colour. Named for the role, not the hue, so changing
+     it is this one line — it started orange and moved on. */
+  --food: #D6249F;
   --red-accent: #E8102D; /* the Stackt logo dot */
 
   --card-radius: 22px;
@@ -1400,7 +1403,7 @@ html, body {
 #app { --accent: var(--pink); }
 #app[data-module="books"]   { --accent: var(--pink); }
 #app[data-module="lps"]     { --accent: var(--purple); }
-#app[data-module="photos"]  { --accent: var(--blue); }
+#app[data-module="food"]    { --accent: var(--food); }
 #app[data-module="finance"] { --accent: var(--mint); }
 
 /* The section heading picks up the accent rather than being flat grey. */
@@ -1412,7 +1415,7 @@ html, body {
 #app[data-module] .mode-btn.active { background: var(--accent); }
 #app[data-module="books"] .mode-btn.active,
 #app[data-module="lps"] .mode-btn.active,
-#app[data-module="photos"] .mode-btn.active { color: #fff; }
+#app[data-module="food"] .mode-btn.active { color: #fff; }
 #app[data-module] .filter-chip.active { background: var(--ink); color: #fff; }
 
 /* ---------- home: static pattern + tile entrance ---------- */
@@ -3570,3 +3573,413 @@ html, body {
 /* An overdrawn pot is the one thing on this screen that should look wrong. */
 .budget-card.over { background: var(--pink); }
 .bc-note { font-size: 11.5px; font-weight: 700; opacity: 0.65; margin-top: 2px; }
+
+/* ============================================
+   FOOD — places, dishes, visits
+   Deliberately built from the shapes already in this file: .item-card,
+   .filter-chip, .track-head and .review-block all come across from Records,
+   because a place IS a record with visits instead of copies. What's new below
+   is only what genuinely has no equivalent — a dish row, a tag chip, and the
+   photo field's filled state.
+   ============================================ */
+
+/* A picked photo takes over its own button, so you can see what you chose
+   before you commit to it. The label text sits on a scrim rather than on the
+   photo itself — a pale dish would otherwise swallow it. */
+.cover-upload.has-photo {
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  min-height: 96px;
+  align-items: flex-end;
+}
+.cover-upload.has-photo .cover-upload-icon { display: none; }
+.cover-upload.has-photo strong,
+.cover-upload.has-photo small {
+  background: rgba(26, 26, 46, 0.62);
+  border-radius: 8px;
+  padding: 2px 8px;
+  opacity: 1;
+}
+
+.add-hint {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.62;
+  line-height: 1.5;
+  margin: -6px 0 18px;
+}
+
+/* Tapping the row is a toggle, so the whole row is the target rather than the
+   14px checkbox iOS draws. */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  margin-bottom: 18px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.switch-row input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--food); }
+
+/* ---------- tags ---------- */
+
+/* A fixed vocabulary rather than free text: "crispy" and "Crispy" typed on
+   different nights would split one idea in two and make the filter useless. */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+.tag-chip {
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .12s var(--spring), background .12s ease;
+}
+.tag-chip.on { background: var(--food); color: #fff; }
+/* Collapsed shows only what you've picked — see the note in food.js. The
+   whole vocabulary is a screenful, and on the place sheet it buried the
+   dishes. */
+.tag-row.collapsed .tag-chip:not(.on):not(.tag-more) { display: none; }
+.tag-more { border-style: dashed; opacity: 0.75; }
+.tag-chip:active { transform: scale(0.92); }
+
+.heart-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 9px 15px;
+}
+.heart-chip-icon { width: 15px; height: 15px; display: block; }
+.heart-chip-icon svg { width: 100%; height: 100%; display: block; }
+.heart-chip.on { background: var(--pink); color: #fff; }
+
+/* ---------- dishes ---------- */
+
+.dish-block, .visit-block {
+  border-top: 2px solid rgba(26, 26, 46, 0.12);
+  margin-top: 22px;
+  padding-top: 16px;
+}
+.dish-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+
+.dish-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--ink);
+  cursor: pointer;
+}
+.dish-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+
+.dish-thumb {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.dish-thumb-icon { width: 30px; height: 30px; display: block; opacity: 0.55; }
+.dish-thumb-icon svg { width: 100%; height: 100%; display: block; }
+.dish-thumb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+.dish-thumb-img.loaded { opacity: 1; }
+
+.dish-main { flex: 1 1 auto; min-width: 0; }
+.dish-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px;
+  font-weight: 800;
+  margin: 0 0 3px;
+}
+.dish-heart { width: 14px; height: 14px; flex: 0 0 auto; }
+.dish-heart svg { width: 100%; height: 100%; display: block; }
+/* The icon is drawn as an outline; a hearted dish needs it filled, the same
+   way .card-fave fills it on a card. Colour alone left it looking un-hearted. */
+.dish-heart svg path { fill: var(--pink); stroke: var(--ink); stroke-width: 4; }
+
+.dish-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0 0; }
+.dish-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: lowercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1.5px solid rgba(26, 26, 46, 0.3);
+}
+.dish-note {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.65;
+  margin: 5px 0 0;
+  line-height: 1.45;
+}
+
+/* ---------- visits ---------- */
+
+.visit-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.visit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.visit-row:active { transform: scale(0.985); }
+.visit-date { font-size: 13px; font-weight: 800; flex: 0 0 auto; }
+.visit-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.visit-spent { flex: 0 0 auto; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.visit-ago { font-size: 11.5px; font-weight: 700; opacity: 0.55; }
+
+/* The food shelf's own accent, so a place card reads as food rather than as
+   an unusually square record sleeve. */
+#app[data-module="food"] .item-swatch { border-radius: 14px; }
+#app[data-module="food"] .empty-state-icon { opacity: 0.75; }
+
+/* The home screen's one-line statement of what the app is now. Sits tight
+   under the title rather than floating, so the two read as one heading. */
+.home-sub {
+  font-size: 13.5px;
+  font-weight: 700;
+  opacity: 0.55;
+  margin: -14px 0 20px;
+}
+
+/* The no-photo invitation on a place. Same shape as the upload field in the
+   forms, so tapping it leading to the same picker is unsurprising. */
+.photo-invite {
+  width: 100%;
+  text-align: left;
+  background: var(--food);
+  color: #fff;
+  font-family: inherit;
+  margin-top: 4px;
+}
+
+/* ============================================
+   MAP PICKER
+   Leaflet's own stylesheet does the mechanics; this makes it look like the
+   rest of the app — thick borders, hard shadow, our pin.
+   ============================================ */
+
+.map-canvas {
+  position: relative;
+  height: 320px;
+  margin: 0 0 12px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--ink);
+  overflow: hidden;
+  background: var(--bg);
+  /* Leaflet sets this itself on the drag surface, but the container needs it
+     too or iOS hands the gesture to the sheet behind. */
+  touch-action: none;
+}
+.map-loading,
+.map-canvas.tiles-out::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.55;
+  z-index: 380;
+  pointer-events: none;
+}
+.map-loading { z-index: 401; }
+
+/* With no tiles the box would be blank white; the app's own dotted ground at
+   least says "this is a map that has no picture" rather than "this is broken". */
+.map-canvas.tiles-out::after {
+  content: "No map images";
+  background:
+    radial-gradient(circle at center, rgba(26,26,46,0.16) 1.4px, transparent 1.5px) 0 0 / 18px 18px,
+    var(--bg);
+}
+
+.map-pin { background: none; border: none; }
+.map-pin-inner {
+  display: block;
+  width: 40px;
+  height: 40px;
+  filter: drop-shadow(0 3px 3px rgba(26, 26, 46, 0.4));
+  cursor: grab;
+}
+.map-pin-inner svg { width: 100%; height: 100%; display: block; }
+.leaflet-marker-draggable:active .map-pin-inner { cursor: grabbing; }
+
+.map-coords {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  opacity: 0.6;
+  margin: 0 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Leaflet's own chrome, brought into the app's language. */
+.map-picker .leaflet-control-zoom a {
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-weight: 900;
+  background: #fff;
+}
+.map-picker .leaflet-control-attribution {
+  background: rgba(255, 248, 240, 0.88);
+  font-size: 10px;
+  font-weight: 600;
+}
+.map-picker .leaflet-control-attribution a { color: var(--ink); }
+
+/* A save button with nowhere to save to reads as broken; disabled says why. */
+.btn.is-disabled { opacity: 0.45; }
+
+/* ============================================
+   PRICE HUNT — the same want, priced at several shops
+   ============================================ */
+
+.hunt-block {
+  border-top: 2px solid rgba(26, 26, 46, 0.12);
+  margin-top: 20px;
+  padding-top: 14px;
+  margin-bottom: 18px;
+}
+.hunt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.hunt-title { font-size: 14px; font-weight: 900; }
+.hunt-count { font-size: 11.5px; font-weight: 700; opacity: 0.55; }
+.hunt-empty {
+  font-size: 12.5px;
+  font-weight: 600;
+  opacity: 0.62;
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+/* The answer, before the working. You came here for one number and this is it. */
+.hunt-verdict {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  align-items: baseline;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: var(--border-w) solid var(--ink);
+  border-radius: 16px;
+  background: var(--mint);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.hv-shop { font-size: 15px; font-weight: 900; min-width: 0; overflow-wrap: anywhere; }
+.hv-price { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.hv-note {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  font-weight: 700;
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+.hunt-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+
+.hunt-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.hunt-row:active { transform: scale(0.985); }
+.hunt-row.best { border-width: var(--border-w); box-shadow: 3px 3px 0 var(--ink); }
+
+.hunt-rank {
+  flex: 0 0 auto;
+  min-width: 38px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.45;
+}
+.hunt-row.best .hunt-rank { opacity: 1; color: var(--ink); }
+
+.hunt-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hunt-shop {
+  font-size: 13.5px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hunt-meta { font-size: 11px; font-weight: 600; opacity: 0.55; }
+.hunt-note { font-size: 11px; font-weight: 600; opacity: 0.7; margin-top: 2px; }
+
+.hunt-price {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.hunt-amount { font-size: 14.5px; font-weight: 900; font-variant-numeric: tabular-nums; }
+/* The gap to the best price, not the raw number — that's the decision. */
+.hunt-gap {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--pink);
+  font-variant-numeric: tabular-nums;
+}

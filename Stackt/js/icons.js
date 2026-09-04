@@ -13,6 +13,16 @@ export const ICONS = {
 
   music: `<svg viewBox="0 0 48 48"><rect x="7" y="21" width="7" height="19" rx="3" ${S}/><rect x="20" y="9" width="7" height="31" rx="3" ${S}/><rect x="33" y="16" width="7" height="24" rx="3" ${S}/></svg>`,
 
+  // Food — a bowl with two chopsticks across it. A plate-and-cutlery mark
+  // reads as a restaurant listing; a bowl reads as a meal, which is what this
+  // module is actually about.
+  food: `<svg viewBox="0 0 48 48"><path d="M6 22h36a18 18 0 0 1-18 18A18 18 0 0 1 6 22z" ${S}/><path d="M14 18 32 6" fill="none" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/><path d="M19 18 37 6" fill="none" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round"/></svg>`,
+
+  // A single dish within a place — one bowl, no sticks, so it reads as
+  // subordinate to the module mark above.
+  dish: `<svg viewBox="0 0 48 48"><path d="M7 24h34a17 17 0 0 1-17 16A17 17 0 0 1 7 24z" ${S}/><path d="M12 18c0-4 4-6 4-9M24 17c0-4 4-6 4-9M36 18c0-4 4-6 4-9" fill="none" stroke="#1A1A2E" stroke-width="2.6" stroke-linecap="round" opacity="0.5"/></svg>`,
+
+  // Kept for backups and old links that still name the retired Photos tile.
   photos: `<svg viewBox="0 0 48 48"><rect x="9" y="12" width="26" height="22" rx="3" ${S} transform="rotate(-7 22 23)"/><rect x="13" y="14" width="26" height="22" rx="3" ${S} transform="rotate(6 26 25)"/><circle cx="26" cy="25" r="5" fill="none" stroke="#1A1A2E" stroke-width="2.5"/></svg>`,
 
   // Wishlist — a tag with its hole, the thing that hangs off a price.
@@ -46,6 +56,10 @@ export const ICONS = {
 
   // Lens — a bare aperture. Used where "photo" is meant rather than "scan".
   lens: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5"><circle cx="24" cy="24" r="15"/><circle cx="24" cy="24" r="6"/></svg>`,
+
+  // Pin — where a place is. Drawn as a teardrop rather than a map marker with
+  // a shadow, so it sits in the same flat, thick-stroke family as the rest.
+  pin: `<svg viewBox="0 0 48 48"><path d="M24 5c8 0 14 6 14 14 0 10-14 24-14 24S10 29 10 19c0-8 6-14 14-14z" ${S}/><circle cx="24" cy="19" r="5" fill="#1A1A2E"/></svg>`,
 
   // Settings — sliders rather than a cog; simpler at small sizes.
   settings: `<svg viewBox="0 0 48 48" fill="none" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round"><line x1="8" y1="15" x2="40" y2="15"/><line x1="8" y1="33" x2="40" y2="33"/><circle cx="19" cy="15" r="5" fill="#fff"/><circle cx="31" cy="33" r="5" fill="#fff"/></svg>`,
