@@ -14,6 +14,21 @@
 // its asset list, which means that first injection is a cache hit rather than
 // a download, and it works with no signal.
 //
+// WHY THE MAP USED TO GO BLANK WHEN YOU DRAGGED IT. Two things, both of which
+// only showed on a real phone:
+//
+//   1. Leaflet's `updateWhenIdle` defaults to TRUE on mobile, which means tiles
+//      are fetched only once a pan STOPS. Drag on a real network and you watch
+//      empty space until you let go. It never reproduced in testing because a
+//      stubbed tile server answers instantly.
+//   2. The sheet flies up under a 300ms spring, and the map was being built
+//      while its container was mid-transform — so Leaflet measured the wrong
+//      box and loaded tiles for a viewport that wasn't there.
+//
+// Hence: tiles load during the drag with a deeper buffer, the map is not
+// created until the sheet has settled, and a ResizeObserver re-measures rather
+// than trusting a timeout to have been long enough.
+//
 // WHAT DOESN'T WORK OFFLINE: the tiles. They come from OpenStreetMap's servers
 // and there's no honest way to bundle them — bulk-downloading tiles is exactly
 // what their usage policy forbids. With no signal you get the app's own grid
@@ -178,8 +193,19 @@ export function openMapPicker({ lat = null, lon = null, title = "Where is it?", 
       onPick(null);
     });
 
-    loadLeaflet()
-      .then((lib) => {
+    /** Resolves once the sheet's entry animation has finished, so the map is
+     *  never measured against a container that is still moving. */
+    const settled = () => new Promise((resolve) => {
+      const sheet = overlay.querySelector(".map-picker");
+      if (!sheet) return resolve();
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      sheet.addEventListener("animationend", finish, { once: true });
+      setTimeout(finish, 420); // belt and braces if the animation never fires
+    });
+
+    Promise.all([loadLeaflet(), settled()])
+      .then(([lib]) => {
         L = lib;
         const loadingNote = overlay.querySelector("#mpLoading");
         if (loadingNote) loadingNote.remove();
@@ -197,6 +223,12 @@ export function openMapPicker({ lat = null, lon = null, title = "Where is it?", 
 
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 19,
+          // THE fix for "it goes blank when I drag": Leaflet defaults this to
+          // true on mobile, which holds every tile request until the pan ends.
+          updateWhenIdle: false,
+          // And keep more of them around the edge, so a fast drag runs into
+          // loaded tiles rather than into nothing.
+          keepBuffer: 4,
           // Required by the tile usage policy, and fair regardless — this map
           // is other people's survey work.
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
@@ -205,11 +237,18 @@ export function openMapPicker({ lat = null, lon = null, title = "Where is it?", 
         if (chosen) place(chosen);
         map.on("click", (e) => place(e.latlng));
 
-        // Leaflet measures its container on creation, and the sheet is still
-        // animating in at that point — without this the map paints into a box
-        // of the wrong size and the tiles land crooked.
-        setTimeout(() => map.invalidateSize(), 60);
-        setTimeout(() => map.invalidateSize(), 400);
+        // Re-measure whenever the box actually changes, rather than guessing
+        // at a delay that's long enough. The keyboard opening, the sheet
+        // settling and a rotation all land here.
+        if (window.ResizeObserver) {
+          const ro = new ResizeObserver(() => map.invalidateSize());
+          ro.observe(canvas);
+          map.on("unload", () => ro.disconnect());
+        } else {
+          setTimeout(() => map.invalidateSize(), 60);
+          setTimeout(() => map.invalidateSize(), 400);
+        }
+        map.whenReady(() => map.invalidateSize());
 
         let missed = 0;
         map.on("tileerror", () => {

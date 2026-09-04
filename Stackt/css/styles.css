@@ -3407,12 +3407,32 @@ html, body {
 .pb-stale { flex: 0 0 100%; font-size: 11px; font-weight: 700; opacity: 0.55; }
 .paid-none { font-size: 12.5px; line-height: 1.5; opacity: 0.7; margin: 0 0 12px; }
 
-.paid-input-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.paid-currency { font-size: 26px; font-weight: 900; opacity: 0.45; }
+/* The currency sits INSIDE the box.
+   It used to be a flex sibling, which pushed the input's left edge ~24px in —
+   so on any sheet with a price and a text field, the price box started
+   somewhere the other boxes didn't and the whole form looked crooked. Now the
+   row IS the box and the glyph is layered on top of a padded input, so every
+   field on every sheet shares one left edge and one width. */
+.paid-input-row {
+  position: relative;
+  display: block;
+  margin-bottom: 12px;
+}
+.paid-currency {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+  font-weight: 900;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 1;
+}
 .paid-input-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 12px 14px;
+  display: block;
+  width: 100%;
+  padding: 12px 14px 12px 40px;   /* room for the glyph */
   font-size: 26px;      /* well over the 16px iOS focus-zoom threshold */
   font-weight: 900;
   font-family: inherit;
@@ -3465,7 +3485,10 @@ html, body {
 .bc-value { font-size: 26px; font-weight: 900; letter-spacing: -0.01em; }
 .bc-per { font-size: 12px; font-weight: 700; opacity: 0.6; margin-left: 6px; }
 .bc-side { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; opacity: 0.6; }
-.paid-input-row.small input { font-size: 20px; padding: 9px 12px; }
+/* The compact variant keeps the same outer box — only the type shrinks, so it
+   still lines up with the plain text fields beside it. */
+.paid-input-row.small input { font-size: 19px; padding: 12px 14px 12px 36px; }
+.paid-input-row.small .paid-currency { font-size: 18px; left: 15px; }
 
 /* ---------- the plan ---------- */
 
@@ -3817,8 +3840,17 @@ html, body {
   box-shadow: 4px 4px 0 var(--ink);
   overflow: hidden;
   background: var(--bg);
-  /* Leaflet sets this itself on the drag surface, but the container needs it
-     too or iOS hands the gesture to the sheet behind. */
+}
+
+/* The map lives inside a sheet that scrolls. Leaflet's own stylesheet sets
+   touch-action: pan-x pan-y on a touch-drag container, which on iOS lets the
+   sheet scroll underneath the pan — you drag the map and the sheet moves.
+   Pinned to none here, after leaflet.css in the cascade, so the gesture
+   belongs to the map for as long as your finger is on it. */
+.map-canvas,
+.map-canvas.leaflet-container,
+.map-canvas.leaflet-touch-drag,
+.map-canvas.leaflet-touch-drag.leaflet-touch-zoom {
   touch-action: none;
 }
 .map-loading,
@@ -3908,74 +3940,66 @@ html, body {
   margin: 0 0 10px;
 }
 
-/* The answer, before the working. You came here for one number and this is it. */
-.hunt-verdict {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 12px;
-  align-items: baseline;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  border: var(--border-w) solid var(--ink);
-  border-radius: 16px;
-  background: var(--mint);
-  box-shadow: 4px 4px 0 var(--ink);
-}
-.hv-shop { font-size: 15px; font-weight: 900; min-width: 0; overflow-wrap: anywhere; }
-.hv-price { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.hv-note {
-  grid-column: 1 / -1;
-  font-size: 11.5px;
-  font-weight: 700;
-  opacity: 0.7;
-  line-height: 1.4;
-}
-
+/* One box per shop, cheapest first. The winner is the row with the heavier
+   border and the mint ground — no separate summary card, because that repeated
+   the same shop and price directly above the row it described. */
 .hunt-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 
 .hunt-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 10px 13px;
+  padding: 11px 14px;
   border: 2px solid var(--ink);
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fff;
   cursor: pointer;
 }
 .hunt-row:active { transform: scale(0.985); }
-.hunt-row.best { border-width: var(--border-w); box-shadow: 3px 3px 0 var(--ink); }
-
-.hunt-rank {
-  flex: 0 0 auto;
-  min-width: 38px;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  opacity: 0.45;
+.hunt-row.best {
+  border-width: var(--border-w);
+  background: var(--mint);
+  box-shadow: 4px 4px 0 var(--ink);
 }
-.hunt-row.best .hunt-rank { opacity: 1; color: var(--ink); }
 
-.hunt-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hunt-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+/* Name left, price right, on one baseline — the two things you compare. */
+.hunt-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
 .hunt-shop {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 800;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hunt-meta { font-size: 11px; font-weight: 600; opacity: 0.55; }
-.hunt-note { font-size: 11px; font-weight: 600; opacity: 0.7; margin-top: 2px; }
-
-.hunt-price {
+.hunt-amount {
   flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
-.hunt-amount { font-size: 14.5px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.hunt-row.best .hunt-amount { font-size: 19px; }
+
+.hunt-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hunt-meta { font-size: 11px; font-weight: 600; opacity: 0.6; min-width: 0; }
+.hunt-note { font-size: 11.5px; font-weight: 600; opacity: 0.75; }
+
+/* What the best price actually buys you, said once, in the row it belongs to. */
+.hunt-win {
+  font-size: 11.5px;
+  font-weight: 800;
+  margin-top: 3px;
+}
+
 /* The gap to the best price, not the raw number — that's the decision. */
 .hunt-gap {
   font-size: 10.5px;
@@ -3983,3 +4007,50 @@ html, body {
   color: var(--pink);
   font-variant-numeric: tabular-nums;
 }
+
+/* ============================================
+   SHEET RHYTHM — one left edge, one width, one set of gaps
+   Every control on a sheet is a full-width block with the same corner radius
+   and the same 3px border. What differed before was the spacing AROUND them:
+   a button carries a 6px hard offset shadow and the note underneath started
+   immediately, so the shadow ran into the text and read as clipping.
+   ============================================ */
+
+/* Clearance for the shadow. --off is 6px, so 6px is the minimum that stops a
+   following line touching it; 14 gives it room to breathe. */
+.cover-picker .block-btn,
+.modal-sheet .block-btn {
+  margin-bottom: 14px;
+}
+/* A note that FOLLOWS a shadowed button needs the gap on its own top margin
+   too — margins between a button and a <p> don't collapse reliably once the
+   button is display:block with a shadow. */
+.cover-picker .block-btn + .settings-note,
+.modal-sheet .block-btn + .settings-note,
+.cover-picker .block-btn + .cover-picker-note,
+.cover-picker .block-btn + p {
+  margin-top: 4px;
+}
+/* Two stacked buttons should sit as a pair, not drift apart. */
+.cover-picker .block-btn + .block-btn,
+.modal-sheet .block-btn + .block-btn {
+  margin-top: -4px;
+}
+
+/* Chips that wrap instead of scrolling.
+   A horizontal scroller slices the fifth chip in half at the sheet edge, which
+   reads as broken rather than as "there's more this way" — and seven short
+   chips fit on two lines anyway. Kept scrolling on the shelf, where the row can
+   be long and the page is wide. */
+.cover-picker .filter-row,
+.modal-sheet .filter-row {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  row-gap: 8px;
+  margin-bottom: 18px;
+}
+
+/* Consistent vertical rhythm for labelled fields inside a sheet. */
+.cover-picker .field,
+.modal-sheet .field { margin-bottom: 16px; }
+.cover-picker .cover-picker-label { margin-top: 2px; }

@@ -16,7 +16,7 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { ICONS } from "./icons.js";
 
-export const APP_VERSION = "4.1.0";
+export const APP_VERSION = "4.1.1";
 
 /** Where the last-seen version is remembered, so the popup shows once. */
 const SEEN_KEY = "stackt-seen-version";
@@ -27,6 +27,26 @@ const SEEN_KEY = "stackt-seen-version";
  * who wants to know what's different, not a commit log.
  */
 export const RELEASES = [
+  {
+    version: "4.1.1",
+    date: "September 2026",
+    title: "Straightened out",
+    highlights: [
+      "The map no longer goes blank when you drag it.",
+      "Every box on every sheet now lines up — same left edge, same width, same gaps.",
+      "The examples are Singapore, which is what they should have been.",
+    ],
+    notes: [
+      "The map was only asking for tiles once you STOPPED dragging, which is a mobile default in the map library. It now loads them while you move, and keeps more of them around the edges, so panning fills in instead of emptying out.",
+      "It also waits for the sheet to finish sliding up before measuring itself, and re-measures whenever the box changes — it used to size itself mid-animation and load tiles for a window that wasn't there.",
+      "Dragging the map can't scroll the sheet behind it any more.",
+      "The dollar sign now sits inside the price box. It used to sit outside, which pushed the price field about 20 points right of every other field and made whole sheets look crooked. That fixes the budget and what-you-paid sheets as well.",
+      "Notes that follow a button had no clearance, so the button's shadow ran into the text — worst on \"Use your location…\" under Put it on the map.",
+      "The place-kind chips wrap onto two lines instead of scrolling sideways and being sliced in half at the edge.",
+      "The price hunt showed the winning shop twice — a summary card above the row saying the same thing. One box per shop now, with the comparison inside the winning row.",
+      "Placeholders and examples moved from Kuala Lumpur to Singapore.",
+    ],
+  },
   {
     version: "4.1.0",
     date: "September 2026",
@@ -42,7 +62,7 @@ export const RELEASES = [
       "The saving is measured against the SECOND cheapest, not the dearest — the dearest was never the choice you were going to make.",
       "The cheapest quote becomes the price the plan runs on, so the schedule and the noted-versus-paid comparison follow the hunt without you doing anything.",
       "Correct a price and the order re-sorts; remove the winner and the next one takes over. Buying it clears the hunt.",
-      "A shop can be pinned on the map too, because \"the one in Mid Valley\" stops meaning anything three months later.",
+      "A shop can be pinned on the map too, because \"the one at Bras Basah\" stops meaning anything three months later.",
       "The map is OpenStreetMap and it's drawn on your phone; nothing about where you are is sent anywhere. The map images need a connection, but the pin works without one.",
       "Food's colour is now magenta.",
     ],
@@ -293,7 +313,7 @@ export const GUIDE = [
       ["Price hunt", "Been round four shops? Add each one — who, where, how much, when you saw it. They're listed cheapest first with the best marked, and each row shows what it would cost you over that best price."],
       ["It picks the price for you", "The cheapest quote becomes the price the plan runs on. Correct one and the order re-sorts; delete the winner and the next takes over. You never keep two numbers in step by hand."],
       ["Cheaper than what?", "The saving is against the second cheapest, not the dearest. Comparing to the dearest would flatter you with a price you were never going to pay."],
-      ["Pin the shop", "A shop can go on the map, because \"the one in Mid Valley\" stops meaning anything three months later."],
+      ["Pin the shop", "A shop can go on the map, because \"the one at Bras Basah\" stops meaning anything three months later."],
       ["Fixing a price", "Tap the price on any copy to correct what you paid — or the price you'd noted, if that was the wrong one."],
       ["Note the price first", "Add something to your wishlist with the price you found online. That number is the point: it's what you're trying to beat."],
       ["Then go hunting", "Find it cheaper — a secondhand copy, a good preloved pressing — and the difference is counted when you add it to your shelf."],

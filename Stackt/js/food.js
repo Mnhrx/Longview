@@ -610,7 +610,7 @@ function openAddForm(store, container, prefill = {}) {
 
       <div class="field">
         <label for="fdName">Where were you?</label>
-        <input type="text" id="fdName" placeholder="Nasi Lemak Wanjo"
+        <input type="text" id="fdName" placeholder="Adam Road Nasi Lemak"
                value="${escapeHtml(prefill.title || "")}">
       </div>
 
@@ -623,7 +623,7 @@ function openAddForm(store, container, prefill = {}) {
 
       <div class="field">
         <label for="fdArea">Area <span class="field-hint">optional</span></label>
-        <input type="text" id="fdArea" placeholder="Kampung Baru" value="${escapeHtml(prefill.area || "")}">
+        <input type="text" id="fdArea" placeholder="Bukit Timah" value="${escapeHtml(prefill.area || "")}">
       </div>
 
       <button class="btn btn-secondary block-btn" id="fdWhere" type="button">

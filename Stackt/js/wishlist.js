@@ -466,6 +466,11 @@ function saveQuotes(store, item, quotes) {
  * gap to the best price rather than the raw number alone — "$12 more" is the
  * thing you're deciding on, and it saves the mental subtraction the Notes-app
  * version made you do.
+ *
+ * ONE box per shop. There used to be a summary card above the list repeating
+ * the winner's name and price, which meant the same fact twice in two
+ * differently-aligned boxes and a lot of height for it. The comparison now
+ * lives inside the row it's about.
  */
 function huntHtml(hunt) {
   if (!hunt) {
@@ -486,21 +491,26 @@ function huntHtml(hunt) {
   const rows = hunt.quotes
     .map((q, i) => {
       const gap = Number(q.price) - Number(hunt.best.price);
+      const best = i === 0;
       return `
-        <div class="hunt-row ${i === 0 ? "best" : ""}" data-quote="${escapeHtml(q.id)}">
-          <span class="hunt-rank">${i === 0 ? "Best" : `#${i + 1}`}</span>
+        <div class="hunt-row ${best ? "best" : ""}" data-quote="${escapeHtml(q.id)}">
           <span class="hunt-main">
-            <span class="hunt-shop">${escapeHtml(q.shop)}</span>
-            <span class="hunt-meta">${[
-              q.area,
-              q.date ? `noted ${fmtShort(q.date)}` : null,
-              q.lat != null ? "pinned" : null,
-            ].filter(Boolean).map(escapeHtml).join(" · ")}</span>
+            <span class="hunt-top">
+              <span class="hunt-shop">${escapeHtml(q.shop)}</span>
+              <span class="hunt-amount">${money(q.price)}</span>
+            </span>
+            <span class="hunt-bottom">
+              <span class="hunt-meta">${[
+                q.area,
+                q.date ? `noted ${fmtShort(q.date)}` : null,
+                q.lat != null ? "pinned" : null,
+              ].filter(Boolean).map(escapeHtml).join(" · ")}</span>
+              ${gap > 0 ? `<span class="hunt-gap">+${money(gap)}</span>` : ""}
+            </span>
             ${q.note ? `<span class="hunt-note">${escapeHtml(q.note)}</span>` : ""}
-          </span>
-          <span class="hunt-price">
-            <span class="hunt-amount">${money(q.price)}</span>
-            ${gap > 0 ? `<span class="hunt-gap">+${money(gap)}</span>` : ""}
+            ${best && hunt.runnerUp
+              ? `<span class="hunt-win">${money(hunt.saving)} cheaper than ${escapeHtml(hunt.runnerUp.shop)}</span>`
+              : ""}
           </span>
         </div>`;
     })
@@ -510,18 +520,8 @@ function huntHtml(hunt) {
     <div class="hunt-block">
       <div class="hunt-head">
         <span class="hunt-title">Price hunt</span>
-        <span class="hunt-count">${hunt.quotes.length} shop${hunt.quotes.length === 1 ? "" : "s"}</span>
-      </div>
-
-      <div class="hunt-verdict">
-        <span class="hv-shop">${escapeHtml(hunt.best.shop)}</span>
-        <span class="hv-price">${money(hunt.best.price)}</span>
-        <span class="hv-note">${
-          hunt.runnerUp
-            ? `${money(hunt.saving)} cheaper than ${escapeHtml(hunt.runnerUp.shop)}${
-                hunt.quotes.length > 2 ? ` · ${money(hunt.spread)} spread across ${hunt.quotes.length}` : ""
-              }`
-            : "The only price you've noted so far"
+        <span class="hunt-count">${hunt.quotes.length} shop${hunt.quotes.length === 1 ? "" : "s"}${
+          hunt.quotes.length > 2 ? ` · ${money(hunt.spread)} spread` : ""
         }</span>
       </div>
 
@@ -548,7 +548,7 @@ function fmtShort(iso) {
  *
  * Name and price are the only required parts — you're standing in a shop with
  * your phone out, and anything else can be filled in on the bus. The map pin
- * is offered because "the one in Mid Valley" stops meaning anything three
+ * is offered because "the one at Bras Basah" stops meaning anything three
  * months later.
  */
 function openShopSheet(item, store, existing, onDone, { prefillPrice = null } = {}) {
@@ -566,7 +566,7 @@ function openShopSheet(item, store, existing, onDone, { prefillPrice = null } = 
 
         <div class="field">
           <label for="shName">Shop</label>
-          <input type="text" id="shName" placeholder="Kinokuniya KLCC"
+          <input type="text" id="shName" placeholder="Bras Basah Complex"
                  value="${escapeHtml(existing ? existing.shop : "")}">
         </div>
 
@@ -584,7 +584,7 @@ function openShopSheet(item, store, existing, onDone, { prefillPrice = null } = 
 
         <div class="field">
           <label for="shArea">Area <span class="field-hint">optional</span></label>
-          <input type="text" id="shArea" placeholder="Mid Valley"
+          <input type="text" id="shArea" placeholder="Bugis"
                  value="${escapeHtml(existing && existing.area ? existing.area : "")}">
         </div>
 
