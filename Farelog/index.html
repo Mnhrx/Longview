@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Farelog</title>
+<meta name="theme-color" content="#1a1a19">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+    --surface-3:      #2c2c2a;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1: #3987e5; /* blue */
+    --series-2: #d95926; /* orange */
+    --series-3: #199e70; /* aqua */
+    --good: #0ca30c;
+    --critical: #e66767;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--page-plane); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { padding-bottom: 84px; }
+  h1, h2, h3 { font-weight: 700; margin: 0 0 4px; }
+  p { margin: 0; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select { font-family: inherit; }
+
+  header.app-header {
+    padding: 20px 16px 12px;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 20;
+  }
+  header.app-header .title-row { display: flex; align-items: center; gap: 10px; }
+  header.app-header .logo { width: 30px; height: 30px; flex: none; }
+  header.app-header h1 { font-size: 19px; }
+  header.app-header .subtitle { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+
+  nav.tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+    display: flex; background: var(--surface-1); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  nav.tabbar button {
+    flex: 1; background: none; border: none; color: var(--text-muted);
+    padding: 10px 4px 8px; font-size: 11.5px; display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
+  }
+  nav.tabbar button .ico { font-size: 19px; }
+  nav.tabbar button.active { color: var(--text-primary); }
+  nav.tabbar button .badge {
+    background: var(--series-2); color: #fff; border-radius: 999px; font-size: 10px;
+    padding: 0 5px; min-width: 15px; line-height: 15px; position: absolute;
+    margin-left: 14px; margin-top: -4px;
+  }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; }
+  .card .hint { color: var(--text-muted); font-size: 12.5px; line-height: 1.5; margin-top: 6px; }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border); border-radius: 14px; padding: 30px 16px;
+    text-align: center; color: var(--text-secondary); margin-bottom: 14px;
+  }
+  .drop-zone .big-ico { font-size: 34px; margin-bottom: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--series-1); color: #fff; border: none; border-radius: 10px;
+    padding: 11px 18px; font-size: 14.5px; font-weight: 600;
+  }
+  .btn.secondary { background: var(--surface-3); color: var(--text-primary); }
+  .btn.ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn.danger { background: transparent; color: var(--critical); border: 1px solid var(--critical); }
+  .btn:disabled { opacity: .45; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=file] { display: none; }
+
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-primary); padding: 9px 10px; font-size: 14px;
+  }
+  .field-row { display: flex; gap: 8px; }
+  .field-row .field { flex: 1; min-width: 0; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+  .checkbox-row input { width: 17px; height: 17px; }
+
+  .review-card { display: flex; gap: 12px; }
+  .review-card .thumb { width: 76px; height: 168px; border-radius: 8px; object-fit: cover;
+    flex: none; background: var(--surface-2); border: 1px solid var(--border); }
+  .review-card .fields { flex: 1; min-width: 0; }
+  .review-meta { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .stat-tile .label { font-size: 11.5px; color: var(--text-muted); }
+  .stat-tile .value { font-size: 21px; font-weight: 700; margin-top: 2px; }
+  .stat-tile .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .chart-wrap { position: relative; height: 220px; margin-top: 8px; }
+  .chart-note { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+  .empty-note { color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px 8px; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data-table th, table.data-table td {
+    text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--gridline); white-space: nowrap;
+  }
+  table.data-table th { color: var(--text-muted); font-weight: 600; }
+  .table-scroll { overflow-x: auto; margin: 8px -16px 0; padding: 0 16px; }
+  .table-scroll::-webkit-scrollbar { height: 6px; }
+  .row-del { background: none; border: none; color: var(--critical); font-size: 15px; padding: 2px 6px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+    background: var(--surface-3); color: var(--text-primary); padding: 10px 16px; border-radius: 10px;
+    font-size: 13px; border: 1px solid var(--border); z-index: 50; opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .toast.show { opacity: 1; }
+
+  .platform-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .platform-Grab { background: rgba(57,135,229,.18); color: #8ebcf2; }
+  .platform-TADA { background: rgba(217,89,38,.18); color: #f0a679; }
+  .platform-Other { background: rgba(25,158,112,.18); color: #7fd6b6; }
+
+  .progress-line { height: 4px; background: var(--surface-3); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+  .progress-line > div { height: 100%; background: var(--series-1); width: 0%; transition: width .2s ease; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="title-row">
+    <svg class="logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="48" height="48" rx="12" fill="#3987e5"/>
+      <path d="M12 30l3-9a3 3 0 0 1 2.8-2h12.4a3 3 0 0 1 2.8 2l3 9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="10" y="30" width="28" height="7" rx="2.5" stroke="#fff" stroke-width="2.4"/>
+      <circle cx="16" cy="37" r="2.2" fill="#fff"/>
+      <circle cx="32" cy="37" r="2.2" fill="#fff"/>
+    </svg>
+    <div>
+      <h1>Farelog</h1>
+      <div class="subtitle">Order pattern tracker</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="tab active" id="tab-upload">
+    <div class="card">
+      <h2>Add screenshots</h2>
+      <p class="hint">
+        Pick screenshots straight from the phone's own gallery / Screenshots folder — not ones
+        forwarded through WhatsApp or another app first. The date and time come from the file
+        itself, so a forwarded copy loses that.
+      </p>
+    </div>
+
+    <div class="drop-zone">
+      <div class="big-ico">📷</div>
+      <p style="margin-bottom:14px;">Select one or more order screenshots to queue for review</p>
+      <label class="btn" for="fileInput">Choose screenshots</label>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </div>
+
+    <div class="card" id="queuePreviewCard" style="display:none;">
+      <h2 id="queueCount">0 photos queued</h2>
+      <p class="hint">Each one gets read automatically, then you'll get a chance to check and fix the details before anything is saved.</p>
+      <div class="progress-line" id="progressLine" style="display:none;"><div id="progressFill"></div></div>
+      <p class="hint" id="progressLabel" style="display:none;"></p>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn" id="startExtractBtn">Read screenshots</button>
+        <button class="btn ghost" id="clearQueueBtn">Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Or load the starter dataset</h2>
+      <p class="hint">16 real order screenshots, already extracted and checked — good for trying out the dashboard right away, or as a reference for what "good" extracted data looks like.</p>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn secondary" id="loadSampleBtn">Load sample data</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-review">
+    <div id="reviewList"></div>
+    <div class="empty-note" id="reviewEmpty">Nothing waiting for review. Add screenshots from the Upload tab.</div>
+  </section>
+
+  <section class="tab" id="tab-dashboard">
+    <div id="dashboardEmpty" class="empty-note" style="display:none;">
+      No saved orders yet. Extract some screenshots (or load the starter dataset) to see patterns here.
+    </div>
+    <div id="dashboardContent">
+      <div class="stat-grid" id="statGrid"></div>
+
+      <div class="card">
+        <h2>Avg. earnings by hour of day</h2>
+        <div class="chart-wrap"><canvas id="chartHour"></canvas></div>
+        <p class="chart-note">Bar height = average of what he actually earned per trip started in that hour. Hover a bar for the trip count.</p>
+      </div>
+
+      <div class="card" id="dowCard">
+        <h2>Avg. earnings by day of week</h2>
+        <div class="chart-wrap"><canvas id="chartDow"></canvas></div>
+        <p class="chart-note" id="dowNote"></p>
+      </div>
+
+      <div class="card">
+        <h2>Best-paying pickup areas</h2>
+        <div class="chart-wrap" id="zoneChartWrap"><canvas id="chartZone"></canvas></div>
+        <p class="chart-note">Grouped by Singapore's published 28 postal districts (from the pickup postal code) — a rough area bucket, not precise geocoding. Areas with only 1–2 trips are noisy; check the count before trusting the ranking.</p>
+      </div>
+
+      <div class="card" id="platformCard">
+        <h2>By platform</h2>
+        <div class="chart-wrap"><canvas id="chartPlatform"></canvas></div>
+      </div>
+
+      <div class="card" id="surgeCard">
+        <h2>Boosted vs regular fares</h2>
+        <div class="stat-grid" id="surgeGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-data">
+    <div class="card">
+      <h2>All saved orders</h2>
+      <p class="hint" id="dataCountLabel"></p>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn secondary" id="exportCsvBtn">Export CSV</button>
+        <label class="btn secondary" for="importCsvInput">Import CSV</label>
+        <input type="file" id="importCsvInput" accept=".csv" style="display:none;">
+        <button class="btn danger" id="clearAllBtn">Clear all data</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table class="data-table" id="dataTable">
+          <thead>
+            <tr>
+              <th>Date/time</th><th>Platform</th><th>Earn</th><th>Paid</th><th>Boost</th>
+              <th>Pickup</th><th>Drop-off</th><th>Service</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="dataTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-tab="upload"><span class="ico">📷</span>Upload</button>
+  <button class="tab-btn" data-tab="review" style="position:relative;"><span class="ico">📝</span>Review<span class="badge" id="reviewBadge" style="display:none;">0</span></button>
+  <button class="tab-btn" data-tab="dashboard"><span class="ico">📊</span>Dashboard</button>
+  <button class="tab-btn" data-tab="data"><span class="ico">🗂️</span>Data</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------
+   Config / reference data
+--------------------------------------------------------------------- */
+
+const STORAGE_KEY = "farelog_records_v1";
+
+// Singapore's widely-published 28 postal-sector -> district grouping.
+// This is a rough public-reference bucket for spotting broad patterns,
+// not precise geocoding. Swap for a real geocoder (e.g. OneMap) later
+// if finer-grained zones are needed.
+const POSTAL_DISTRICTS = {
+  "01":"D01 Raffles Pl / Cecil / Marina","02":"D01 Raffles Pl / Cecil / Marina","03":"D01 Raffles Pl / Cecil / Marina",
+  "04":"D01 Raffles Pl / Cecil / Marina","05":"D01 Raffles Pl / Cecil / Marina","06":"D01 Raffles Pl / Cecil / Marina",
+  "07":"D02 Anson / Tanjong Pagar","08":"D02 Anson / Tanjong Pagar",
+  "09":"D04 Telok Blangah / HarbourFront","10":"D04 Telok Blangah / HarbourFront",
+  "11":"D05 Pasir Panjang / Clementi (W)","12":"D05 Pasir Panjang / Clementi (W)","13":"D05 Pasir Panjang / Clementi (W)",
+  "14":"D03 Queenstown / Tiong Bahru","15":"D03 Queenstown / Tiong Bahru","16":"D03 Queenstown / Tiong Bahru",
+  "17":"D06 City Hall / High St",
+  "18":"D07 Middle Rd / Bugis","19":"D07 Middle Rd / Bugis",
+  "20":"D08 Little India / Farrer Pk","21":"D08 Little India / Farrer Pk",
+  "22":"D09 Orchard / River Valley","23":"D09 Orchard / River Valley",
+  "24":"D10 Bukit Timah / Holland / Tanglin","25":"D10 Bukit Timah / Holland / Tanglin",
+  "26":"D10 Bukit Timah / Holland / Tanglin","27":"D10 Bukit Timah / Holland / Tanglin",
+  "28":"D11 Novena / Thomson","29":"D11 Novena / Thomson","30":"D11 Novena / Thomson",
+  "31":"D12 Toa Payoh / Balestier / Serangoon","32":"D12 Toa Payoh / Balestier / Serangoon","33":"D12 Toa Payoh / Balestier / Serangoon",
+  "34":"D13 Macpherson / Braddell","35":"D13 Macpherson / Braddell","36":"D13 Macpherson / Braddell","37":"D13 Macpherson / Braddell",
+  "38":"D14 Geylang / Eunos","39":"D14 Geylang / Eunos","40":"D14 Geylang / Eunos","41":"D14 Geylang / Eunos",
+  "42":"D15 Katong / Joo Chiat","43":"D15 Katong / Joo Chiat","44":"D15 Katong / Joo Chiat","45":"D15 Katong / Joo Chiat",
+  "46":"D16 Bedok / Upper East Coast","47":"D16 Bedok / Upper East Coast","48":"D16 Bedok / Upper East Coast",
+  "49":"D17 Loyang / Changi","50":"D17 Loyang / Changi","81":"D17 Loyang / Changi",
+  "51":"D18 Tampines / Pasir Ris","52":"D18 Tampines / Pasir Ris",
+  "53":"D19 Hougang / Punggol / Serangoon Gdn","54":"D19 Hougang / Punggol / Serangoon Gdn","55":"D19 Hougang / Punggol / Serangoon Gdn","82":"D19 Hougang / Punggol / Serangoon Gdn",
+  "56":"D20 Bishan / Ang Mo Kio","57":"D20 Bishan / Ang Mo Kio",
+  "58":"D21 Upper Bukit Timah / Clementi Pk","59":"D21 Upper Bukit Timah / Clementi Pk",
+  "60":"D22 Jurong","61":"D22 Jurong","62":"D22 Jurong","63":"D22 Jurong","64":"D22 Jurong",
+  "65":"D23 Hillview / Bukit Panjang / CCK","66":"D23 Hillview / Bukit Panjang / CCK","67":"D23 Hillview / Bukit Panjang / CCK","68":"D23 Hillview / Bukit Panjang / CCK",
+  "69":"D24 Lim Chu Kang / Tengah","70":"D24 Lim Chu Kang / Tengah","71":"D24 Lim Chu Kang / Tengah",
+  "72":"D25 Kranji / Woodlands","73":"D25 Kranji / Woodlands",
+  "75":"D27 Yishun / Sembawang","76":"D27 Yishun / Sembawang",
+  "77":"D26 Upper Thomson / Springleaf","78":"D26 Upper Thomson / Springleaf",
+  "79":"D28 Seletar / Yio Chu Kang","80":"D28 Seletar / Yio Chu Kang",
+};
+
+const DOW_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+const SAMPLE_RECORDS = [
+  {dateTime:"2026-09-01T09:43",platform:"Grab",earn:6.20,paid:8.10,pickupAddr:"634 Veerasamy Rd",pickupPostal:"200634",dropoffAddr:"Private Space Medical, Farrer Park Medical Centre",dropoffPostal:"217562",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:false},
+  {dateTime:"2026-09-01T09:00",platform:"Grab",earn:6.20,paid:9.50,pickupAddr:"Keppel Distripark Pickup/Dropoff",pickupPostal:"099447",dropoffAddr:"HarbourFront Tower Two",dropoffPostal:"099254",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-01T07:12",platform:"Grab",earn:16.70,paid:23.20,pickupAddr:"Back Entrance (Carpark), Woodlands Stadium",pickupPostal:"738597",dropoffAddr:"103C Edgefield Plns",dropoffPostal:"823103",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-01T09:22",platform:"Grab",earn:9.60,paid:13.50,pickupAddr:"103 Bukit Purmei Rd",pickupPostal:"090110",dropoffAddr:"Suntec City Tower 3 & 4",dropoffPostal:"038988",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-02T08:47",platform:"Grab",earn:8.30,paid:12.10,pickupAddr:"Blk 28, Twin Regency",pickupPostal:"169278",dropoffAddr:"Singapore National Eye Centre (SNEC)",dropoffPostal:"168751",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-02T08:14",platform:"Grab",earn:22.40,paid:30.40,pickupAddr:"458 Ang Mo Kio Ave 10",pickupPostal:"560458",dropoffAddr:"Central Plaza",dropoffPostal:"168730",serviceType:"Standard | 4 seater (Car)",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-02T07:52",platform:"Grab",earn:13.70,paid:18.00,pickupAddr:"Near 705 Bedok North Rd",pickupPostal:"470705",dropoffAddr:"ITE College Central & Headquarters",dropoffPostal:"567720",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-03T09:34",platform:"Grab",earn:17.80,paid:24.30,pickupAddr:"772 Bedok Reservoir View",pickupPostal:"470772",dropoffAddr:"Mustafa Centre Door 4",dropoffPostal:"207704",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-03T08:27",platform:"Grab",earn:26.00,paid:35.20,pickupAddr:"112 Bishan St 12",pickupPostal:"570112",dropoffAddr:"Main Entrance, One @ Changi City",dropoffPostal:"486036",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-03T08:27",platform:"Grab",earn:9.10,paid:18.20,pickupAddr:"112 Bishan St 12",pickupPostal:"570112",dropoffAddr:"Islamic Religious Council of Singapore (Muis)",dropoffPostal:"579702",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:false},
+  {dateTime:"2026-09-04T06:58",platform:"Grab",earn:14.60,paid:15.90,pickupAddr:"278 Tampines St 22",pickupPostal:"520278",dropoffAddr:"23 Lor 29 Geylang",dropoffPostal:"388072",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:false},
+  {dateTime:"2026-09-04T08:18",platform:"Grab",earn:24.80,paid:32.70,pickupAddr:"762 Bedok Reservoir Rd, Waterfront Waves",pickupPostal:"479246",dropoffAddr:"Lobby, Mandarin Gallery",dropoffPostal:"238897",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-04T07:37",platform:"Grab",earn:39.90,paid:55.21,pickupAddr:"814 Tampines St 81",pickupPostal:"520814",dropoffAddr:"One-Stop Centre, Republic Polytechnic",dropoffPostal:"738961",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-05T10:16",platform:"Grab",earn:31.00,paid:39.50,pickupAddr:"Main Entrance, Singapore Flyer",pickupPostal:"039803",dropoffAddr:"313A Sumang Link, Punggol Parcvista",dropoffPostal:"821313",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+  {dateTime:"2026-09-05T09:40",platform:"TADA",earn:23.10,paid:25.90,pickupAddr:"Main Entrance, White Sands",pickupPostal:"518457",dropoffAddr:"403 Tampines St 41",dropoffPostal:"520403",serviceType:"Standard | Car or taxi",stopsTotal:3,surge:false},
+  {dateTime:"2026-09-05T09:02",platform:"Grab",earn:34.90,paid:47.00,pickupAddr:"Lobby, Republic Plaza",pickupPostal:"048619",dropoffAddr:"588A Pasir Ris Drive 3, Costa Grove",dropoffPostal:"511588",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:true},
+];
+
+/* ---------------------------------------------------------------------
+   State
+--------------------------------------------------------------------- */
+
+let records = loadRecords();
+let reviewQueue = []; // {id, file, previewUrl, lastModified, status, parsed:{...}}
+let charts = {};
+
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveRecords() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
+  catch (e) { showToast("Couldn't save — storage might be full."); }
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+/* ---------------------------------------------------------------------
+   Tabs
+--------------------------------------------------------------------- */
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+function switchTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
+  if (name === "dashboard") renderDashboard();
+  if (name === "data") renderDataTable();
+  if (name === "review") renderReviewQueue();
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+/* ---------------------------------------------------------------------
+   Upload + OCR extraction
+--------------------------------------------------------------------- */
+
+const fileInput = document.getElementById("fileInput");
+const queuePreviewCard = document.getElementById("queuePreviewCard");
+const queueCount = document.getElementById("queueCount");
+let pendingFiles = [];
+
+fileInput.addEventListener("change", (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  pendingFiles = pendingFiles.concat(files);
+  queueCount.textContent = pendingFiles.length + " photo" + (pendingFiles.length === 1 ? "" : "s") + " queued";
+  queuePreviewCard.style.display = "block";
+  fileInput.value = "";
+});
+
+document.getElementById("clearQueueBtn").addEventListener("click", () => {
+  pendingFiles = [];
+  queuePreviewCard.style.display = "none";
+});
+
+document.getElementById("startExtractBtn").addEventListener("click", async () => {
+  if (!pendingFiles.length) return;
+  const btn = document.getElementById("startExtractBtn");
+  btn.disabled = true;
+  const progressLine = document.getElementById("progressLine");
+  const progressFill = document.getElementById("progressFill");
+  const progressLabel = document.getElementById("progressLabel");
+  progressLine.style.display = "block";
+  progressLabel.style.display = "block";
+
+  const files = pendingFiles;
+  pendingFiles = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    progressLabel.textContent = "Reading " + (i + 1) + " of " + files.length + "…";
+    progressFill.style.width = Math.round((i / files.length) * 100) + "%";
+    try {
+      const { data: { text } } = await Tesseract.recognize(file, "eng");
+      const parsed = parseOcrText(text);
+      reviewQueue.push({
+        id: uid(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        lastModified: file.lastModified,
+        parsed,
+      });
+    } catch (err) {
+      reviewQueue.push({
+        id: uid(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        lastModified: file.lastModified,
+        parsed: emptyParsed(),
+        error: true,
+      });
+    }
+  }
+
+  progressFill.style.width = "100%";
+  progressLabel.textContent = "Done — check the Review tab.";
+  setTimeout(() => {
+    progressLine.style.display = "none";
+    progressLabel.style.display = "none";
+    btn.disabled = false;
+    queuePreviewCard.style.display = "none";
+  }, 700);
+
+  updateReviewBadge();
+  switchTab("review");
+});
+
+document.getElementById("loadSampleBtn").addEventListener("click", () => {
+  const existingIds = new Set(records.map(r => r.pickupPostal + r.dropoffPostal + r.dateTime));
+  let added = 0;
+  SAMPLE_RECORDS.forEach(s => {
+    const key = s.pickupPostal + s.dropoffPostal + s.dateTime;
+    if (existingIds.has(key)) return;
+    records.push(Object.assign({ id: uid(), createdAt: new Date().toISOString(), notes: "sample" }, s));
+    added++;
+  });
+  saveRecords();
+  showToast(added + " sample order" + (added === 1 ? "" : "s") + " added");
+  updateReviewBadge();
+});
+
+function emptyParsed() {
+  return { platform: "Grab", earn: "", paid: "", pickupAddr: "", pickupPostal: "",
+    dropoffAddr: "", dropoffPostal: "", serviceType: "", stopsTotal: 2, surge: false };
+}
+
+/* ---- OCR text parsing (best-effort — this is what the Review step is for) ---- */
+
+function parseOcrText(text) {
+  const out = emptyParsed();
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const full = text.replace(/\s+/g, " ");
+
+  if (/tada/i.test(full)) out.platform = "TADA";
+  else out.platform = "Grab";
+
+  const earnLine = lines.find(l => /earn/i.test(l));
+  if (earnLine) {
+    const m = earnLine.match(/(\d+[.,]\d{2})/);
+    if (m) out.earn = parseFloat(m[1].replace(",", "."));
+  }
+
+  let paidLine = lines.find(l => /passenger\s*paid/i.test(l));
+  if (paidLine) {
+    let m = paidLine.match(/(\d+[.,]\d{2})/);
+    if (!m) {
+      const idx = lines.indexOf(paidLine);
+      const next = lines[idx + 1] || "";
+      m = next.match(/(\d+[.,]\d{2})/);
+    }
+    if (m) out.paid = parseFloat(m[1].replace(",", "."));
+  }
+
+  const svcLine = lines.find(l => /standard\s*\|/i.test(l));
+  if (svcLine) out.serviceType = svcLine.replace(/^service\s*/i, "").trim();
+
+  const stopsMatch = full.match(/(\d)\s*\/\s*(\d)\s*stops?\s*to\s*go/i);
+  if (stopsMatch) out.stopsTotal = parseInt(stopsMatch[2], 10);
+
+  function grabBlock(labelRegex) {
+    const idx = lines.findIndex(l => labelRegex.test(l));
+    if (idx === -1) return { addr: "", postal: "" };
+    const blockLines = [];
+    for (let j = idx + 1; j < Math.min(idx + 5, lines.length); j++) {
+      blockLines.push(lines[j]);
+      if (/\b\d{6}\b/.test(lines[j])) break;
+      if (/service|payment method|passenger paid/i.test(lines[j])) { blockLines.pop(); break; }
+    }
+    const joined = blockLines.join(", ");
+    const postalMatch = joined.match(/\b(\d{6})\b/);
+    return { addr: joined.replace(/,?\s*singapore,?\s*\d{6}/i, "").replace(/\b\d{6}\b/, "").trim(), postal: postalMatch ? postalMatch[1] : "" };
+  }
+
+  const pickup = grabBlock(/pick\s*up/i);
+  out.pickupAddr = pickup.addr;
+  out.pickupPostal = pickup.postal;
+
+  const dropoff = grabBlock(/drop\s*off/i);
+  out.dropoffAddr = dropoff.addr;
+  out.dropoffPostal = dropoff.postal;
+
+  return out;
+}
+
+/* ---------------------------------------------------------------------
+   Review queue UI
+--------------------------------------------------------------------- */
+
+function updateReviewBadge() {
+  const badge = document.getElementById("reviewBadge");
+  if (reviewQueue.length) { badge.style.display = "inline-block"; badge.textContent = reviewQueue.length; }
+  else badge.style.display = "none";
+}
+
+function localDateTimeInputValue(ms) {
+  const d = new Date(ms);
+  const pad = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
+function renderReviewQueue() {
+  const list = document.getElementById("reviewList");
+  const empty = document.getElementById("reviewEmpty");
+  list.innerHTML = "";
+  if (!reviewQueue.length) { empty.style.display = "block"; return; }
+  empty.style.display = "none";
+
+  reviewQueue.forEach(item => {
+    const p = item.parsed;
+    const card = document.createElement("div");
+    card.className = "card review-card";
+    card.innerHTML = `
+      <img class="thumb" src="${item.previewUrl}" alt="">
+      <div class="fields">
+        <div class="review-meta">${item.error ? "⚠️ Couldn't read this one automatically — fill it in by hand." : "Auto-read — check before saving"}</div>
+        <div class="field-row">
+          <div class="field"><label>Date &amp; time</label><input type="datetime-local" data-f="dateTime" value="${localDateTimeInputValue(item.lastModified)}"></div>
+          <div class="field"><label>Platform</label>
+            <select data-f="platform">
+              <option value="Grab" ${p.platform === "Grab" ? "selected" : ""}>Grab</option>
+              <option value="TADA" ${p.platform === "TADA" ? "selected" : ""}>TADA</option>
+              <option value="Other" ${p.platform === "Other" ? "selected" : ""}>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>He earned (S$)</label><input type="number" step="0.01" data-f="earn" value="${p.earn}"></div>
+          <div class="field"><label>Passenger paid (S$)</label><input type="number" step="0.01" data-f="paid" value="${p.paid}"></div>
+        </div>
+        <div class="field-row">
+          <div class="field" style="flex:2;"><label>Pickup</label><input type="text" data-f="pickupAddr" value="${escapeAttr(p.pickupAddr)}"></div>
+          <div class="field"><label>Postal</label><input type="text" data-f="pickupPostal" value="${p.pickupPostal}" maxlength="6"></div>
+        </div>
+        <div class="field-row">
+          <div class="field" style="flex:2;"><label>Drop-off</label><input type="text" data-f="dropoffAddr" value="${escapeAttr(p.dropoffAddr)}"></div>
+          <div class="field"><label>Postal</label><input type="text" data-f="dropoffPostal" value="${p.dropoffPostal}" maxlength="6"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Service</label><input type="text" data-f="serviceType" value="${escapeAttr(p.serviceType)}"></div>
+          <div class="field"><label>Stops total</label><input type="number" data-f="stopsTotal" value="${p.stopsTotal}"></div>
+        </div>
+        <label class="checkbox-row"><input type="checkbox" data-f="surge" ${p.surge ? "checked" : ""}> Boosted / priority fare (green ⤴ badge on screen)</label>
+        <div class="btn-row">
+          <button class="btn" data-action="save">Save</button>
+          <button class="btn ghost" data-action="discard">Discard</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('[data-action="save"]').addEventListener("click", () => saveReviewItem(item.id, card));
+    card.querySelector('[data-action="discard"]').addEventListener("click", () => discardReviewItem(item.id));
+    list.appendChild(card);
+  });
+}
+
+function escapeAttr(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function saveReviewItem(id, card) {
+  const item = reviewQueue.find(r => r.id === id);
+  if (!item) return;
+  const rec = { id: uid(), createdAt: new Date().toISOString() };
+  card.querySelectorAll("[data-f]").forEach(el => {
+    const key = el.dataset.f;
+    if (el.type === "checkbox") rec[key] = el.checked;
+    else if (el.type === "number") rec[key] = el.value === "" ? null : parseFloat(el.value);
+    else rec[key] = el.value;
+  });
+  records.push(rec);
+  saveRecords();
+  reviewQueue = reviewQueue.filter(r => r.id !== id);
+  URL.revokeObjectURL(item.previewUrl);
+  updateReviewBadge();
+  renderReviewQueue();
+  showToast("Saved");
+}
+
+function discardReviewItem(id) {
+  const item = reviewQueue.find(r => r.id === id);
+  if (item) URL.revokeObjectURL(item.previewUrl);
+  reviewQueue = reviewQueue.filter(r => r.id !== id);
+  updateReviewBadge();
+  renderReviewQueue();
+}
+
+/* ---------------------------------------------------------------------
+   Dashboard
+--------------------------------------------------------------------- */
+
+function districtFor(postal) {
+  if (!postal || postal.length < 2) return null;
+  return POSTAL_DISTRICTS[postal.slice(0, 2)] || null;
+}
+
+function money(n) { return "S$" + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
+
+function renderDashboard() {
+  const empty = document.getElementById("dashboardEmpty");
+  const content = document.getElementById("dashboardContent");
+  if (!records.length) { empty.style.display = "block"; content.style.display = "none"; return; }
+  empty.style.display = "none";
+  content.style.display = "block";
+
+  const withEarn = records.filter(r => typeof r.earn === "number" && !isNaN(r.earn));
+  const totalTrips = records.length;
+  const totalEarn = withEarn.reduce((s, r) => s + r.earn, 0);
+  const avgEarn = withEarn.length ? totalEarn / withEarn.length : 0;
+  const withCommission = records.filter(r => typeof r.earn === "number" && typeof r.paid === "number" && r.paid > 0);
+  const avgCommissionPct = withCommission.length
+    ? withCommission.reduce((s, r) => s + (r.paid - r.earn) / r.paid, 0) / withCommission.length * 100 : null;
+
+  document.getElementById("statGrid").innerHTML = `
+    <div class="stat-tile"><div class="label">Total trips</div><div class="value">${totalTrips}</div></div>
+    <div class="stat-tile"><div class="label">Total earned</div><div class="value">${money(totalEarn)}</div></div>
+    <div class="stat-tile"><div class="label">Avg. per trip</div><div class="value">${money(avgEarn)}</div></div>
+    <div class="stat-tile"><div class="label">Avg. platform cut</div><div class="value">${avgCommissionPct === null ? "—" : avgCommissionPct.toFixed(1) + "%"}</div></div>
+  `;
+
+  // --- hour of day ---
+  const byHour = Array.from({ length: 24 }, () => ({ sum: 0, n: 0 }));
+  withEarn.forEach(r => {
+    if (!r.dateTime) return;
+    const h = new Date(r.dateTime).getHours();
+    if (isNaN(h)) return;
+    byHour[h].sum += r.earn; byHour[h].n += 1;
+  });
+  const hourLabels = [], hourData = [], hourCounts = [];
+  byHour.forEach((b, h) => { if (b.n > 0) { hourLabels.push(h + ":00"); hourData.push(+(b.sum / b.n).toFixed(2)); hourCounts.push(b.n); } });
+  renderBarChart("chartHour", hourLabels, hourData, hourCounts, "var(--series-1)");
+
+  // --- day of week ---
+  const distinctDays = new Set(records.filter(r => r.dateTime).map(r => r.dateTime.slice(0, 10)));
+  const dowNote = document.getElementById("dowNote");
+  const dowCard = document.getElementById("dowCard");
+  if (distinctDays.size < 3) {
+    dowCard.querySelector(".chart-wrap").style.display = "none";
+    dowNote.textContent = "Not enough different days logged yet (" + distinctDays.size + " so far) — this fills in as more days come in.";
+  } else {
+    dowCard.querySelector(".chart-wrap").style.display = "block";
+    dowNote.textContent = "Based on " + distinctDays.size + " distinct days logged so far.";
+    const byDow = Array.from({ length: 7 }, () => ({ sum: 0, n: 0 }));
+    withEarn.forEach(r => {
+      if (!r.dateTime) return;
+      const d = new Date(r.dateTime).getDay();
+      byDow[d].sum += r.earn; byDow[d].n += 1;
+    });
+    const dowLabels = [], dowData = [], dowCounts = [];
+    byDow.forEach((b, i) => { if (b.n > 0) { dowLabels.push(DOW_LABELS[i]); dowData.push(+(b.sum / b.n).toFixed(2)); dowCounts.push(b.n); } });
+    renderBarChart("chartDow", dowLabels, dowData, dowCounts, "var(--series-1)");
+  }
+
+  // --- pickup zones ---
+  const byZone = {};
+  withEarn.forEach(r => {
+    const d = districtFor(r.pickupPostal);
+    if (!d) return;
+    if (!byZone[d]) byZone[d] = { sum: 0, n: 0 };
+    byZone[d].sum += r.earn; byZone[d].n += 1;
+  });
+  const zoneEntries = Object.entries(byZone).map(([name, v]) => ({ name, avg: v.sum / v.n, n: v.n }))
+    .sort((a, b) => b.avg - a.avg).slice(0, 8);
+  if (zoneEntries.length) {
+    renderBarChart("chartZone", zoneEntries.map(z => z.name + " (" + z.n + ")"), zoneEntries.map(z => +z.avg.toFixed(2)),
+      zoneEntries.map(z => z.n), "var(--series-1)", true);
+  } else {
+    document.getElementById("zoneChartWrap").innerHTML = '<p class="empty-note">No pickup postal codes recognised yet.</p>';
+  }
+
+  // --- platform ---
+  const byPlatform = {};
+  withEarn.forEach(r => {
+    const p = r.platform || "Other";
+    if (!byPlatform[p]) byPlatform[p] = { sum: 0, n: 0 };
+    byPlatform[p].sum += r.earn; byPlatform[p].n += 1;
+  });
+  const platforms = Object.keys(byPlatform);
+  const platformCard = document.getElementById("platformCard");
+  if (platforms.length < 2) {
+    platformCard.style.display = "none";
+  } else {
+    platformCard.style.display = "block";
+    const colors = { Grab: "#3987e5", TADA: "#d95926", Other: "#199e70" };
+    renderCategoricalBarChart("chartPlatform", platforms, platforms.map(p => +(byPlatform[p].sum / byPlatform[p].n).toFixed(2)),
+      platforms.map(p => byPlatform[p].n), platforms.map(p => colors[p] || "#199e70"));
+  }
+
+  // --- surge ---
+  const surgeCard = document.getElementById("surgeCard");
+  const withSurgeFlag = withEarn.filter(r => typeof r.surge === "boolean");
+  const boosted = withSurgeFlag.filter(r => r.surge);
+  const regular = withSurgeFlag.filter(r => !r.surge);
+  if (!boosted.length || !regular.length) {
+    surgeCard.style.display = "none";
+  } else {
+    surgeCard.style.display = "block";
+    const avgB = boosted.reduce((s, r) => s + r.earn, 0) / boosted.length;
+    const avgR = regular.reduce((s, r) => s + r.earn, 0) / regular.length;
+    document.getElementById("surgeGrid").innerHTML = `
+      <div class="stat-tile"><div class="label">Boosted (${boosted.length} trips)</div><div class="value">${money(avgB)}</div><div class="sub">avg per trip</div></div>
+      <div class="stat-tile"><div class="label">Regular (${regular.length} trips)</div><div class="value">${money(avgR)}</div><div class="sub">avg per trip</div></div>
+    `;
+  }
+}
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name.replace("var(", "").replace(")", "")).trim() || name;
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function chartLibMissing(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return true;
+  if (typeof Chart === "undefined") {
+    canvas.parentElement.innerHTML = '<p class="empty-note">Chart library didn\'t load (no internet connection?) — the numbers above are still accurate, just no chart to show right now.</p>';
+    return true;
+  }
+  return false;
+}
+
+function renderBarChart(canvasId, labels, data, counts, colorVar, horizontal) {
+  if (chartLibMissing(canvasId)) return;
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  const color = cssVar(colorVar);
+  try {
+  charts[canvasId] = new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 4, maxBarThickness: 34 }] },
+    options: {
+      indexAxis: horizontal ? "y" : "x",
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (c) => {
+              const n = counts[c.dataIndex];
+              return "avg " + money(c.raw) + "  (" + n + " trip" + (n === 1 ? "" : "s") + ")";
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: "#898781", font: { size: 10.5 } }, grid: { color: "#2c2c2a" } },
+        y: { ticks: { color: "#898781", font: { size: 10.5 } }, grid: { color: "#2c2c2a" }, beginAtZero: true }
+      }
+    }
+  });
+  } catch (e) { console.error(e); }
+}
+
+function renderCategoricalBarChart(canvasId, labels, data, counts, colors) {
+  if (chartLibMissing(canvasId)) return;
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  try {
+  charts[canvasId] = new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4, maxBarThickness: 46 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => "avg " + money(c.raw) + "  (" + counts[c.dataIndex] + " trips)" } }
+      },
+      scales: {
+        x: { ticks: { color: "#898781" }, grid: { display: false } },
+        y: { ticks: { color: "#898781" }, grid: { color: "#2c2c2a" }, beginAtZero: true }
+      }
+    }
+  });
+  } catch (e) { console.error(e); }
+}
+
+/* ---------------------------------------------------------------------
+   Data tab: table, export, import, clear
+--------------------------------------------------------------------- */
+
+function renderDataTable() {
+  document.getElementById("dataCountLabel").textContent = records.length + " order" + (records.length === 1 ? "" : "s") + " saved";
+  const body = document.getElementById("dataTableBody");
+  body.innerHTML = "";
+  const sorted = [...records].sort((a, b) => (b.dateTime || "").localeCompare(a.dateTime || ""));
+  sorted.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.dateTime ? r.dateTime.replace("T", " ") : "—"}</td>
+      <td><span class="platform-pill platform-${r.platform || "Other"}">${r.platform || "?"}</span></td>
+      <td>${typeof r.earn === "number" ? money(r.earn) : "—"}</td>
+      <td>${typeof r.paid === "number" ? money(r.paid) : "—"}</td>
+      <td>${r.surge ? "✓" : ""}</td>
+      <td>${escapeAttr(r.pickupAddr)} ${r.pickupPostal || ""}</td>
+      <td>${escapeAttr(r.dropoffAddr)} ${r.dropoffPostal || ""}</td>
+      <td>${escapeAttr(r.serviceType)}</td>
+      <td><button class="row-del" data-id="${r.id}">✕</button></td>
+    `;
+    tr.querySelector(".row-del").addEventListener("click", () => {
+      records = records.filter(x => x.id !== r.id);
+      saveRecords();
+      renderDataTable();
+    });
+    body.appendChild(tr);
+  });
+}
+
+const CSV_COLS = ["dateTime","platform","earn","paid","pickupAddr","pickupPostal","dropoffAddr","dropoffPostal","serviceType","stopsTotal","surge"];
+
+document.getElementById("exportCsvBtn").addEventListener("click", () => {
+  const rows = [CSV_COLS.join(",")];
+  records.forEach(r => {
+    rows.push(CSV_COLS.map(c => csvEscape(r[c])).join(","));
+  });
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "farelog_export_" + new Date().toISOString().slice(0, 10) + ".csv";
+  a.click();
+});
+
+function csvEscape(v) {
+  if (v === undefined || v === null) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+document.getElementById("importCsvInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result);
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const header = parseCsvLine(lines[0]);
+    let added = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cells = parseCsvLine(lines[i]);
+      const rec = { id: uid(), createdAt: new Date().toISOString() };
+      header.forEach((h, idx) => {
+        let v = cells[idx];
+        if (h === "earn" || h === "paid") v = v === "" ? null : parseFloat(v);
+        if (h === "stopsTotal") v = v === "" ? null : parseInt(v, 10);
+        if (h === "surge") v = v === "true" || v === "1" || v === "TRUE";
+        rec[h] = v;
+      });
+      records.push(rec);
+      added++;
+    }
+    saveRecords();
+    showToast(added + " rows imported");
+    renderDataTable();
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+function parseCsvLine(line) {
+  const out = []; let cur = ""; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ",") { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+document.getElementById("clearAllBtn").addEventListener("click", () => {
+  if (!records.length) return;
+  if (!confirm("Delete all " + records.length + " saved orders? This can't be undone.")) return;
+  records = [];
+  saveRecords();
+  renderDataTable();
+  showToast("All data cleared");
+});
+
+/* ---------------------------------------------------------------------
+   Init
+--------------------------------------------------------------------- */
+
+updateReviewBadge();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
