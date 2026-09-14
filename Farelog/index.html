@@ -558,9 +558,12 @@
    App metadata / changelog
 --------------------------------------------------------------------- */
 
-const APP_VERSION = "3.1.0";
+const APP_VERSION = "3.1.1";
 const LAST_SEEN_KEY = "farelog_last_seen_version";
 const CHANGELOG = [
+  { version: "3.1.1", notes: [
+    "The app now picks up new versions on its own. Before this, it kept showing the copy saved on your device until it was cleared by hand — which is why a phone and a computer could sit on different versions. It still works offline the same way.",
+  ]},
   { version: "3.1.0", notes: [
     "Labeled the daily-earnings calendar: day letters, month markers, and a \"less → more\" legend, instead of an unlabeled grid of squares.",
     "Fixed the gap between the stat tiles and the card below them overlapping on some screens.",
