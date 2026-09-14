@@ -1,4 +1,10 @@
-const CACHE_NAME = "farelog-shell-v1";
+// Bump this string on every release that changes index.html (keep it in step
+// with APP_VERSION in index.html). Changing it is what makes browsers notice
+// this file differs and install the new service worker — that's the only
+// thing that makes already-installed phones/browsers pick up a fresh shell
+// without someone manually clearing site data. Leaving it unchanged (as it
+// was for v1/v2/v3) means updates silently never reach returning visitors.
+const CACHE_NAME = "farelog-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",
