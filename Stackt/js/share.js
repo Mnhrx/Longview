@@ -13,6 +13,7 @@
 // ============================================
 
 import { openModal, dismissLayer, escapeHtml, makeClearable } from "./ui.js";
+import { localUrl } from "./covers.js";
 
 const PALETTE = {
   bg: "#FFF8F0",
@@ -32,17 +33,28 @@ export const FORMATS = {
 
 const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
 
+/** blob: and data: are already ours — see the crossOrigin note in loadOnce. */
+function isLocalSrc(src) {
+  const s = String(src);
+  return s.startsWith("data:") || s.startsWith("blob:");
+}
+
 /**
  * Loads an image for canvas use.
  *
  * Resolves to null rather than rejecting — a missing cover should cost you a
- * colour block, never the whole card. Data URLs (your own photos) are same
- * origin and skip the CORS dance entirely.
+ * colour block, never the whole card.
+ *
+ * crossOrigin is set ONLY for remote sources. Setting it on a blob: or data:
+ * URL is not harmless: WebKit refuses to load those with the attribute
+ * present, which would have made every photo you took fail on iPhone while
+ * working perfectly in testing. The old code claimed to skip this for data
+ * URLs and didn't — it only skipped the retry.
  */
 function loadOnce(src, bust) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!isLocalSrc(src)) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     // A cache-busting param forces a fresh CORS request, which is the way past
@@ -51,10 +63,35 @@ function loadOnce(src, bust) {
   });
 }
 
-function loadImage(src) {
-  if (!src) return Promise.resolve(null);
-  if (String(src).startsWith("data:")) return loadOnce(src, false);
-  return loadOnce(src, false).then((img) => img || loadOnce(src, true));
+/**
+ * Takes whatever a module calls a cover source and turns it into something an
+ * <img> can actually load.
+ *
+ * The bug this exists for: a photo you took is stored in IndexedDB and
+ * referenced by a KEY like "own:5ry1stt8", not by a URL. Every module hands
+ * that key straight through — it's what setCoverSrc expects on screen — so the
+ * share canvas was being asked to load a string no browser can resolve, and
+ * quietly drew nothing. Food showed it first because every food entry has your
+ * own photo, but a book or record with a photo you took was just as blank.
+ */
+async function resolveSrc(src) {
+  if (!src) return null;
+  const s = String(src);
+  if (s.startsWith("own:") || s.startsWith("remote:")) {
+    try {
+      return await localUrl(s);
+    } catch (err) {
+      return null;
+    }
+  }
+  return s;
+}
+
+async function loadImage(src) {
+  const resolved = await resolveSrc(src);
+  if (!resolved) return null;
+  if (isLocalSrc(resolved)) return loadOnce(resolved, false);
+  return loadOnce(resolved, false).then((img) => img || loadOnce(resolved, true));
 }
 
 /**

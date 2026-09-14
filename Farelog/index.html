@@ -14,38 +14,48 @@
     --surface-1:      #1a1a19;
     --surface-2:      #232322;
     --surface-3:      #2c2c2a;
+    --surface-4:      #34342f;
     --page-plane:     #0d0d0d;
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
+    --text-muted:     #989691;
     --gridline:       #2c2c2a;
     --baseline:       #383835;
-    --border:         rgba(255,255,255,0.10);
+    --border:         rgba(255,255,255,0.12);
     --series-1: #3987e5; /* blue */
     --series-2: #d95926; /* orange */
     --series-3: #199e70; /* aqua */
     --good: #0ca30c;
+    --warning: #fab219;
     --critical: #e66767;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; background: var(--page-plane); color: var(--text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  body { padding-bottom: 84px; }
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; }
+  body { padding-bottom: 92px; }
   h1, h2, h3 { font-weight: 700; margin: 0 0 4px; }
   p { margin: 0; }
   button { font-family: inherit; cursor: pointer; }
   input, select { font-family: inherit; }
+  svg.ic { display: block; flex: none; }
+  .mobile-only { }
+  .desktop-only { display: none; }
 
   header.app-header {
-    padding: 20px 16px 12px;
+    padding: 18px 16px 14px;
     background: var(--surface-1);
     border-bottom: 1px solid var(--border);
     position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
   }
-  header.app-header .title-row { display: flex; align-items: center; gap: 10px; }
-  header.app-header .logo { width: 30px; height: 30px; flex: none; }
-  header.app-header h1 { font-size: 19px; }
-  header.app-header .subtitle { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+  header.app-header .title-row { display: flex; align-items: center; gap: 12px; }
+  header.app-header .logo { width: 38px; height: 38px; flex: none; }
+  header.app-header h1 { font-size: 23px; }
+  header.app-header .subtitle { color: var(--text-muted); font-size: 13px; margin-top: 1px; }
+  .help-btn {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--surface-3); border: none;
+    color: var(--text-secondary); font-size: 17px; font-weight: 700; flex: none;
+  }
 
   main { max-width: 720px; margin: 0 auto; padding: 16px; }
   section.tab { display: none; }
@@ -58,92 +68,224 @@
   }
   nav.tabbar button {
     flex: 1; background: none; border: none; color: var(--text-muted);
-    padding: 10px 4px 8px; font-size: 11.5px; display: flex; flex-direction: column;
-    align-items: center; gap: 3px;
+    padding: 11px 4px 9px; font-size: 12.5px; display: flex; flex-direction: column;
+    align-items: center; gap: 5px; min-height: 56px;
   }
-  nav.tabbar button .ico { font-size: 19px; }
   nav.tabbar button.active { color: var(--text-primary); }
   nav.tabbar button .badge {
-    background: var(--series-2); color: #fff; border-radius: 999px; font-size: 10px;
-    padding: 0 5px; min-width: 15px; line-height: 15px; position: absolute;
-    margin-left: 14px; margin-top: -4px;
+    background: var(--series-2); color: #fff; border-radius: 999px; font-size: 10.5px;
+    padding: 0 5px; min-width: 16px; line-height: 16px; font-weight: 700; position: absolute;
+    margin-left: 15px; margin-top: -16px;
   }
 
   .card {
-    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
-    padding: 16px; margin-bottom: 14px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; margin-bottom: 14px;
   }
-  .card h2 { font-size: 15px; }
-  .card .hint { color: var(--text-muted); font-size: 12.5px; line-height: 1.5; margin-top: 6px; }
+  .card h2 { font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .card .hint { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-top: 6px; }
 
   .drop-zone {
-    border: 1.5px dashed var(--border); border-radius: 14px; padding: 30px 16px;
+    border: 1.5px dashed var(--border); border-radius: 16px; padding: 34px 16px;
     text-align: center; color: var(--text-secondary); margin-bottom: 14px;
   }
-  .drop-zone .big-ico { font-size: 34px; margin-bottom: 8px; }
+  .drop-zone .big-ico { margin: 0 auto 12px; width: 52px; height: 52px; border-radius: 50%;
+    background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+  .drop-zone p { font-size: 15px; margin-bottom: 16px; }
+
   .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    background: var(--series-1); color: #fff; border: none; border-radius: 10px;
-    padding: 11px 18px; font-size: 14.5px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    background: var(--series-1); color: #fff; border: none; border-radius: 12px;
+    padding: 13px 20px; font-size: 15.5px; font-weight: 700; min-height: 48px;
   }
   .btn.secondary { background: var(--surface-3); color: var(--text-primary); }
   .btn.ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
   .btn.danger { background: transparent; color: var(--critical); border: 1px solid var(--critical); }
+  .btn.small { padding: 8px 14px; font-size: 13.5px; min-height: 38px; }
   .btn:disabled { opacity: .45; }
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
   input[type=file] { display: none; }
 
-  .field { margin-bottom: 10px; }
-  .field label { display: block; font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px; }
+  .field { margin-bottom: 11px; }
+  .field label { display: block; font-size: 12.5px; color: var(--text-muted); margin-bottom: 5px; font-weight: 600; }
   .field input, .field select {
-    width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text-primary); padding: 9px 10px; font-size: 14px;
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text-primary); padding: 11px 12px; font-size: 16px;
   }
   .field-row { display: flex; gap: 8px; }
   .field-row .field { flex: 1; min-width: 0; }
-  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
-  .checkbox-row input { width: 17px; height: 17px; }
+  .checkbox-row { display: flex; align-items: center; gap: 10px; margin: 12px 0; font-size: 14.5px; }
+  .checkbox-row input { width: 20px; height: 20px; flex: none; }
 
-  .review-card { display: flex; gap: 12px; }
-  .review-card .thumb { width: 76px; height: 168px; border-radius: 8px; object-fit: cover;
+  .review-card { display: flex; gap: 14px; }
+  .review-card .thumb { width: 92px; height: 200px; border-radius: 10px; object-fit: cover;
     flex: none; background: var(--surface-2); border: 1px solid var(--border); }
   .review-card .fields { flex: 1; min-width: 0; }
-  .review-meta { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; }
-
-  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
-  .stat-tile .label { font-size: 11.5px; color: var(--text-muted); }
-  .stat-tile .value { font-size: 21px; font-weight: 700; margin-top: 2px; }
-  .stat-tile .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-
-  .chart-wrap { position: relative; height: 220px; margin-top: 8px; }
-  .chart-note { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
-  .empty-note { color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px 8px; }
-
-  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.data-table th, table.data-table td {
-    text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--gridline); white-space: nowrap;
+  .review-meta {
+    font-size: 12.5px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600;
+    display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--surface-2);
   }
-  table.data-table th { color: var(--text-muted); font-weight: 600; }
-  .table-scroll { overflow-x: auto; margin: 8px -16px 0; padding: 0 16px; }
+  .review-progress { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .stat-tile .label { font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
+  .stat-tile .value { font-size: 30px; font-weight: 800; margin-top: 3px; letter-spacing: -0.5px; }
+  .stat-tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .stat-tile .delta { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; margin-top: 4px; }
+  .stat-tile .delta.status-good { color: #6fe36f; }
+  .stat-tile .delta.status-warning { color: #ffce5c; }
+  .stat-tile .delta.status-neutral { color: var(--text-muted); }
+
+  .chart-wrap { position: relative; height: 250px; margin-top: 10px; }
+  .chart-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+  .empty-note { color: var(--text-muted); font-size: 14px; text-align: center; padding: 24px 8px; line-height: 1.5; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th, table.data-table td {
+    text-align: left; padding: 9px 7px; border-bottom: 1px solid var(--gridline); white-space: nowrap;
+  }
+  table.data-table th { color: var(--text-muted); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+  .table-scroll { overflow-x: auto; margin: 10px -18px 0; padding: 0 18px; }
   .table-scroll::-webkit-scrollbar { height: 6px; }
-  .row-del { background: none; border: none; color: var(--critical); font-size: 15px; padding: 2px 6px; }
+  .row-del { background: none; border: none; color: var(--critical); padding: 4px 8px; }
 
   .toast {
-    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
-    background: var(--surface-3); color: var(--text-primary); padding: 10px 16px; border-radius: 10px;
-    font-size: 13px; border: 1px solid var(--border); z-index: 50; opacity: 0; pointer-events: none;
-    transition: opacity .2s ease;
+    position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+    background: var(--surface-4); color: var(--text-primary); padding: 12px 18px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; border: 1px solid var(--border); z-index: 50; opacity: 0; pointer-events: none;
+    transition: opacity .2s ease; max-width: 88vw; text-align: center;
   }
   .toast.show { opacity: 1; }
 
-  .platform-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .platform-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
   .platform-Grab { background: rgba(57,135,229,.18); color: #8ebcf2; }
   .platform-TADA { background: rgba(217,89,38,.18); color: #f0a679; }
   .platform-Other { background: rgba(25,158,112,.18); color: #7fd6b6; }
 
-  .progress-line { height: 4px; background: var(--surface-3); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+  .progress-line { height: 5px; background: var(--surface-3); border-radius: 4px; overflow: hidden; margin-top: 12px; }
   .progress-line > div { height: 100%; background: var(--series-1); width: 0%; transition: width .2s ease; }
+
+  /* --- Help / What's-new overlays --- */
+  .sheet-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 60;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet-overlay[hidden] { display: none; }
+  .sheet {
+    background: var(--surface-1); border-radius: 20px 20px 0 0; padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0));
+    max-height: 82vh; overflow-y: auto; width: 100%; max-width: 720px;
+  }
+  .sheet h2 { font-size: 19px; margin-bottom: 14px; }
+  .sheet h3 { font-size: 14px; color: var(--text-secondary); margin: 16px 0 4px; }
+  .sheet p { font-size: 14px; color: var(--text-secondary); line-height: 1.55; }
+  .sheet ul { margin: 6px 0 0; padding-left: 20px; }
+  .sheet li { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+  .sheet .version-tag { display: inline-block; background: var(--surface-3); color: var(--text-secondary);
+    font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; margin-right: 8px; }
+  .sheet-close { width: 100%; margin-top: 18px; }
+  .link-btn { background: none; border: none; color: var(--series-1); font-size: 13.5px; font-weight: 700; padding: 4px 0; }
+
+  /* --- Segmented controls --- */
+  .segmented { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 14px; }
+  .segmented button {
+    flex: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary);
+    padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 700;
+  }
+  .segmented button.active { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+
+  .tabline { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
+  .tabline button {
+    flex: none; background: none; border: none; color: var(--text-muted); font-size: 14px; font-weight: 700;
+    padding: 10px 14px 12px; border-bottom: 2.5px solid transparent; margin-bottom: -1px; display: flex; align-items: center; gap: 6px;
+  }
+  .tabline button.active { color: var(--text-primary); border-bottom-color: var(--series-1); }
+
+  /* --- Right-now banner --- */
+  .now-card { border-radius: 16px; padding: 18px; margin-bottom: 14px; border: 1px solid var(--border); }
+  .now-card.status-good { background: linear-gradient(135deg, rgba(12,163,12,.16), var(--surface-1)); }
+  .now-card.status-warning { background: linear-gradient(135deg, rgba(250,178,25,.14), var(--surface-1)); }
+  .now-card.status-neutral { background: var(--surface-1); }
+  .now-card .now-label { font-size: 12.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .now-card .now-headline { font-size: 21px; font-weight: 800; margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .now-card .now-sub { font-size: 13.5px; color: var(--text-secondary); margin-top: 5px; line-height: 1.5; }
+  .now-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 3px 11px; border-radius: 999px; }
+  .now-pill.status-good { background: rgba(12,163,12,.22); color: #6fe36f; }
+  .now-pill.status-warning { background: rgba(250,178,25,.22); color: #ffce5c; }
+  .now-pill.status-neutral { background: var(--surface-3); color: var(--text-secondary); }
+
+  /* --- Records panel --- */
+  .records-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .record-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .record-tile .rt-icon { width: 34px; height: 34px; border-radius: 10px; background: rgba(57,135,229,.16);
+    color: #8ebcf2; display: flex; align-items: center; justify-content: center; flex: none; }
+  .record-tile .rt-label { font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .record-tile .rt-value { font-size: 20px; font-weight: 800; margin-top: 2px; }
+  .record-tile .rt-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
+  /* higher specificity than the plain .desktop-only utility so it always wins, on
+     mobile (hidden) and desktop (flex row, not the utility's generic block) */
+  .record-tile.desktop-only { display: none; }
+
+  /* --- Heatmap --- */
+  .heatmap-scroll { overflow-x: auto; margin-top: 10px; }
+  table.heatmap { border-collapse: separate; border-spacing: 3px; width: 100%; min-width: 480px; }
+  table.heatmap th { font-size: 11px; color: var(--text-muted); font-weight: 700; padding: 4px 3px; text-align: center; }
+  table.heatmap th.row-head { text-align: left; padding-left: 4px; }
+  table.heatmap td.row-head { font-size: 12.5px; color: var(--text-secondary); font-weight: 700; padding: 3px 6px 3px 4px; white-space: nowrap; }
+  table.heatmap td.cell {
+    text-align: center; font-size: 12px; font-weight: 800; color: #fff; border-radius: 8px;
+    padding: 10px 2px; min-width: 44px; border: 1.5px solid transparent;
+  }
+  table.heatmap td.cell.empty { color: var(--text-muted); font-weight: 500; background: var(--surface-2) !important; }
+  table.heatmap td.cell.low-sample { border-color: rgba(255,255,255,.4); border-style: dashed; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11.5px; color: var(--text-muted); }
+  .legend-swatch { width: 60px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #223349, var(--series-1)); }
+
+  /* --- Calendar heatmap (desktop) --- */
+  .cal-scroll { overflow-x: auto; margin-top: 10px; }
+  .cal-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 15px); gap: 3px; width: max-content; }
+  .cal-cell { width: 15px; height: 15px; border-radius: 3px; background: var(--surface-2); }
+  .cal-cell.has-data { background: var(--series-1); }
+
+  /* --- Generic info rows (flow, breakdowns, commission) --- */
+  .info-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--gridline); font-size: 13.5px; }
+  .info-row:last-child { border-bottom: none; }
+  .info-main { flex: 1; min-width: 0; line-height: 1.4; }
+  .info-main .arrow { color: var(--text-muted); margin: 0 4px; }
+  .info-stats { text-align: right; flex: none; }
+  .info-stats .amt { font-weight: 800; font-size: 14.5px; }
+  .info-stats .cnt { font-size: 11.5px; color: var(--text-muted); }
+
+  /* --- Responsive: desktop --- */
+  @media (min-width: 900px) {
+    body { padding-bottom: 40px; }
+    main { max-width: 1180px; padding: 24px 28px; }
+    header.app-header { padding: 18px 28px; }
+
+    nav.tabbar {
+      position: static; border-top: none; border-bottom: 1px solid var(--border);
+      max-width: 1180px; margin: 0 auto; padding-bottom: 0; justify-content: flex-start;
+    }
+    nav.tabbar button { flex: none; flex-direction: row; padding: 14px 22px; font-size: 14.5px; min-height: 0; }
+    nav.tabbar button .badge { position: static; margin: 0 0 0 2px; }
+
+    .mobile-only { display: none !important; }
+    .desktop-only { display: block; }
+    .record-tile.desktop-only { display: flex; }
+
+    .stat-grid { grid-template-columns: repeat(4, 1fr); }
+    .records-grid { grid-template-columns: repeat(4, 1fr); }
+
+    .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; align-items: start; }
+    .dash-grid .dash-section.section-overview { grid-column: 1 / -1; }
+
+    #reviewList { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+
+    .card { padding: 22px; }
+  }
 </style>
 </head>
 <body>
@@ -151,53 +293,64 @@
 <header class="app-header">
   <div class="title-row">
     <svg class="logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="48" height="48" rx="12" fill="#3987e5"/>
-      <path d="M12 30l3-9a3 3 0 0 1 2.8-2h12.4a3 3 0 0 1 2.8 2l3 9" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-      <rect x="10" y="30" width="28" height="7" rx="2.5" stroke="#fff" stroke-width="2.4"/>
-      <circle cx="16" cy="37" r="2.2" fill="#fff"/>
-      <circle cx="32" cy="37" r="2.2" fill="#fff"/>
+      <rect width="48" height="48" rx="13" fill="#3987e5"/>
+      <circle cx="24" cy="24" r="14.5" stroke="#fff" stroke-width="2.6"/>
+      <path d="M24 24V10.6M24 24l12.06 7.16M24 24L11.94 31.16" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="24" cy="24" r="3.8" fill="#fff"/>
     </svg>
     <div>
       <h1>Farelog</h1>
       <div class="subtitle">Order pattern tracker</div>
     </div>
   </div>
+  <button class="help-btn" id="helpBtn">?</button>
 </header>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-tab="upload">
+    <svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+    Upload
+  </button>
+  <button class="tab-btn" data-tab="review" style="position:relative;">
+    <svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3.6A1.6 1.6 0 0 1 10.6 2h2.8A1.6 1.6 0 0 1 15 3.6V4"/><path d="M8.5 12.6l2 2 4-4.6"/></svg>
+    Review<span class="badge" id="reviewBadge" style="display:none;">0</span>
+  </button>
+  <button class="tab-btn" data-tab="dashboard">
+    <svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 20V11M12 20V4M19.5 20v-7.5"/></svg>
+    Dashboard
+  </button>
+  <button class="tab-btn" data-tab="data">
+    <svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M9.5 4v16"/></svg>
+    Data
+  </button>
+</nav>
 
 <main>
 
   <section class="tab active" id="tab-upload">
-    <div class="card">
-      <h2>Add screenshots</h2>
-      <p class="hint">
-        Pick screenshots straight from the phone's own gallery / Screenshots folder — not ones
-        forwarded through WhatsApp or another app first. The date and time come from the file
-        itself, so a forwarded copy loses that.
-      </p>
-    </div>
-
     <div class="drop-zone">
-      <div class="big-ico">📷</div>
-      <p style="margin-bottom:14px;">Select one or more order screenshots to queue for review</p>
+      <div class="big-ico">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2.2"/><path d="M8 7l1.6-2.6A1.8 1.8 0 0 1 11.13 3.4h1.74a1.8 1.8 0 0 1 1.53 1L16 7"/><circle cx="12" cy="14" r="3.6"/></svg>
+      </div>
+      <p>Add order screenshots</p>
       <label class="btn" for="fileInput">Choose screenshots</label>
       <input type="file" id="fileInput" accept="image/*" multiple>
     </div>
 
     <div class="card" id="queuePreviewCard" style="display:none;">
       <h2 id="queueCount">0 photos queued</h2>
-      <p class="hint">Each one gets read automatically, then you'll get a chance to check and fix the details before anything is saved.</p>
       <div class="progress-line" id="progressLine" style="display:none;"><div id="progressFill"></div></div>
       <p class="hint" id="progressLabel" style="display:none;"></p>
-      <div class="btn-row" style="margin-top:12px;">
+      <div class="btn-row" style="margin-top:14px;">
         <button class="btn" id="startExtractBtn">Read screenshots</button>
         <button class="btn ghost" id="clearQueueBtn">Clear</button>
       </div>
     </div>
 
     <div class="card">
-      <h2>Or load the starter dataset</h2>
-      <p class="hint">16 real order screenshots, already extracted and checked — good for trying out the dashboard right away, or as a reference for what "good" extracted data looks like.</p>
-      <div class="btn-row" style="margin-top:10px;">
+      <h2>Try it with sample data</h2>
+      <p class="hint">16 real orders, already checked — see the Dashboard filled in right away.</p>
+      <div class="btn-row" style="margin-top:12px;">
         <button class="btn secondary" id="loadSampleBtn">Load sample data</button>
       </div>
     </div>
@@ -213,34 +366,104 @@
       No saved orders yet. Extract some screenshots (or load the starter dataset) to see patterns here.
     </div>
     <div id="dashboardContent">
-      <div class="stat-grid" id="statGrid"></div>
 
-      <div class="card">
-        <h2>Avg. earnings by hour of day</h2>
-        <div class="chart-wrap"><canvas id="chartHour"></canvas></div>
-        <p class="chart-note">Bar height = average of what he actually earned per trip started in that hour. Hover a bar for the trip count.</p>
+      <div class="segmented" id="platformFilter" style="display:none;"></div>
+
+      <div class="tabline mobile-only" id="dashSubnav">
+        <button data-sec="overview" class="active">Overview</button>
+        <button data-sec="timing">Timing</button>
+        <button data-sec="locations">Locations</button>
+        <button data-sec="platforms">Platforms</button>
       </div>
 
-      <div class="card" id="dowCard">
-        <h2>Avg. earnings by day of week</h2>
-        <div class="chart-wrap"><canvas id="chartDow"></canvas></div>
-        <p class="chart-note" id="dowNote"></p>
-      </div>
+      <div class="dash-grid">
 
-      <div class="card">
-        <h2>Best-paying pickup areas</h2>
-        <div class="chart-wrap" id="zoneChartWrap"><canvas id="chartZone"></canvas></div>
-        <p class="chart-note">Grouped by Singapore's published 28 postal districts (from the pickup postal code) — a rough area bucket, not precise geocoding. Areas with only 1–2 trips are noisy; check the count before trusting the ranking.</p>
-      </div>
+        <div class="dash-section section-overview" data-section="overview">
+          <div class="now-card status-neutral" id="nowCard" style="display:none;">
+            <div class="now-label">Right now</div>
+            <div class="now-headline" id="nowHeadline"></div>
+            <div class="now-sub" id="nowSub"></div>
+          </div>
 
-      <div class="card" id="platformCard">
-        <h2>By platform</h2>
-        <div class="chart-wrap"><canvas id="chartPlatform"></canvas></div>
-      </div>
+          <div class="stat-grid" id="statGrid"></div>
 
-      <div class="card" id="surgeCard">
-        <h2>Boosted vs regular fares</h2>
-        <div class="stat-grid" id="surgeGrid"></div>
+          <div class="card" id="deltaCard" style="display:none;">
+            <h2>This week vs last week</h2>
+            <div class="stat-grid" id="deltaGrid"></div>
+          </div>
+
+          <div class="card" id="recordsCard" style="display:none;">
+            <h2>Personal records</h2>
+            <div class="records-grid" id="recordsGrid"></div>
+          </div>
+        </div>
+
+        <div class="dash-section section-timing" data-section="timing" hidden>
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <h2 style="margin-bottom:0;">By day &amp; time of day</h2>
+              <div class="segmented" id="heatmapMetricToggle" style="margin:0;">
+                <button data-metric="earn" class="active">Earnings</button>
+                <button data-metric="boost">Boost rate</button>
+              </div>
+            </div>
+            <div class="heatmap-scroll"><table class="heatmap" id="heatmapTable"></table></div>
+            <p class="chart-note" id="heatmapNote"></p>
+          </div>
+
+          <div class="card desktop-only" id="calendarCard" style="display:none;">
+            <h2>Daily earnings, last 12 weeks</h2>
+            <div class="cal-scroll"><div class="cal-grid" id="calGrid"></div></div>
+            <p class="chart-note">Brighter blue = higher-earning day, blank = no trips logged. Best viewed on a wider screen.</p>
+          </div>
+
+          <div class="card" id="trendCard">
+            <h2>Weekly earnings trend</h2>
+            <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+            <p class="chart-note" id="trendNote"></p>
+          </div>
+        </div>
+
+        <div class="dash-section section-locations" data-section="locations" hidden>
+          <div class="stat-grid" id="distanceStatGrid" style="display:none;"></div>
+
+          <div class="card">
+            <h2>Best-paying pickup areas</h2>
+            <div class="chart-wrap" id="zoneChartWrap"><canvas id="chartZone"></canvas></div>
+            <p class="chart-note">By Singapore's published postal districts — a rough area bucket, not an exact map.</p>
+          </div>
+
+          <div class="card" id="flowCard">
+            <h2>Where trips from here tend to end up</h2>
+            <div id="flowList"></div>
+          </div>
+        </div>
+
+        <div class="dash-section section-platforms" data-section="platforms" hidden>
+          <div class="card" id="platformCard">
+            <h2>By platform</h2>
+            <div class="chart-wrap"><canvas id="chartPlatform"></canvas></div>
+          </div>
+
+          <div class="card" id="commissionCard" style="display:none;">
+            <h2>Platform cut</h2>
+            <div id="commissionList"></div>
+          </div>
+
+          <div class="card" id="tripTypeCard" style="display:none;">
+            <h2>By trip type</h2>
+            <div class="hint" style="margin-bottom:6px;">Stops</div>
+            <div id="stopsList"></div>
+            <div class="hint" style="margin:14px 0 6px;">Service tier</div>
+            <div id="serviceList"></div>
+          </div>
+
+          <div class="card" id="surgeCard">
+            <h2>Boosted vs regular fares</h2>
+            <div class="stat-grid" id="surgeGrid"></div>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
@@ -249,11 +472,11 @@
     <div class="card">
       <h2>All saved orders</h2>
       <p class="hint" id="dataCountLabel"></p>
-      <div class="btn-row" style="margin-top:10px;">
-        <button class="btn secondary" id="exportCsvBtn">Export CSV</button>
-        <label class="btn secondary" for="importCsvInput">Import CSV</label>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn secondary small" id="exportCsvBtn">Export CSV</button>
+        <label class="btn secondary small" for="importCsvInput">Import CSV</label>
         <input type="file" id="importCsvInput" accept=".csv" style="display:none;">
-        <button class="btn danger" id="clearAllBtn">Clear all data</button>
+        <button class="btn danger small" id="clearAllBtn">Clear all</button>
       </div>
     </div>
     <div class="card">
@@ -261,7 +484,7 @@
         <table class="data-table" id="dataTable">
           <thead>
             <tr>
-              <th>Date/time</th><th>Platform</th><th>Earn</th><th>Paid</th><th>Boost</th>
+              <th>Date/time</th><th>Platform</th><th>Earn</th><th>Paid</th><th>Km</th><th>Boost</th>
               <th>Pickup</th><th>Drop-off</th><th>Service</th><th></th>
             </tr>
           </thead>
@@ -273,14 +496,31 @@
 
 </main>
 
-<nav class="tabbar">
-  <button class="tab-btn active" data-tab="upload"><span class="ico">📷</span>Upload</button>
-  <button class="tab-btn" data-tab="review" style="position:relative;"><span class="ico">📝</span>Review<span class="badge" id="reviewBadge" style="display:none;">0</span></button>
-  <button class="tab-btn" data-tab="dashboard"><span class="ico">📊</span>Dashboard</button>
-  <button class="tab-btn" data-tab="data"><span class="ico">🗂️</span>Data</button>
-</nav>
-
 <div class="toast" id="toast"></div>
+
+<div class="sheet-overlay" id="helpOverlay" hidden>
+  <div class="sheet">
+    <h2>How Farelog works</h2>
+    <h3>Upload</h3>
+    <p>Pick screenshots straight from the phone's gallery / Screenshots folder — not ones forwarded through WhatsApp or another app first. The date and time come from the file itself, so a forwarded copy loses that.</p>
+    <h3>Review</h3>
+    <p>Every screenshot is auto-read, then lands here for a check before anything is saved. Fix anything that's wrong, tick the boost badge by hand if it showed on screen, then Save — or Discard if it isn't an order screen.</p>
+    <h3>Dashboard</h3>
+    <p>Overview, Timing, Locations and Platforms — switch between them with the tabs (they all show at once on a wider screen). Filter everything to one platform with the row of buttons at the top.</p>
+    <h3>Data</h3>
+    <p>The full table, CSV export/import to move data between devices, and a way to wipe everything and start over.</p>
+    <button class="link-btn" id="openWhatsNewBtn">What's new in this version →</button>
+    <button class="btn sheet-close" id="helpCloseBtn">Got it</button>
+  </div>
+</div>
+
+<div class="sheet-overlay" id="whatsNewOverlay" hidden>
+  <div class="sheet">
+    <h2>What's new</h2>
+    <div id="whatsNewList"></div>
+    <button class="btn sheet-close" id="whatsNewCloseBtn">Got it</button>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -288,15 +528,58 @@
 "use strict";
 
 /* ---------------------------------------------------------------------
+   App metadata / changelog
+--------------------------------------------------------------------- */
+
+const APP_VERSION = "3.0.0";
+const LAST_SEEN_KEY = "farelog_last_seen_version";
+const CHANGELOG = [
+  { version: "3.0.0", notes: [
+    "Estimated trip distance and S$/km, from pickup and drop-off postal codes.",
+    "New breakdowns: stop count, service tier, boost rate by time slot, and platform cut over time.",
+    "A personal-records card (best trip, best day, best time slot, busiest day) and a this-week-vs-last-week comparison.",
+    "A daily-earnings calendar view on wider screens.",
+    "The Dashboard is now split into Overview / Timing / Locations / Platforms — tabs on a phone, all shown together on a wider screen.",
+    "Wider layout and a top nav bar on desktop/tablet; two-column Review on wider screens.",
+    "Original icons throughout — no more emoji.",
+    "Fixed the day/time heatmap cells overlapping each other, and the personal-records cards not laying out consistently.",
+  ]},
+  { version: "2.0.0", notes: [
+    "Bigger text and touch targets; long explanations moved into this help panel instead of sitting on every screen.",
+    "The platform filter (All / Grab / TADA / …) now narrows every Dashboard chart, not just one.",
+    "Added the day × time-of-day heatmap, the \"right now\" readout, the weekly earnings trend, and the pickup → drop-off flow list.",
+    "New steering-wheel app icon.",
+  ]},
+  { version: "1.0.0", notes: [
+    "First version: Upload, Review and Dashboard tabs, with on-device screenshot reading.",
+  ]},
+];
+
+/* ---------------------------------------------------------------------
+   Small inline icon set (no emoji)
+--------------------------------------------------------------------- */
+
+const ICON = {
+  up:    '<svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15l7-7 7 7"/></svg>',
+  down:  '<svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></svg>',
+  flat:  '<svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>',
+  dot:   '<svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>',
+  star:  '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6-4.6-4.1 6.1-.6z"/></svg>',
+  calendarDay: '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg>',
+  flame: '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3c1 3-3 4-3 7.5a3 3 0 0 0 6 0c1.2.9 2 2.3 2 3.9A5 5 0 0 1 7 14.4C6.6 10 12 8 12 3z"/></svg>',
+  clock: '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+};
+
+/* ---------------------------------------------------------------------
    Config / reference data
 --------------------------------------------------------------------- */
 
 const STORAGE_KEY = "farelog_records_v1";
+const GEOCODE_CACHE_KEY = "farelog_geocode_cache_v1";
 
 // Singapore's widely-published 28 postal-sector -> district grouping.
 // This is a rough public-reference bucket for spotting broad patterns,
-// not precise geocoding. Swap for a real geocoder (e.g. OneMap) later
-// if finer-grained zones are needed.
+// not precise geocoding.
 const POSTAL_DISTRICTS = {
   "01":"D01 Raffles Pl / Cecil / Marina","02":"D01 Raffles Pl / Cecil / Marina","03":"D01 Raffles Pl / Cecil / Marina",
   "04":"D01 Raffles Pl / Cecil / Marina","05":"D01 Raffles Pl / Cecil / Marina","06":"D01 Raffles Pl / Cecil / Marina",
@@ -331,6 +614,18 @@ const POSTAL_DISTRICTS = {
 };
 
 const DOW_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DOW_LABELS_SHORT = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+// 6 four-hour dayparts, label = start of the bucket.
+const DAYPARTS = [
+  { label: "12am", startHour: 0 },
+  { label: "4am",  startHour: 4 },
+  { label: "8am",  startHour: 8 },
+  { label: "12pm", startHour: 12 },
+  { label: "4pm",  startHour: 16 },
+  { label: "8pm",  startHour: 20 },
+];
+function daypartIndex(hour) { return Math.floor(hour / 4); }
 
 const SAMPLE_RECORDS = [
   {dateTime:"2026-09-01T09:43",platform:"Grab",earn:6.20,paid:8.10,pickupAddr:"634 Veerasamy Rd",pickupPostal:"200634",dropoffAddr:"Private Space Medical, Farrer Park Medical Centre",dropoffPostal:"217562",serviceType:"Standard | Car or taxi",stopsTotal:2,surge:false},
@@ -358,6 +653,11 @@ const SAMPLE_RECORDS = [
 let records = loadRecords();
 let reviewQueue = []; // {id, file, previewUrl, lastModified, status, parsed:{...}}
 let charts = {};
+let platformFilterValue = "All";
+let activeDashSection = "overview";
+let heatmapMetric = "earn"; // "earn" | "boost"
+let geocodeCache = loadGeocodeCache();
+let enrichInFlight = false;
 
 function loadRecords() {
   try {
@@ -369,10 +669,19 @@ function saveRecords() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
   catch (e) { showToast("Couldn't save — storage might be full."); }
 }
+function loadGeocodeCache() {
+  try {
+    const raw = localStorage.getItem(GEOCODE_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+function saveGeocodeCache() {
+  try { localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(geocodeCache)); } catch (e) {}
+}
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
 /* ---------------------------------------------------------------------
-   Tabs
+   Tabs + help / what's-new overlays
 --------------------------------------------------------------------- */
 
 document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -385,6 +694,50 @@ function switchTab(name) {
   if (name === "data") renderDataTable();
   if (name === "review") renderReviewQueue();
 }
+
+document.getElementById("helpBtn").addEventListener("click", () => { document.getElementById("helpOverlay").hidden = false; });
+document.getElementById("helpCloseBtn").addEventListener("click", () => { document.getElementById("helpOverlay").hidden = true; });
+document.getElementById("helpOverlay").addEventListener("click", (e) => { if (e.target.id === "helpOverlay") e.currentTarget.hidden = true; });
+document.getElementById("openWhatsNewBtn").addEventListener("click", () => {
+  document.getElementById("helpOverlay").hidden = true;
+  openWhatsNew(false);
+});
+document.getElementById("whatsNewCloseBtn").addEventListener("click", () => closeWhatsNew());
+document.getElementById("whatsNewOverlay").addEventListener("click", (e) => { if (e.target.id === "whatsNewOverlay") closeWhatsNew(); });
+
+function renderChangelogHtml(entries) {
+  return entries.map(e => `
+    <h3 style="margin-top:16px;"><span class="version-tag">v${e.version}</span></h3>
+    <ul>${e.notes.map(n => `<li>${n}</li>`).join("")}</ul>
+  `).join("");
+}
+
+function openWhatsNew(auto) {
+  const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
+  let entries;
+  if (auto) {
+    const idx = CHANGELOG.findIndex(e => e.version === lastSeen);
+    entries = idx > 0 ? CHANGELOG.slice(0, idx) : idx === 0 ? [] : [CHANGELOG[0]];
+    if (!entries.length) return;
+  } else {
+    entries = CHANGELOG;
+  }
+  document.getElementById("whatsNewList").innerHTML = renderChangelogHtml(entries);
+  document.getElementById("whatsNewOverlay").hidden = false;
+}
+function closeWhatsNew() {
+  document.getElementById("whatsNewOverlay").hidden = true;
+  localStorage.setItem(LAST_SEEN_KEY, APP_VERSION);
+}
+
+(function initVersionCheck() {
+  const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
+  if (lastSeen === null) {
+    localStorage.setItem(LAST_SEEN_KEY, APP_VERSION); // first-ever open — nothing to announce
+  } else if (lastSeen !== APP_VERSION) {
+    openWhatsNew(true);
+  }
+})();
 
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -569,14 +922,15 @@ function renderReviewQueue() {
   if (!reviewQueue.length) { empty.style.display = "block"; return; }
   empty.style.display = "none";
 
-  reviewQueue.forEach(item => {
+  reviewQueue.forEach((item, idx) => {
     const p = item.parsed;
     const card = document.createElement("div");
     card.className = "card review-card";
     card.innerHTML = `
       <img class="thumb" src="${item.previewUrl}" alt="">
       <div class="fields">
-        <div class="review-meta">${item.error ? "⚠️ Couldn't read this one automatically — fill it in by hand." : "Auto-read — check before saving"}</div>
+        ${reviewQueue.length > 1 ? `<div class="review-progress">${idx + 1} of ${reviewQueue.length}</div>` : ""}
+        <div class="review-meta">${item.error ? "Couldn't auto-read — fill in by hand" : "Auto-read — check before saving"}</div>
         <div class="field-row">
           <div class="field"><label>Date &amp; time</label><input type="datetime-local" data-f="dateTime" value="${localDateTimeInputValue(item.lastModified)}"></div>
           <div class="field"><label>Platform</label>
@@ -603,7 +957,7 @@ function renderReviewQueue() {
           <div class="field"><label>Service</label><input type="text" data-f="serviceType" value="${escapeAttr(p.serviceType)}"></div>
           <div class="field"><label>Stops total</label><input type="number" data-f="stopsTotal" value="${p.stopsTotal}"></div>
         </div>
-        <label class="checkbox-row"><input type="checkbox" data-f="surge" ${p.surge ? "checked" : ""}> Boosted / priority fare (green ⤴ badge on screen)</label>
+        <label class="checkbox-row"><input type="checkbox" data-f="surge" ${p.surge ? "checked" : ""}> Boosted / priority fare</label>
         <div class="btn-row">
           <button class="btn" data-action="save">Save</button>
           <button class="btn ghost" data-action="discard">Discard</button>
@@ -648,6 +1002,62 @@ function discardReviewItem(id) {
 }
 
 /* ---------------------------------------------------------------------
+   Geocoding (OneMap, public search endpoint — no key needed) + distance
+--------------------------------------------------------------------- */
+
+async function geocodePostal(postal) {
+  if (!postal || !/^\d{6}$/.test(postal)) return null;
+  if (Object.prototype.hasOwnProperty.call(geocodeCache, postal)) return geocodeCache[postal];
+  try {
+    const url = "https://www.onemap.gov.sg/api/common/elastic/search?searchVal=" + postal + "&returnGeom=Y&getAddrDetails=N&pageNum=1";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("bad status");
+    const json = await res.json();
+    const r = json && json.results && json.results[0];
+    const coord = r ? { lat: parseFloat(r.LATITUDE), lng: parseFloat(r.LONGITUDE) } : null;
+    geocodeCache[postal] = coord;
+    saveGeocodeCache();
+    return coord;
+  } catch (e) {
+    geocodeCache[postal] = null;
+    saveGeocodeCache();
+    return null;
+  }
+}
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+// Fills in distanceKm on any saved record missing it (undefined = not yet
+// tried, null = tried and unavailable). Re-renders the Dashboard once done
+// if the user is still there. Fails soft — no distance data just means
+// those stats stay hidden, nothing else breaks.
+async function enrichDistances() {
+  if (enrichInFlight) return;
+  const todo = records.filter(r => r.distanceKm === undefined && r.pickupPostal && r.dropoffPostal);
+  if (!todo.length) return;
+  enrichInFlight = true;
+  let changed = false;
+  for (const r of todo) {
+    const a = await geocodePostal(r.pickupPostal);
+    const b = await geocodePostal(r.dropoffPostal);
+    r.distanceKm = (a && b) ? +haversineKm(a, b).toFixed(2) : null;
+    changed = true;
+  }
+  enrichInFlight = false;
+  if (changed) {
+    saveRecords();
+    const dashActive = document.getElementById("tab-dashboard").classList.contains("active");
+    if (dashActive) renderDashboard();
+  }
+}
+
+/* ---------------------------------------------------------------------
    Dashboard
 --------------------------------------------------------------------- */
 
@@ -657,6 +1067,31 @@ function districtFor(postal) {
 }
 
 function money(n) { return "S$" + (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
+function money0(n) { return "S$" + Math.round(n); }
+
+document.getElementById("dashSubnav").querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => {
+    activeDashSection = b.dataset.sec;
+    applyDashSectionVisibility();
+  });
+});
+function applyDashSectionVisibility() {
+  document.getElementById("dashSubnav").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.sec === activeDashSection));
+  document.querySelectorAll(".dash-section").forEach(s => {
+    s.hidden = window.matchMedia("(max-width: 899px)").matches && s.dataset.section !== activeDashSection;
+  });
+}
+window.addEventListener("resize", applyDashSectionVisibility);
+
+document.getElementById("heatmapMetricToggle").querySelectorAll("button").forEach(b => {
+  b.addEventListener("click", () => {
+    heatmapMetric = b.dataset.metric;
+    document.getElementById("heatmapMetricToggle").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+    const grid = lastWithEarnForHeatmap ? buildDowDaypartGrid(lastWithEarnForHeatmap) : null;
+    if (grid) drawHeatmap(grid);
+  });
+});
+let lastWithEarnForHeatmap = null;
 
 function renderDashboard() {
   const empty = document.getElementById("dashboardEmpty");
@@ -664,56 +1099,329 @@ function renderDashboard() {
   if (!records.length) { empty.style.display = "block"; content.style.display = "none"; return; }
   empty.style.display = "none";
   content.style.display = "block";
+  applyDashSectionVisibility();
 
-  const withEarn = records.filter(r => typeof r.earn === "number" && !isNaN(r.earn));
-  const totalTrips = records.length;
+  // --- platform filter control (built from the FULL dataset) ---
+  const allPlatforms = Array.from(new Set(records.map(r => r.platform || "Other")));
+  const filterBar = document.getElementById("platformFilter");
+  if (allPlatforms.length < 2) {
+    filterBar.style.display = "none";
+    platformFilterValue = "All";
+  } else {
+    filterBar.style.display = "flex";
+    if (platformFilterValue !== "All" && !allPlatforms.includes(platformFilterValue)) platformFilterValue = "All";
+    const opts = ["All", ...allPlatforms];
+    filterBar.innerHTML = opts.map(p => `<button data-p="${escapeAttr(p)}" class="${p === platformFilterValue ? "active" : ""}">${escapeAttr(p)}</button>`).join("");
+    filterBar.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      platformFilterValue = b.dataset.p;
+      renderDashboard();
+    }));
+  }
+
+  const filtered = platformFilterValue === "All" ? records : records.filter(r => (r.platform || "Other") === platformFilterValue);
+  const withEarn = filtered.filter(r => typeof r.earn === "number" && !isNaN(r.earn));
+  lastWithEarnForHeatmap = withEarn;
+
+  renderNowCard(withEarn);
+  renderStatTiles(filtered, withEarn);
+  renderDelta(withEarn);
+  renderRecords(withEarn);
+  drawHeatmap(buildDowDaypartGrid(withEarn));
+  renderCalendar(withEarn);
+  renderTrend(withEarn);
+  renderDistanceStats(withEarn);
+  renderZones(withEarn);
+  renderFlow(withEarn);
+  renderPlatformChart(records, withEarn);
+  renderCommission(filtered);
+  renderTripTypes(withEarn);
+  renderSurge(withEarn);
+
+  enrichDistances();
+}
+
+function renderStatTiles(filtered, withEarn) {
+  const totalTrips = filtered.length;
   const totalEarn = withEarn.reduce((s, r) => s + r.earn, 0);
   const avgEarn = withEarn.length ? totalEarn / withEarn.length : 0;
-  const withCommission = records.filter(r => typeof r.earn === "number" && typeof r.paid === "number" && r.paid > 0);
+  const withCommission = filtered.filter(r => typeof r.earn === "number" && typeof r.paid === "number" && r.paid > 0);
   const avgCommissionPct = withCommission.length
     ? withCommission.reduce((s, r) => s + (r.paid - r.earn) / r.paid, 0) / withCommission.length * 100 : null;
 
   document.getElementById("statGrid").innerHTML = `
     <div class="stat-tile"><div class="label">Total trips</div><div class="value">${totalTrips}</div></div>
-    <div class="stat-tile"><div class="label">Total earned</div><div class="value">${money(totalEarn)}</div></div>
+    <div class="stat-tile"><div class="label">Total earned</div><div class="value">${money0(totalEarn)}</div></div>
     <div class="stat-tile"><div class="label">Avg. per trip</div><div class="value">${money(avgEarn)}</div></div>
-    <div class="stat-tile"><div class="label">Avg. platform cut</div><div class="value">${avgCommissionPct === null ? "—" : avgCommissionPct.toFixed(1) + "%"}</div></div>
+    <div class="stat-tile"><div class="label">Avg. platform cut</div><div class="value">${avgCommissionPct === null ? "—" : avgCommissionPct.toFixed(0) + "%"}</div></div>
   `;
+}
 
-  // --- hour of day ---
-  const byHour = Array.from({ length: 24 }, () => ({ sum: 0, n: 0 }));
-  withEarn.forEach(r => {
-    if (!r.dateTime) return;
-    const h = new Date(r.dateTime).getHours();
-    if (isNaN(h)) return;
-    byHour[h].sum += r.earn; byHour[h].n += 1;
+function isoWeekStart(d) {
+  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = (date.getDay() + 6) % 7; // Mon=0..Sun=6
+  date.setDate(date.getDate() - day);
+  return date;
+}
+function fmtShortDate(d) { return d.toLocaleDateString("en-SG", { day: "numeric", month: "short" }); }
+
+function weeklyTotals(withEarn) {
+  const withDates = withEarn.filter(r => r.dateTime && !isNaN(new Date(r.dateTime).getTime()));
+  const weeks = {};
+  withDates.forEach(r => {
+    const ws = isoWeekStart(new Date(r.dateTime));
+    const key = ws.toISOString().slice(0, 10);
+    if (!weeks[key]) weeks[key] = { start: ws, sum: 0, n: 0 };
+    weeks[key].sum += r.earn; weeks[key].n += 1;
   });
-  const hourLabels = [], hourData = [], hourCounts = [];
-  byHour.forEach((b, h) => { if (b.n > 0) { hourLabels.push(h + ":00"); hourData.push(+(b.sum / b.n).toFixed(2)); hourCounts.push(b.n); } });
-  renderBarChart("chartHour", hourLabels, hourData, hourCounts, "var(--series-1)");
+  return weeks;
+}
 
-  // --- day of week ---
-  const distinctDays = new Set(records.filter(r => r.dateTime).map(r => r.dateTime.slice(0, 10)));
-  const dowNote = document.getElementById("dowNote");
-  const dowCard = document.getElementById("dowCard");
-  if (distinctDays.size < 3) {
-    dowCard.querySelector(".chart-wrap").style.display = "none";
-    dowNote.textContent = "Not enough different days logged yet (" + distinctDays.size + " so far) — this fills in as more days come in.";
-  } else {
-    dowCard.querySelector(".chart-wrap").style.display = "block";
-    dowNote.textContent = "Based on " + distinctDays.size + " distinct days logged so far.";
-    const byDow = Array.from({ length: 7 }, () => ({ sum: 0, n: 0 }));
-    withEarn.forEach(r => {
-      if (!r.dateTime) return;
-      const d = new Date(r.dateTime).getDay();
-      byDow[d].sum += r.earn; byDow[d].n += 1;
-    });
-    const dowLabels = [], dowData = [], dowCounts = [];
-    byDow.forEach((b, i) => { if (b.n > 0) { dowLabels.push(DOW_LABELS[i]); dowData.push(+(b.sum / b.n).toFixed(2)); dowCounts.push(b.n); } });
-    renderBarChart("chartDow", dowLabels, dowData, dowCounts, "var(--series-1)");
+function renderDelta(withEarn) {
+  const card = document.getElementById("deltaCard");
+  const weeks = weeklyTotals(withEarn);
+  const keys = Object.keys(weeks).sort();
+  if (keys.length < 2) { card.style.display = "none"; return; }
+  card.style.display = "block";
+  const thisWeek = weeks[keys[keys.length - 1]];
+  const lastWeek = weeks[keys[keys.length - 2]];
+  const diff = thisWeek.sum - lastWeek.sum;
+  const pct = lastWeek.sum > 0 ? (diff / lastWeek.sum) * 100 : null;
+  let status = "neutral", icon = ICON.flat;
+  if (diff > 0.5) { status = "good"; icon = ICON.up; }
+  else if (diff < -0.5) { status = "warning"; icon = ICON.down; }
+
+  document.getElementById("deltaGrid").innerHTML = `
+    <div class="stat-tile"><div class="label">This week</div><div class="value">${money0(thisWeek.sum)}</div><div class="sub">${thisWeek.n} trips</div></div>
+    <div class="stat-tile"><div class="label">Last week</div><div class="value">${money0(lastWeek.sum)}</div><div class="sub">${lastWeek.n} trips</div></div>
+    <div class="stat-tile" style="grid-column:1/-1;">
+      <div class="label">Change</div>
+      <div class="delta status-${status}">${icon} ${diff >= 0 ? "+" : "−"}${money0(Math.abs(diff))}${pct !== null ? " (" + (pct >= 0 ? "+" : "") + pct.toFixed(0) + "%)" : ""}</div>
+    </div>
+  `;
+}
+
+function renderRecords(withEarn) {
+  const card = document.getElementById("recordsCard");
+  if (withEarn.length < 3) { card.style.display = "none"; return; }
+  card.style.display = "block";
+
+  const withDates = withEarn.filter(r => r.dateTime && !isNaN(new Date(r.dateTime).getTime()));
+
+  const bestTrip = withEarn.reduce((best, r) => (!best || r.earn > best.earn) ? r : best, null);
+
+  const byDay = {};
+  withDates.forEach(r => {
+    const key = r.dateTime.slice(0, 10);
+    if (!byDay[key]) byDay[key] = { sum: 0, n: 0 };
+    byDay[key].sum += r.earn; byDay[key].n += 1;
+  });
+  let bestDayKey = null, bestDay = null, busiestDayKey = null, busiestDay = null;
+  Object.entries(byDay).forEach(([k, v]) => {
+    if (!bestDay || v.sum > bestDay.sum) { bestDay = v; bestDayKey = k; }
+    if (!busiestDay || v.n > busiestDay.n) { busiestDay = v; busiestDayKey = k; }
+  });
+
+  const grid = buildDowDaypartGrid(withEarn);
+  let bestSlot = null;
+  for (let dow = 0; dow < 7; dow++) for (let dp = 0; dp < 6; dp++) {
+    const c = grid[dow][dp];
+    if (c.n >= 2 && (!bestSlot || c.sum / c.n > bestSlot.avg)) bestSlot = { dow, dp, avg: c.sum / c.n, n: c.n };
   }
 
-  // --- pickup zones ---
+  const tiles = [];
+  if (bestTrip) tiles.push({
+    primary: true, icon: ICON.star, label: "Best trip", value: money(bestTrip.earn),
+    sub: (bestTrip.dateTime ? new Date(bestTrip.dateTime).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" }) : "") +
+      (bestTrip.pickupAddr ? " · " + bestTrip.pickupAddr : "")
+  });
+  if (bestDayKey) tiles.push({
+    icon: ICON.calendarDay, label: "Best day", value: money0(bestDay.sum),
+    sub: new Date(bestDayKey).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" }) + " · " + bestDay.n + " trips"
+  });
+  if (bestSlot) tiles.push({
+    icon: ICON.clock, label: "Best time slot", value: money(bestSlot.avg) + "/trip",
+    sub: DOW_LABELS[bestSlot.dow] + " " + DAYPARTS[bestSlot.dp].label + "–" + DAYPARTS[(bestSlot.dp + 1) % 6].label + " · " + bestSlot.n + " trips"
+  });
+  if (busiestDayKey) tiles.push({
+    icon: ICON.flame, label: "Busiest day", value: busiestDay.n + " trips",
+    sub: new Date(busiestDayKey).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" }) + " · " + money0(busiestDay.sum) + " total"
+  });
+
+  document.getElementById("recordsGrid").innerHTML = tiles.map(t => `
+    <div class="record-tile${t.primary ? "" : " desktop-only"}">
+      <div class="rt-icon">${t.icon}</div>
+      <div>
+        <div class="rt-label">${t.label}</div>
+        <div class="rt-value">${t.value}</div>
+        <div class="rt-sub">${escapeAttr(t.sub)}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderNowCard(withEarn) {
+  const nowCard = document.getElementById("nowCard");
+  if (withEarn.length < 4) { nowCard.style.display = "none"; return; }
+  nowCard.style.display = "block";
+
+  const grid = buildDowDaypartGrid(withEarn);
+  const now = new Date();
+  const dow = now.getDay();
+  const dp = daypartIndex(now.getHours());
+  const cell = grid[dow][dp];
+  const overallAvg = withEarn.reduce((s, r) => s + r.earn, 0) / withEarn.length;
+  const dpLabel = DAYPARTS[dp].label + "–" + DAYPARTS[(dp + 1) % 6].label;
+  const whenText = DOW_LABELS[dow] + ", " + dpLabel;
+
+  let status = "neutral", icon = ICON.flat, tag = "No data", sub = "No trips logged for " + whenText + " so far — this fills in as more data comes in.";
+  if (cell.n > 0) {
+    const ratio = cell.sum / cell.n / overallAvg;
+    if (ratio >= 1.15) { status = "good"; icon = ICON.up; tag = "Strong"; }
+    else if (ratio <= 0.85) { status = "warning"; icon = ICON.down; tag = "Quiet"; }
+    else { status = "neutral"; icon = ICON.flat; tag = "Average"; }
+    sub = "Averaged " + money(cell.sum / cell.n) + "/trip in this slot" + (cell.n < 2 ? " (only " + cell.n + " trip logged — early days)" : " across " + cell.n + " trips") + ", vs " + money(overallAvg) + " overall.";
+  }
+
+  nowCard.className = "now-card status-" + status;
+  document.getElementById("nowHeadline").innerHTML = `<span class="now-pill status-${status}">${icon} ${tag}</span> ${escapeAttr(whenText)}`;
+  document.getElementById("nowSub").textContent = sub;
+}
+
+// shared aggregation: day-of-week x daypart -> {sum, n, boosted}
+function buildDowDaypartGrid(withEarn) {
+  const grid = Array.from({ length: 7 }, () => Array.from({ length: 6 }, () => ({ sum: 0, n: 0, boosted: 0 })));
+  withEarn.forEach(r => {
+    if (!r.dateTime) return;
+    const d = new Date(r.dateTime);
+    if (isNaN(d.getTime())) return;
+    const dow = d.getDay();
+    const dp = daypartIndex(d.getHours());
+    grid[dow][dp].sum += r.earn;
+    grid[dow][dp].n += 1;
+    if (r.surge) grid[dow][dp].boosted += 1;
+  });
+  return grid;
+}
+
+function drawHeatmap(grid) {
+  const note = document.getElementById("heatmapNote");
+  const metric = heatmapMetric;
+  const cellValue = (c) => metric === "earn" ? (c.n ? c.sum / c.n : 0) : (c.n ? (c.boosted / c.n) * 100 : 0);
+  const maxVal = Math.max(0, ...grid.flat().filter(c => c.n > 0).map(cellValue));
+  const lowC = [34, 51, 73];
+  const highC = [57, 135, 229];
+
+  let html = "<tr><th class=\"row-head\"></th>" + DAYPARTS.map(d => `<th>${d.label}</th>`).join("") + "</tr>";
+  for (let dow = 0; dow < 7; dow++) {
+    html += "<tr>";
+    html += `<td class="row-head">${DOW_LABELS_SHORT[dow]}</td>`;
+    for (let dp = 0; dp < 6; dp++) {
+      const c = grid[dow][dp];
+      if (c.n === 0) {
+        html += `<td class="cell empty">–</td>`;
+      } else {
+        const v = cellValue(c);
+        const t = maxVal > 0 ? v / maxVal : 0;
+        const rgb = lowC.map((lo, i) => Math.round(lo + (highC[i] - lo) * t));
+        const lowSample = c.n < 2 ? " low-sample" : "";
+        const display = metric === "earn" ? Math.round(v) : Math.round(v) + "%";
+        const tip = metric === "earn"
+          ? `${DOW_LABELS[dow]} ${DAYPARTS[dp].label}: avg ${money(v)} over ${c.n} trip${c.n === 1 ? "" : "s"}`
+          : `${DOW_LABELS[dow]} ${DAYPARTS[dp].label}: boosted ${c.boosted} of ${c.n} trip${c.n === 1 ? "" : "s"}`;
+        html += `<td class="cell${lowSample}" style="background:rgb(${rgb.join(",")})" title="${tip}">${display}</td>`;
+      }
+    }
+    html += "</tr>";
+  }
+  document.getElementById("heatmapTable").innerHTML = html;
+  note.textContent = metric === "earn"
+    ? "Average earnings per trip for each day / time-of-day slot."
+    : "Share of trips in each slot that were boosted / priority fares.";
+  note.textContent += " Dashed border = only 1 trip logged so far — a hint, not a settled fact yet.";
+}
+
+function renderCalendar(withEarn) {
+  const wrap = document.getElementById("calendarCard");
+  const byDate = {};
+  withEarn.forEach(r => {
+    if (!r.dateTime) return;
+    const key = r.dateTime.slice(0, 10);
+    if (!byDate[key]) byDate[key] = { sum: 0, n: 0 };
+    byDate[key].sum += r.earn; byDate[key].n += 1;
+  });
+  if (!Object.keys(byDate).length) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+
+  const days = 84; // 12 weeks
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = new Date(today); start.setDate(start.getDate() - (days - 1));
+  // align to a Sunday so the 7-row grid reads as calendar weeks
+  start.setDate(start.getDate() - start.getDay());
+
+  const values = Object.values(byDate).map(v => v.sum);
+  const maxVal = values.length ? Math.max(...values) : 0;
+
+  let html = "";
+  const cursor = new Date(start);
+  const totalCells = Math.ceil((today.getTime() - start.getTime()) / 86400000) + 1;
+  const weeks = Math.ceil(totalCells / 7);
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < 7; d++) {
+      const key = cursor.toISOString().slice(0, 10);
+      const v = byDate[key];
+      const isFuture = cursor > today;
+      if (!isFuture) {
+        if (v) {
+          const t = maxVal > 0 ? v.sum / maxVal : 0;
+          const alpha = 0.25 + t * 0.75;
+          html += `<div class="cal-cell has-data" style="opacity:${alpha.toFixed(2)}" title="${key}: ${money(v.sum)}, ${v.n} trip${v.n === 1 ? "" : "s"}"></div>`;
+        } else {
+          html += `<div class="cal-cell" title="${key}: no trips logged"></div>`;
+        }
+      } else {
+        html += `<div class="cal-cell" style="visibility:hidden"></div>`;
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  document.getElementById("calGrid").innerHTML = html;
+}
+
+function renderTrend(withEarn) {
+  const trendNote = document.getElementById("trendNote");
+  const wrap = document.getElementById("chartTrend").parentElement;
+  const weeks = weeklyTotals(withEarn);
+  const weekKeys = Object.keys(weeks).sort();
+  if (weekKeys.length < 2) {
+    wrap.style.display = "none";
+    trendNote.textContent = "Needs at least two different weeks of data to show a trend — keep logging and this fills in.";
+    destroyChart("chartTrend");
+    return;
+  }
+  wrap.style.display = "block";
+  trendNote.textContent = "Total earned per week, week starting Monday.";
+  const labels = weekKeys.map(k => fmtShortDate(weeks[k].start));
+  const data = weekKeys.map(k => +weeks[k].sum.toFixed(2));
+  const counts = weekKeys.map(k => weeks[k].n);
+  renderLineChart("chartTrend", labels, data, counts);
+}
+
+function renderDistanceStats(withEarn) {
+  const grid = document.getElementById("distanceStatGrid");
+  const withDist = withEarn.filter(r => typeof r.distanceKm === "number");
+  if (!withDist.length) { grid.style.display = "none"; return; }
+  grid.style.display = "grid";
+  const totalKm = withDist.reduce((s, r) => s + r.distanceKm, 0);
+  const totalEarn = withDist.reduce((s, r) => s + r.earn, 0);
+  const perKm = totalKm > 0 ? totalEarn / totalKm : 0;
+  const longest = withDist.reduce((best, r) => (!best || r.distanceKm > best.distanceKm) ? r : best, null);
+  grid.innerHTML = `
+    <div class="stat-tile"><div class="label">Avg. S$/km</div><div class="value">${money(perKm)}</div><div class="sub">straight-line estimate, ${withDist.length} of ${withEarn.length} trips</div></div>
+    <div class="stat-tile"><div class="label">Longest trip</div><div class="value">${longest.distanceKm.toFixed(1)} km</div><div class="sub">${money(longest.earn)} · ${escapeAttr(longest.pickupAddr || "")}</div></div>
+  `;
+}
+
+function renderZones(withEarn) {
   const byZone = {};
   withEarn.forEach(r => {
     const d = districtFor(r.pickupPostal);
@@ -723,32 +1431,115 @@ function renderDashboard() {
   });
   const zoneEntries = Object.entries(byZone).map(([name, v]) => ({ name, avg: v.sum / v.n, n: v.n }))
     .sort((a, b) => b.avg - a.avg).slice(0, 8);
+  const wrap = document.getElementById("zoneChartWrap");
   if (zoneEntries.length) {
+    wrap.style.height = Math.max(250, zoneEntries.length * 42) + "px";
+    wrap.innerHTML = '<canvas id="chartZone"></canvas>';
     renderBarChart("chartZone", zoneEntries.map(z => z.name + " (" + z.n + ")"), zoneEntries.map(z => +z.avg.toFixed(2)),
       zoneEntries.map(z => z.n), "var(--series-1)", true);
   } else {
-    document.getElementById("zoneChartWrap").innerHTML = '<p class="empty-note">No pickup postal codes recognised yet.</p>';
+    destroyChart("chartZone");
+    wrap.style.height = "";
+    wrap.innerHTML = '<p class="empty-note">No pickup postal codes recognised yet.</p>';
   }
+}
 
-  // --- platform ---
-  const byPlatform = {};
+function renderFlow(withEarn) {
+  const pairs = {};
   withEarn.forEach(r => {
+    const from = districtFor(r.pickupPostal);
+    const to = districtFor(r.dropoffPostal);
+    if (!from || !to) return;
+    const key = from + "→" + to;
+    if (!pairs[key]) pairs[key] = { from, to, sum: 0, n: 0 };
+    pairs[key].sum += r.earn; pairs[key].n += 1;
+  });
+  const entries = Object.values(pairs).sort((a, b) => b.n - a.n).slice(0, 8);
+  const card = document.getElementById("flowCard");
+  const list = document.getElementById("flowList");
+  if (!entries.length) { card.style.display = "none"; return; }
+  card.style.display = "block";
+  list.innerHTML = entries.map(e => `
+    <div class="info-row">
+      <div class="info-main">${escapeAttr(e.from)} <span class="arrow">→</span> ${escapeAttr(e.to)}</div>
+      <div class="info-stats"><div class="amt">${money(e.sum / e.n)}</div><div class="cnt">${e.n} trip${e.n === 1 ? "" : "s"}</div></div>
+    </div>
+  `).join("");
+}
+
+function renderPlatformChart(allRecords, filteredWithEarn) {
+  const platformCard = document.getElementById("platformCard");
+  const allWithEarn = allRecords.filter(r => typeof r.earn === "number" && !isNaN(r.earn));
+  const byPlatform = {};
+  allWithEarn.forEach(r => {
     const p = r.platform || "Other";
     if (!byPlatform[p]) byPlatform[p] = { sum: 0, n: 0 };
     byPlatform[p].sum += r.earn; byPlatform[p].n += 1;
   });
   const platforms = Object.keys(byPlatform);
-  const platformCard = document.getElementById("platformCard");
-  if (platforms.length < 2) {
+  if (platforms.length < 2 || platformFilterValue !== "All") {
     platformCard.style.display = "none";
-  } else {
-    platformCard.style.display = "block";
-    const colors = { Grab: "#3987e5", TADA: "#d95926", Other: "#199e70" };
-    renderCategoricalBarChart("chartPlatform", platforms, platforms.map(p => +(byPlatform[p].sum / byPlatform[p].n).toFixed(2)),
-      platforms.map(p => byPlatform[p].n), platforms.map(p => colors[p] || "#199e70"));
+    return;
   }
+  platformCard.style.display = "block";
+  const colors = { Grab: "#3987e5", TADA: "#d95926", Other: "#199e70" };
+  renderCategoricalBarChart("chartPlatform", platforms, platforms.map(p => +(byPlatform[p].sum / byPlatform[p].n).toFixed(2)),
+    platforms.map(p => byPlatform[p].n), platforms.map(p => colors[p] || "#199e70"));
+}
 
-  // --- surge ---
+function renderCommission(filtered) {
+  const card = document.getElementById("commissionCard");
+  const byPlatform = {};
+  filtered.forEach(r => {
+    if (typeof r.earn !== "number" || typeof r.paid !== "number" || r.paid <= 0) return;
+    const p = r.platform || "Other";
+    if (!byPlatform[p]) byPlatform[p] = { sumPct: 0, n: 0 };
+    byPlatform[p].sumPct += (r.paid - r.earn) / r.paid * 100;
+    byPlatform[p].n += 1;
+  });
+  const entries = Object.entries(byPlatform);
+  if (!entries.length) { card.style.display = "none"; return; }
+  card.style.display = "block";
+  document.getElementById("commissionList").innerHTML = entries.map(([p, v]) => `
+    <div class="info-row">
+      <div class="info-main"><span class="platform-pill platform-${p}">${escapeAttr(p)}</span></div>
+      <div class="info-stats"><div class="amt">${(v.sumPct / v.n).toFixed(0)}%</div><div class="cnt">avg cut · ${v.n} trips</div></div>
+    </div>
+  `).join("");
+}
+
+function renderTripTypes(withEarn) {
+  const card = document.getElementById("tripTypeCard");
+  if (!withEarn.length) { card.style.display = "none"; return; }
+  card.style.display = "block";
+
+  const byStops = { "Single-stop": { sum: 0, n: 0 }, "Multi-stop": { sum: 0, n: 0 } };
+  withEarn.forEach(r => {
+    const key = (r.stopsTotal && r.stopsTotal > 2) ? "Multi-stop" : "Single-stop";
+    byStops[key].sum += r.earn; byStops[key].n += 1;
+  });
+  document.getElementById("stopsList").innerHTML = Object.entries(byStops).filter(([, v]) => v.n > 0).map(([label, v]) => `
+    <div class="info-row">
+      <div class="info-main">${label}</div>
+      <div class="info-stats"><div class="amt">${money(v.sum / v.n)}</div><div class="cnt">avg · ${v.n} trips</div></div>
+    </div>
+  `).join("");
+
+  const byService = {};
+  withEarn.forEach(r => {
+    const key = r.serviceType || "Unspecified";
+    if (!byService[key]) byService[key] = { sum: 0, n: 0 };
+    byService[key].sum += r.earn; byService[key].n += 1;
+  });
+  document.getElementById("serviceList").innerHTML = Object.entries(byService).sort((a, b) => b[1].n - a[1].n).map(([label, v]) => `
+    <div class="info-row">
+      <div class="info-main">${escapeAttr(label)}</div>
+      <div class="info-stats"><div class="amt">${money(v.sum / v.n)}</div><div class="cnt">avg · ${v.n} trips</div></div>
+    </div>
+  `).join("");
+}
+
+function renderSurge(withEarn) {
   const surgeCard = document.getElementById("surgeCard");
   const withSurgeFlag = withEarn.filter(r => typeof r.surge === "boolean");
   const boosted = withSurgeFlag.filter(r => r.surge);
@@ -760,8 +1551,8 @@ function renderDashboard() {
     const avgB = boosted.reduce((s, r) => s + r.earn, 0) / boosted.length;
     const avgR = regular.reduce((s, r) => s + r.earn, 0) / regular.length;
     document.getElementById("surgeGrid").innerHTML = `
-      <div class="stat-tile"><div class="label">Boosted (${boosted.length} trips)</div><div class="value">${money(avgB)}</div><div class="sub">avg per trip</div></div>
-      <div class="stat-tile"><div class="label">Regular (${regular.length} trips)</div><div class="value">${money(avgR)}</div><div class="sub">avg per trip</div></div>
+      <div class="stat-tile"><div class="label">Boosted (${boosted.length})</div><div class="value">${money(avgB)}</div><div class="sub">avg per trip</div></div>
+      <div class="stat-tile"><div class="label">Regular (${regular.length})</div><div class="value">${money(avgR)}</div><div class="sub">avg per trip</div></div>
     `;
   }
 }
@@ -790,13 +1581,14 @@ function renderBarChart(canvasId, labels, data, counts, colorVar, horizontal) {
   try {
   charts[canvasId] = new Chart(ctx, {
     type: "bar",
-    data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 4, maxBarThickness: 34 }] },
+    data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 5, maxBarThickness: 36 }] },
     options: {
       indexAxis: horizontal ? "y" : "x",
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
+          bodyFont: { size: 13 }, titleFont: { size: 13 }, padding: 10,
           callbacks: {
             label: (c) => {
               const n = counts[c.dataIndex];
@@ -806,8 +1598,36 @@ function renderBarChart(canvasId, labels, data, counts, colorVar, horizontal) {
         }
       },
       scales: {
-        x: { ticks: { color: "#898781", font: { size: 10.5 } }, grid: { color: "#2c2c2a" } },
-        y: { ticks: { color: "#898781", font: { size: 10.5 } }, grid: { color: "#2c2c2a" }, beginAtZero: true }
+        x: { ticks: { color: "#989691", font: { size: 11.5 } }, grid: { color: "#2c2c2a" } },
+        y: { ticks: { color: "#989691", font: { size: 11.5 } }, grid: { color: "#2c2c2a" }, beginAtZero: true }
+      }
+    }
+  });
+  } catch (e) { console.error(e); }
+}
+
+function renderLineChart(canvasId, labels, data, counts) {
+  if (chartLibMissing(canvasId)) return;
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  const color = cssVar("var(--series-1)");
+  try {
+  charts[canvasId] = new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: "rgba(57,135,229,.14)", fill: true,
+      tension: 0.25, pointRadius: 4, pointBackgroundColor: color, borderWidth: 2.5 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          bodyFont: { size: 13 }, titleFont: { size: 13 }, padding: 10,
+          callbacks: { label: (c) => money(c.raw) + "  (" + counts[c.dataIndex] + " trips)" }
+        }
+      },
+      scales: {
+        x: { ticks: { color: "#989691", font: { size: 11.5 } }, grid: { display: false } },
+        y: { ticks: { color: "#989691", font: { size: 11.5 } }, grid: { color: "#2c2c2a" }, beginAtZero: true }
       }
     }
   });
@@ -821,16 +1641,16 @@ function renderCategoricalBarChart(canvasId, labels, data, counts, colors) {
   try {
   charts[canvasId] = new Chart(ctx, {
     type: "bar",
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4, maxBarThickness: 46 }] },
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 5, maxBarThickness: 50 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (c) => "avg " + money(c.raw) + "  (" + counts[c.dataIndex] + " trips)" } }
+        tooltip: { bodyFont: { size: 13 }, padding: 10, callbacks: { label: (c) => "avg " + money(c.raw) + "  (" + counts[c.dataIndex] + " trips)" } }
       },
       scales: {
-        x: { ticks: { color: "#898781" }, grid: { display: false } },
-        y: { ticks: { color: "#898781" }, grid: { color: "#2c2c2a" }, beginAtZero: true }
+        x: { ticks: { color: "#989691", font: { size: 12.5 } }, grid: { display: false } },
+        y: { ticks: { color: "#989691" }, grid: { color: "#2c2c2a" }, beginAtZero: true }
       }
     }
   });
@@ -853,6 +1673,7 @@ function renderDataTable() {
       <td><span class="platform-pill platform-${r.platform || "Other"}">${r.platform || "?"}</span></td>
       <td>${typeof r.earn === "number" ? money(r.earn) : "—"}</td>
       <td>${typeof r.paid === "number" ? money(r.paid) : "—"}</td>
+      <td>${typeof r.distanceKm === "number" ? r.distanceKm.toFixed(1) : "—"}</td>
       <td>${r.surge ? "✓" : ""}</td>
       <td>${escapeAttr(r.pickupAddr)} ${r.pickupPostal || ""}</td>
       <td>${escapeAttr(r.dropoffAddr)} ${r.dropoffPostal || ""}</td>
@@ -868,7 +1689,7 @@ function renderDataTable() {
   });
 }
 
-const CSV_COLS = ["dateTime","platform","earn","paid","pickupAddr","pickupPostal","dropoffAddr","dropoffPostal","serviceType","stopsTotal","surge"];
+const CSV_COLS = ["dateTime","platform","earn","paid","pickupAddr","pickupPostal","dropoffAddr","dropoffPostal","serviceType","stopsTotal","surge","distanceKm"];
 
 document.getElementById("exportCsvBtn").addEventListener("click", () => {
   const rows = [CSV_COLS.join(",")];
@@ -902,7 +1723,7 @@ document.getElementById("importCsvInput").addEventListener("change", (e) => {
       const rec = { id: uid(), createdAt: new Date().toISOString() };
       header.forEach((h, idx) => {
         let v = cells[idx];
-        if (h === "earn" || h === "paid") v = v === "" ? null : parseFloat(v);
+        if (h === "earn" || h === "paid" || h === "distanceKm") v = v === "" ? null : parseFloat(v);
         if (h === "stopsTotal") v = v === "" ? null : parseInt(v, 10);
         if (h === "surge") v = v === "true" || v === "1" || v === "TRUE";
         rec[h] = v;

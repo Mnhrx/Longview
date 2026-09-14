@@ -483,7 +483,7 @@ function huntHtml(hunt) {
           Been round a few shops? Note what each one charges and the cheapest
           is worked out for you — and becomes the price the plan runs on.
         </p>
-        <button class="link-btn" id="wsAddShop" type="button">Add the first shop</button>
+        <button class="btn btn-secondary block-btn" id="wsAddShop" type="button">Add the first shop</button>
       </div>
     `;
   }
@@ -526,7 +526,7 @@ function huntHtml(hunt) {
       </div>
 
       <div class="hunt-rows">${rows}</div>
-      <button class="link-btn" id="wsAddShop" type="button">Add another shop</button>
+      <button class="btn btn-secondary block-btn" id="wsAddShop" type="button">Add another shop</button>
       <p class="settings-note">
         The cheapest is the price the plan runs on, and what you'll be measured
         against when you buy it.
@@ -733,10 +733,15 @@ function openWantSheet(item, store, { month = undefined, pinned = false }, onDon
           </p>
         `}
 
+        ${hunt ? "" : `<button class="btn btn-secondary block-btn" id="wsSave" type="button">Save price</button>`}
+
         ${huntHtml(hunt)}
 
+        <!-- Primary last, and each secondary button sits with the thing it
+             acts on: Save price under the price field, Add a shop inside the
+             hunt. Stacking all three together made you read three identical
+             boxes to find the one that mattered. -->
         <button class="btn btn-primary block-btn" id="wsGot" type="button">I got this</button>
-        ${hunt ? "" : `<button class="btn btn-secondary block-btn" id="wsSave" type="button">Save price</button>`}
         <div class="ws-links">
           <button class="link-btn" id="wsPin" type="button">${
             pinned ? "Clear pin" : "Get this one next"

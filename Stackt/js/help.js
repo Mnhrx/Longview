@@ -16,7 +16,7 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { ICONS } from "./icons.js";
 
-export const APP_VERSION = "4.1.1";
+export const APP_VERSION = "4.1.2";
 
 /** Where the last-seen version is remembered, so the popup shows once. */
 const SEEN_KEY = "stackt-seen-version";
@@ -27,6 +27,21 @@ const SEEN_KEY = "stackt-seen-version";
  * who wants to know what's different, not a commit log.
  */
 export const RELEASES = [
+  {
+    version: "4.1.2",
+    date: "September 2026",
+    title: "Your photos, on your cards",
+    highlights: [
+      "Share cards were coming out blank wherever the picture was one you took. Fixed.",
+      "Adding a shop to a price hunt is a proper button now.",
+    ],
+    notes: [
+      "A photo you take is filed in the app's own store and referred to by an internal name, not a web address. The share card was handed that name and asked to load it like a link, so it drew nothing — the rest of the card was fine, which is why it looked like the photo had simply vanished.",
+      "It wasn't only Food. A book or a record with a photo you took shared just as blank; it went unnoticed because most of those use a cover fetched from the internet, which is a real address and worked.",
+      "There was a second fault waiting behind it: the card builder was labelling every image as coming from another site, which Safari refuses for images already on your phone. Both are fixed together, so this works on iPhone and not just in testing.",
+      "Add the first shop and Add another shop are buttons rather than underlined text. The links at the foot of that sheet stay links — four full-width buttons stops telling you which one matters.",
+    ],
+  },
   {
     version: "4.1.1",
     date: "September 2026",
