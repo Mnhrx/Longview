@@ -4,7 +4,7 @@
 // thing that makes already-installed phones/browsers pick up a fresh shell
 // without someone manually clearing site data. Leaving it unchanged (as it
 // was for v1/v2/v3) means updates silently never reach returning visitors.
-const CACHE_NAME = "farelog-shell-v3";
+const CACHE_NAME = "farelog-shell-v3.1.0";
 const SHELL_FILES = [
   "./",
   "./index.html",
