@@ -21,6 +21,9 @@
 
   /* the "playful & bold" signature easing: overshoots then settles */
   --spring: cubic-bezier(.34, 1.56, .64, 1);
+  /* A shorter, harder overshoot than --spring: for things being thrown rather
+     than eased. Used by the scatter and the cascade. */
+  --slam: cubic-bezier(.2, .9, .2, 1.18);
   --spring-fast: cubic-bezier(.5, 1.8, .6, 1);
 }
 
@@ -4054,3 +4057,127 @@ html, body {
 .cover-picker .field,
 .modal-sheet .field { margin-bottom: 16px; }
 .cover-picker .cover-picker-label { margin-top: 2px; }
+
+/* ============================================
+   MOTION — the set pieces
+   Primitives live here as keyframes; js/motion.js only conducts them. CSS
+   animation runs on the compositor, which is what keeps this smooth while the
+   main thread is busy pulling a photo out of IndexedDB.
+
+   THE SHAPE OF IT. One continuous upward sweep, not a grow-and-shrink. The
+   first attempt grew the colour out of the tile and then contracted it back
+   into the header: two gestures pointing opposite ways, which cancel each
+   other out in the middle. A sweep only ever goes one way, and it leaves by
+   carrying on rather than by reversing.
+
+   THE 220ms OF NOTHING is the most important number here. The colour waits
+   while the tiles fly apart, so the scatter is actually seen. Without it the
+   panel covers the screen before anything has moved and the whole beat plays
+   behind an opaque rectangle — which is exactly what the first build did.
+   ============================================ */
+
+/* LIFT — the tile you touched comes off the page. The hard shadow IS the
+   depth cue in this visual language, so growing it is how something rises. */
+.home-tile.mo-hero {
+  animation: moHero .4s var(--spring) both;
+  z-index: 3;
+}
+@keyframes moHero {
+  from { transform: scale(1); box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink); }
+  to   { transform: scale(1.09); box-shadow: 14px 14px 0 var(--ink); }
+}
+
+/* SCATTER — the others are shoved aside, each on its own vector and its own
+   rotation, so nothing moves in lockstep. Staggered from js so the last one
+   is gone (~560ms) just as the colour finishes covering. */
+.home-tile.mo-away {
+  animation: moAway .4s var(--slam) both;
+  z-index: 1;
+}
+@keyframes moAway {
+  from { transform: translate3d(0, 0, 0) rotate(0); opacity: 1; }
+  to   { transform: translate3d(var(--mo-dx, 0), var(--mo-dy, 0), 0) rotate(var(--mo-rot, 0)); opacity: 0; }
+}
+
+/* The heading goes with them — otherwise "Your Stackt" sits there unmoved
+   while its menu is thrown off the screen underneath it. */
+.home-screen.mo-leaving .view-title,
+.home-screen.mo-leaving .home-sub {
+  animation: moFadeOut .3s .08s both;
+}
+@keyframes moFadeOut {
+  to { transform: translate3d(0, -10px, 0); opacity: 0; }
+}
+
+/* THE SWEEP — a full-bleed panel in the tile's colour. It waits below the
+   screen, comes up through it, HOLDS while the new screen is built behind it,
+   then keeps going and leaves off the top. transform only: no layout, no
+   paint, so it runs on the compositor.
+
+   The hold is the load-bearing part. 140ms fully covered is the window the
+   router's paint happens in — wide enough that a module pulling photos out of
+   IndexedDB still finishes unseen. */
+.mo-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  transform: translateY(101%);
+  will-change: transform;
+}
+.mo-panel.mo-wipe { animation: moWipe .78s .22s cubic-bezier(.65, 0, .35, 1) both; }
+@keyframes moWipe {
+  0%     { transform: translateY(101%); }   /* waiting below */
+  43.5%  { transform: translateY(0); }      /* covering — t ≈ 560ms */
+  61.5%  { transform: translateY(0); }      /* held — the swap lands here */
+  100%   { transform: translateY(-101%); }  /* gone off the top — t ≈ 1000ms */
+}
+
+/* CASCADE — the new screen's rows land one at a time, each a few degrees off
+   true. Started while the colour is still leaving, so they are already moving
+   when they're uncovered rather than sitting still waiting to be revealed.
+   Capped at eight: past that you're animating things nobody has scrolled to. */
+.view.mo-cascade > * > .card-grid > *,
+.view.mo-cascade > * > * > .card-grid > *,
+.view.mo-cascade > * > .plan-list > *,
+.view.mo-cascade > * > .want-list > * {
+  animation: moCascade .34s var(--slam) both;
+}
+.view.mo-cascade .card-grid > *:nth-child(1) { animation-delay: .02s; }
+.view.mo-cascade .card-grid > *:nth-child(2) { animation-delay: .06s; }
+.view.mo-cascade .card-grid > *:nth-child(3) { animation-delay: .1s; }
+.view.mo-cascade .card-grid > *:nth-child(4) { animation-delay: .14s; }
+.view.mo-cascade .card-grid > *:nth-child(5) { animation-delay: .18s; }
+.view.mo-cascade .card-grid > *:nth-child(6) { animation-delay: .22s; }
+.view.mo-cascade .card-grid > *:nth-child(7) { animation-delay: .26s; }
+.view.mo-cascade .card-grid > *:nth-child(8) { animation-delay: .3s; }
+.view.mo-cascade .card-grid > *:nth-child(n + 9) { animation: none; }
+@keyframes moCascade {
+  from { transform: translate3d(0, 22px, 0) rotate(-2.5deg); opacity: 0; }
+  to   { transform: translate3d(0, 0, 0) rotate(0); opacity: 1; }
+}
+
+/* The heading arrives with them rather than being already there. */
+.view.mo-cascade > * > .view-title {
+  animation: moHead .34s var(--slam) both;
+}
+@keyframes moHead {
+  from { transform: translate3d(0, 12px, 0); opacity: 0; }
+  to   { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
+/* Non-negotiable: the whole language collapses to nothing on request. The set
+   piece is also skipped in JS, so this is belt and braces. */
+@media (prefers-reduced-motion: reduce) {
+  .home-tile.mo-hero,
+  .home-tile.mo-away,
+  .home-screen.mo-leaving .view-title,
+  .home-screen.mo-leaving .home-sub,
+  .mo-panel,
+  .mo-panel.mo-wipe,
+  .view.mo-cascade > * > .view-title,
+  .view.mo-cascade .card-grid > * {
+    animation: none !important;
+  }
+  .mo-panel { display: none; }
+}

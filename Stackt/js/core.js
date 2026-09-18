@@ -6,6 +6,7 @@
 
 import { transitionSwap } from "./animations.js";
 import { clearAllLayers } from "./ui.js";
+import { moduleEntry, cancelModuleEntry } from "./motion.js";
 import { ownKey, putBlob, deleteBlob, dataUrlToBlob, blobToDataUrl, getRecord, allOwnRecords, encodeCover } from "./covers.js";
 import { workKey } from "./sorting.js";
 
@@ -359,8 +360,31 @@ export const router = {
       applyChrome(view, isHome, this.modules[view]);
     };
 
-    // Going home is carried by the menu's own zoom-out, so no slide on top of it.
-    transitionSwap(paint, direction, { silent: !!opts.fromPopState || isHome });
+    // Anything mid-flight from a previous tap is torn down first — and its
+    // teardown guarantees that screen got painted, so a fast double-tap can't
+    // leave you looking at nothing.
+    cancelModuleEntry();
+
+    // The set piece runs only when a home tile was actually tapped. A back
+    // gesture, a hash load or the settings button all take the plain slide —
+    // and going home keeps the menu's own zoom-out, which the earlier attempt
+    // at this transition covered up. See the note in js/motion.js.
+    const bigEntry =
+      !isHome && !opts.fromPopState && !opts.viaGesture && opts.fromTile && opts.accent;
+
+    if (bigEntry) {
+      moduleEntry({
+        tile: opts.fromTile,
+        accent: opts.accent,
+        // transitionSwap still runs inside, silently: the block is covering
+        // the screen at this instant, so a slide underneath it is invisible
+        // work and one more thing to go wrong.
+        swap: () => transitionSwap(paint, direction, { silent: true }),
+      });
+    } else {
+      // Going home is carried by the menu's own zoom-out, so no slide on top of it.
+      transitionSwap(paint, direction, { silent: !!opts.fromPopState || isHome });
+    }
 
     if (this.onNavigate) this.onNavigate(view, opts);
   },

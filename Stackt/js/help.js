@@ -16,7 +16,7 @@
 import { openOverlay, dismissLayer, escapeHtml } from "./ui.js";
 import { ICONS } from "./icons.js";
 
-export const APP_VERSION = "4.1.2";
+export const APP_VERSION = "4.2.0";
 
 /** Where the last-seen version is remembered, so the popup shows once. */
 const SEEN_KEY = "stackt-seen-version";
@@ -27,6 +27,24 @@ const SEEN_KEY = "stackt-seen-version";
  * who wants to know what's different, not a commit log.
  */
 export const RELEASES = [
+  {
+    version: "4.2.0",
+    date: "September 2026",
+    title: "Opening a module, properly",
+    highlights: [
+      "Tap a tile and it lifts, the others are thrown aside, and its colour sweeps up through the screen.",
+      "The new screen's rows land one at a time instead of arriving all at once.",
+      "There's a switch in Settings to turn the whole thing off.",
+    ],
+    notes: [
+      "The tile you touch rises on its shadow and the other four are thrown aside, each on its own path. Then the tile's colour comes up from below, sweeps through the whole screen, pauses for a beat, and carries on off the top — and the module is underneath it when it goes. One direction the whole way, so it reads as a scene change rather than a curtain being pulled across and back.",
+      "The colour deliberately waits about a fifth of a second before it moves. That pause is the whole trick: without it the screen is covered before the tiles have gone anywhere, and the part worth watching plays behind a solid rectangle.",
+      "Going back is untouched. The menu still zooms out from the centre, which is the one thing an earlier attempt at this got wrong: it covered that up.",
+      "Settings has a Motion card with a single tick box. Off means modules open with the plain slide they always had. If your iPhone is set to reduce motion, the transitions stay off regardless, and the card says so instead of leaving you a tick box that does nothing.",
+      "Tapping a second tile before the first has finished is handled: the first screen is painted immediately and the second opens plainly. The screen always gets drawn — the animation cannot swallow it.",
+      "None of this is a new library. It's CSS keyframes, which the phone runs on its graphics chip, so it stays smooth even while a photo is being pulled out of storage underneath.",
+    ],
+  },
   {
     version: "4.1.2",
     date: "September 2026",

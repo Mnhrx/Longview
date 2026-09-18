@@ -53,7 +53,14 @@ function render(container, store, opts = {}) {
     `;
     btn.addEventListener("click", () => {
       bounceTap(btn);
-      router.navigate(tile.key);
+      // The tile and its colour are handed to the router so the entry
+      // animation can grow out of the thing that was actually touched. The
+      // colour is resolved here rather than in motion.js because this is where
+      // it's declared.
+      router.navigate(tile.key, {
+        fromTile: btn,
+        accent: getComputedStyle(btn).getPropertyValue("--tile-bg").trim() || tile.bg,
+      });
     });
     grid.appendChild(btn);
   });

@@ -16,6 +16,7 @@ import {
 import { bookCoverSrc } from "./books.js";
 import { APP_VERSION, openGuide, openWhatsNew, openReleaseHistory, GUIDE } from "./help.js";
 import { recordCoverSrc } from "./lps.js";
+import { motionLevel, setMotionLevel } from "./motion.js";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -88,6 +89,20 @@ function render(container, flash = null) {
       </p>
       <button class="btn btn-secondary" id="whatsNewBtn" type="button">What's new in ${APP_VERSION}</button>
       <button class="link-btn" id="releaseHistoryBtn" type="button">All release notes</button>
+    </div>
+
+    <div class="settings-card">
+      <p class="settings-heading">Motion</p>
+      <p class="settings-note">
+        Opening a module plays a short piece of choreography — the tile lifts,
+        the others are thrown aside, and its colour sweeps up through the
+        screen. Switch it off and everything still works, just plainly.
+      </p>
+      <label class="settings-check">
+        <input type="checkbox" id="motionFull">
+        <span>Play the full transitions</span>
+      </label>
+      <p class="settings-status" id="motionStatus"></p>
     </div>
 
     <div class="settings-card">
@@ -165,6 +180,7 @@ function render(container, flash = null) {
   container.appendChild(wrap);
 
   wireHelp(wrap);
+  wireMotion(wrap);
   wireBackup(wrap);
   wireStorage(wrap);
   wireCoverCheck(wrap);
@@ -179,6 +195,48 @@ function render(container, flash = null) {
       el.className = `settings-status ${flash.kind || ""}`.trim();
     }
   }
+}
+
+// ---------- motion ----------
+
+/* The switch exists so the set pieces can be turned off without a redeploy.
+   Taste in animation is not something worth arguing with from inside the app,
+   and "I'll just roll back" shouldn't mean restoring a zip.
+
+   The OS asking for reduced motion wins outright — motion.js skips the set
+   pieces regardless of what's ticked here, so the note says so plainly rather
+   than leaving a checkbox that appears to do nothing. */
+function wireMotion(wrap) {
+  const box = wrap.querySelector("#motionFull");
+  const status = wrap.querySelector("#motionStatus");
+  if (!box) return;
+
+  let reduced = false;
+  try {
+    reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) {
+    /* no matchMedia — assume motion is fine */
+  }
+
+  box.checked = motionLevel() === "full";
+  if (reduced) {
+    status.textContent =
+      "Your device is set to reduce motion, so the transitions stay off whatever this says.";
+    status.className = "settings-status";
+  }
+
+  box.addEventListener("change", () => {
+    setMotionLevel(box.checked ? "full" : "plain");
+    // Read it back rather than trusting the write: a private window can refuse
+    // localStorage, and a tick that silently does nothing is worse than none.
+    const saved = motionLevel() === "full";
+    box.checked = saved;
+    if (reduced) return;
+    status.textContent = saved
+      ? "On — open a module from the menu to see it."
+      : "Off — modules open with the plain slide.";
+    status.className = "settings-status ok";
+  });
 }
 
 // ---------- backup ----------
