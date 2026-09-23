@@ -241,6 +241,9 @@ label.toggle{cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:5
 .jar canvas{width:100%;max-width:104px;height:150px;display:block}
 .jar b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
 .jar span{font-size:13px;color:var(--muted);font-weight:600}
+.jars3{padding:6px 8px 14px}
+.jars3 canvas{display:block;width:100%;height:200px;touch-action:manipulation}
+.jarLbls{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .leaveCard{padding:16px;display:flex;flex-direction:column;gap:14px}
 .lvRow{display:flex;flex-direction:column;gap:6px}
@@ -352,6 +355,7 @@ select.fld{text-align-last:center}
       </div>
       <p class="sub" id="heroNote"></p>
       <button class="payPill pillBtn" id="payPillMonth" type="button" hidden></button>
+      <button class="linkish" id="slipBtn" type="button">🧾 Enter payslip</button>
     </div>
     <div class="card chartCard" id="mChart">
       <canvas id="chart" aria-label="Hours worked each day in this pay period" role="img"></canvas>
@@ -390,10 +394,7 @@ select.fld{text-align-last:center}
 </div>
   <p class="sec">Pay</p>
 <div class="card">
-  <div class="pair">
-    <label class="lab">Payday (day of month)<input type="number" class="fld" id="sPayday" inputmode="numeric" min="1" max="31" step="1"></label>
-    <label class="lab">Annual leave a year<input type="number" class="fld" id="sAL" inputmode="numeric" min="0" max="60" step="1"></label>
-  </div>
+  <label class="lab full">Payday (day of month)<input type="number" class="fld" id="sPayday" inputmode="numeric" min="1" max="31" step="1"></label>
   <label class="lab full">Pay period starts on day (1–28)<input type="number" class="fld" id="sPayDay" inputmode="numeric" min="1" max="28" step="1"></label>
 
   <div class="seg" role="radiogroup" aria-label="Pay type" id="paySeg">
@@ -445,6 +446,16 @@ select.fld{text-align-last:center}
 
 </div>
 
+    <p class="sec">Leave</p>
+    <div class="card">
+      <div class="pair">
+        <label class="lab">Annual leave a year<input type="number" class="fld" id="sAL" inputmode="numeric" min="0" max="60" step="1"></label>
+        <label class="lab">Paid MC a year<input type="number" class="fld" id="sMC" inputmode="numeric" min="0" max="60" step="1"></label>
+      </div>
+      <label class="lab full">Leave starts after (months)<input type="number" class="fld" id="sLeaveAfter" inputmode="numeric" min="0" max="24" step="1"></label>
+      <label class="toggle"><span>Use Employment Act MC steps instead</span><span class="switch"><input type="checkbox" id="sEaMc" aria-label="Use Employment Act MC steps instead"><span></span></span></label>
+      <p class="note" style="margin:0">The Act gives 5 paid MC days at 3 months, rising to 14 at 6 months. Turn this on only if your company gives the legal minimum.</p>
+    </div>
     <p class="sec">Sound</p>
     <div class="card">
       <label class="toggle"><span>Sound effects</span><span class="switch"><input type="checkbox" id="sSfx" aria-label="Sound effects"><span></span></span></label>
@@ -467,10 +478,14 @@ select.fld{text-align-last:center}
       <p class="sub" id="cNote"></p>
     </div>
     <div class="split" id="cSplit"></div>
-    <div class="card jars" id="cJars">
-      <div class="jar"><canvas id="jarOA"></canvas><b id="vOA">$0</b><span>Ordinary</span></div>
-      <div class="jar"><canvas id="jarSA"></canvas><b id="vSA">$0</b><span id="nSA">Special</span></div>
-      <div class="jar"><canvas id="jarMA"></canvas><b id="vMA">$0</b><span>MediSave</span></div>
+    <div class="card jars3" id="cJars">
+      <canvas id="jarCv" aria-label="Your CPF split into three accounts, shown as jars of liquid" role="img"></canvas>
+      <div class="jarLbls">
+        <div class="jar"><b id="vOA">$0</b><span>Ordinary</span></div>
+        <div class="jar"><b id="vSA">$0</b><span id="nSA">Special</span></div>
+        <div class="jar"><b id="vMA">$0</b><span>MediSave</span></div>
+      </div>
+      <p class="note" style="margin:6px 0 0">Tap a jar to give it a swirl.</p>
     </div>
     <div class="card stat wide" id="cTotal"></div>
     <p class="note" id="cFoot">Estimated from your expected pay, using 2026 CPF rates and the $8,000 monthly wage ceiling. Your CPF statement is the final word.</p>
@@ -531,6 +546,22 @@ select.fld{text-align-last:center}
 <label class="hapt" aria-hidden="true"><input type="checkbox" switch id="hapt" tabindex="-1"></label>
 
 <div class="backdrop" id="backdrop"></div>
+
+<div class="sheet" id="slipSheet" role="dialog" aria-modal="true" aria-labelledby="slipTitle">
+  <h2 id="slipTitle">Your payslip</h2>
+  <p id="slipHint">Enter the amounts from your payslip for this pay period. The app will use them instead of its estimate.</p>
+  <label class="lab full">Gross pay, before CPF (S$)<input type="number" class="fld" id="slGross" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label>
+  <div class="pair">
+    <label class="lab">Your CPF (optional)<input type="number" class="fld" id="slEe" inputmode="decimal" min="0" step="0.01" placeholder="auto"></label>
+    <label class="lab">Employer CPF (optional)<input type="number" class="fld" id="slEr" inputmode="decimal" min="0" step="0.01" placeholder="auto"></label>
+  </div>
+  <p class="daylen" id="slPreview"></p>
+  <div class="actions">
+    <button class="btn ghost" id="slCancel" type="button">Cancel</button>
+    <button class="btn solid" id="slSave" type="button">Save payslip</button>
+  </div>
+  <div class="sheetBtns"><button class="btn danger" id="slClear" type="button" hidden>Use the estimate again</button></div>
+</div>
 
 <div class="sheet" id="daySheet" role="dialog" aria-modal="true" aria-labelledby="dayTitle">
   <h2 id="dayTitle">Edit day</h2>
@@ -615,6 +646,13 @@ const Sound=(function(){
     g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+attack); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
     o.connect(g); g.connect(sfx); o.start(t); o.stop(t+dur+.05);
   }
+  function noise(dur,{f0=800,f1=300,q=1,gain=.1,type='bandpass',wobble=false}={}){
+    const t=ctx.currentTime, src=ctx.createBufferSource(); src.buffer=noiseBuf;
+    const f=ctx.createBiquadFilter(); f.type=type; f.Q.value=q; f.frequency.setValueAtTime(f0,t); f.frequency.exponentialRampToValueAtTime(f1,t+dur);
+    if(wobble){ const l=ctx.createOscillator(), lg=ctx.createGain(); l.frequency.value=11; lg.gain.value=f0*.35; l.connect(lg); lg.connect(f.frequency); l.start(t); l.stop(t+dur+.05); }
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+.02); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+    src.connect(f); f.connect(g); g.connect(sfx); src.start(t); src.stop(t+dur+.05);
+  }
   function unlock(){ if(!init()) return; if(ctx.state!=='running') ctx.resume().then(()=>{ if(want&&!pad) zone(want,true); }).catch(()=>{}); }
   ['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev,unlock,{capture:true,passive:true}));
   document.addEventListener('visibilitychange',()=>{ if(!ctx) return; document.hidden?ctx.suspend():ctx.resume(); });
@@ -642,17 +680,43 @@ const Sound=(function(){
   return {
     apply(){ init(); apply(); },
     zone,
-    tap(){ if(ok()) tone(520,.07,{to:760,gain:.08}); },
-    pop(){ if(ok()){ tone(420,.12,{to:980,gain:.22}); tone(1400,.08,{when:.04,gain:.05}); } },
-    chime(){ if(ok()) [784,987.77,1174.66,1567.98].forEach((f,i)=>tone(f,1.2,{type:'triangle',gain:.12,when:i*.07})); },
-    down(){ if(ok()) [1174.66,987.77,783.99].forEach((f,i)=>tone(f,.9,{type:'triangle',gain:.11,when:i*.08})); },
+    // a single water droplet: a quick upward pitch flick with a fast fade
+    tap(){ if(ok()) tone(700+Math.random()*250,.09,{to:1600+Math.random()*400,gain:.09,attack:.002}); },
+    pop(){ if(ok()){ tone(380+Math.random()*80,.11,{to:1100,gain:.18,attack:.002}); } },
+    // one bubble: pitch rises as it collapses, like a real air bubble in water
+    bubble(f){ if(!ok()) return; f=f||(500+Math.random()*700); tone(f,.07+Math.random()*.05,{to:f*(2+Math.random()*.6),gain:.06+Math.random()*.05,attack:.002}); },
+    // clock in: a rising stream of bubbles, then a round "bloop"
+    chime(){ if(!ok()) return;
+      for(let i=0;i<14;i++){ const f=300+i*55+Math.random()*120; setTimeout(()=>this.bubble(f),i*38+Math.random()*25); }
+      setTimeout(()=>{ if(!ok()) return; tone(170,.26,{to:520,gain:.26,attack:.004}); tone(340,.18,{to:900,gain:.08,when:.03}); noise(.12,{f0:900,f1:300,q:1.2,gain:.08}); },560); },
+    // clock out: a gooey "blorp" that wobbles down, a slimy squelch, then a few pops settling
+    down(){ if(!ok()) return;
+      const t=ctx.currentTime, o=ctx.createOscillator(), g=ctx.createGain(), lp=ctx.createBiquadFilter(), lfo=ctx.createOscillator(), lg=ctx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(330,t); o.frequency.exponentialRampToValueAtTime(85,t+.45);
+      lfo.frequency.value=16; lg.gain.value=24; lfo.connect(lg); lg.connect(o.frequency);
+      lp.type='lowpass'; lp.frequency.value=900; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.3,t+.02); g.gain.exponentialRampToValueAtTime(.001,t+.55);
+      o.connect(lp); lp.connect(g); g.connect(sfx); o.start(t); lfo.start(t); o.stop(t+.6); lfo.stop(t+.6);
+      noise(.35,{f0:1200,f1:350,q:4,gain:.09,wobble:true});
+      [0,1,2,3].forEach(i=>setTimeout(()=>this.bubble(420-i*60+Math.random()*80),420+i*90+Math.random()*40)); },
     coin(){ if(ok()){ tone(1976,.18,{gain:.05,type:'square'}); tone(2637,.3,{gain:.05,when:.06,type:'square'}); } },
     fanfare(){ if(!ok()) return; [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,.35,{type:'sawtooth',gain:.06,when:i*.11}));
-      [523.25,659.25,783.99,1046.5].forEach(f=>tone(f,1.6,{type:'triangle',gain:.07,when:.5})); tone(1567.98,1.2,{gain:.05,when:.5}); },
-    swoosh(){ if(!ok()) return; const t=ctx.currentTime, src=ctx.createBufferSource(); src.buffer=noiseBuf;
-      const f=ctx.createBiquadFilter(); f.type='bandpass'; f.Q.value=1.4; f.frequency.setValueAtTime(260,t); f.frequency.exponentialRampToValueAtTime(2600,t+.55); f.frequency.exponentialRampToValueAtTime(500,t+1.15);
-      const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.22,t+.45); g.gain.exponentialRampToValueAtTime(.001,t+1.2);
-      src.connect(f); f.connect(g); g.connect(sfx); src.start(t); src.stop(t+1.3); }
+      [523.25,659.25,783.99,1046.5].forEach(f=>tone(f,1.6,{type:'triangle',gain:.07,when:.5})); tone(1567.98,1.2,{gain:.05,when:.5});
+      for(let i=0;i<10;i++) setTimeout(()=>this.bubble(600+Math.random()*900),500+i*70); },
+    // a different swoosh each trip: direction sets the sweep and panning, the rest is randomised
+    swoosh(dir){ if(!ok()) return; dir=dir||{x:0,y:0};
+      const t=ctx.currentTime, d=.9+Math.random()*.5, up=dir.y>.3, downw=dir.y<-.3, side=Math.abs(dir.x)>.3;
+      const lo=180+Math.random()*160, hi=1800+Math.random()*1800, end=up?hi*1.3:downw?lo*.8:400+Math.random()*400;
+      const src=ctx.createBufferSource(); src.buffer=noiseBuf; src.playbackRate.value=.8+Math.random()*.5;
+      const f=ctx.createBiquadFilter(); f.type='bandpass'; f.Q.value=.8+Math.random()*1.6;
+      f.frequency.setValueAtTime(up?lo:downw?hi:lo*1.4,t); f.frequency.exponentialRampToValueAtTime(up?hi:downw?lo*1.2:hi,t+d*.5); f.frequency.exponentialRampToValueAtTime(end,t+d);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.16+Math.random()*.08,t+d*.42); g.gain.exponentialRampToValueAtTime(.001,t+d);
+      let node=g;
+      if(ctx.createStereoPanner){ const p=ctx.createStereoPanner(), sx=side?Math.sign(dir.x):(Math.random()-.5)*.6; p.pan.setValueAtTime(side?-sx*.8:sx,t); p.pan.linearRampToValueAtTime(side?sx*.8:-sx,t+d); g.connect(p); node=p; }
+      src.connect(f); f.connect(g); node.connect(sfx); src.start(t); src.stop(t+d+.1);
+      const extra=Math.random();
+      if(extra<.35) for(let i=0;i<6;i++) tone(1800+Math.random()*1600,.25,{gain:.025,when:d*.45+i*.06});          // sparkle trail
+      else if(extra<.65) noise(d*.9,{f0:90,f1:60,q:.7,gain:.12,type:'lowpass'});                                  // low rumble
+    }
   };
 })();
 // a light tap of haptic feedback: vibration where supported, the iOS 18+ switch trick on iPhone
@@ -661,7 +725,7 @@ function haptic(){ try{ if(navigator.vibrate&&navigator.vibrate(12)) return; con
 /* ================= storage & settings ================= */
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){} }
-const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,al:14,age:0,sfx:true,amb:true,vol:60};
+const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
 let state=load()||{};
 if(!Array.isArray(state.history)) state.history=[];
 if(state.active===undefined) state.active=null;
@@ -790,7 +854,13 @@ const world=(function(){
   const camPos=k=>new T.Vector3(ZONES[k][0],ZONES[k][1],ZONES[k][2]+14);
 
   const sphere=new T.SphereGeometry(1,64,48), torus=new T.TorusGeometry(1,.36,40,120), knot=new T.TorusKnotGeometry(.75,.26,180,24,2,3);
-  const pillG=m=>{ const g=new T.Group(); g.add(new T.Mesh(new T.CylinderGeometry(.5,.5,1.4,48,1,true),m)); const a=new T.Mesh(new T.SphereGeometry(.5,40,24),m); a.position.y=.7; g.add(a); const b=a.clone(); b.position.y=-.7; g.add(b); return g; };
+  // one continuous surface each (spun from a single outline), so there are no joins or gaps
+  const capsuleGeo=(()=>{ const pts=[]; const r=.5,h=.7,n=24;
+    for(let i=0;i<=n;i++){ const a=-Math.PI/2+Math.PI/2*i/n; pts.push(new T.Vector2(Math.max(1e-4,Math.cos(a)*r),-h+Math.sin(a)*r)); }
+    for(let i=1;i<=n;i++){ const a=Math.PI/2*i/n; pts.push(new T.Vector2(Math.max(1e-4,Math.cos(a)*r),h+Math.sin(a)*r)); }
+    return new T.LatheGeometry(pts,56); })();
+  const pillG=m=>new T.Mesh(capsuleGeo,m);
+  const dropGeo=(()=>{ const pts=[], n=64; for(let i=0;i<=n;i++){ const t=Math.PI*i/n; pts.push(new T.Vector2(Math.max(1e-4,.78*Math.sin(t)*Math.pow(Math.sin(t/2),1.35)),Math.cos(t)*1.05)); } return new T.LatheGeometry(pts.reverse(),64); })();
   const oct=new T.OctahedronGeometry(1,0), ico=new T.IcosahedronGeometry(1,0), cone=new T.ConeGeometry(.8,1.6,48);
   const coin=new T.CylinderGeometry(1,1,.2,64), slab=new T.CylinderGeometry(1,1,.22,6), disc=new T.CylinderGeometry(1,1,.34,64);
   const shapes=[];
@@ -837,7 +907,7 @@ const world=(function(){
   add('days',new T.Mesh(slab,soft(0xE8E0FF)),-4.3,.7,-5,.6,0xE8E0FF);
   // cpf: the growth garden — glossy leaves, seeds and water drops
   const leaf=new T.SphereGeometry(1,48,32); leaf.scale(1,.28,.62);
-  const drop=new T.Group(); { const m=gloss(0x7CE8FF,{roughness:.05}); const b=new T.Mesh(new T.SphereGeometry(.6,40,30),m); const tp=new T.Mesh(new T.ConeGeometry(.6,1,40,1,true),m); tp.position.y=.78; drop.add(b,tp); }
+  const drop=new T.Mesh(dropGeo,gloss(0x7CE8FF,{roughness:.05}));
   add('cpf',new T.Mesh(leaf,gloss(0x19D9A0)),-3.3,5.0,-2,1.5,0x19D9A0);
   add('cpf',new T.Mesh(leaf,gloss(0x7EDB5A)),3.4,3.5,-3,1.3,0x7EDB5A);
   add('cpf',drop,-3.5,-3.3,-1,1.2,0x7CE8FF);
@@ -937,6 +1007,7 @@ const world=(function(){
       G.timeline().to(smat,{opacity:.85,duration:.35}).to(smat,{opacity:0,duration:.6},.55);
     },
     travel(toWork){ this.go(toWork?'work':'home'); },
+    dir(a,b){ const A=ZONES[a],B=ZONES[b]; if(!A||!B) return {x:0,y:0}; const dx=B[0]-A[0],dy=B[1]-A[1],dz=B[2]-A[2], L=Math.hypot(dx,dy,dz)||1; return {x:dx/L,y:dy/L}; },
     get zone(){ return cur; },
     setProgress(p){ p=Math.min(1,Math.max(0,p)); shapes.forEach(o=>{ if(o.userData.zone!=='work') return; const c=o.userData.warm.clone().lerp(o.userData.cool,p); o.userData.mats.forEach(m=>m.color.copy(c)); }); if(RM) frame(0); },
     party(){ if(!ANIM) return; shapes.forEach((o,i)=>{ if(o.userData.zone!=='work') return;
@@ -1307,7 +1378,7 @@ document.querySelectorAll('#otSeg button').forEach(b=>b.onclick=()=>setOtBlock(b
 function setPayType(v){ payType=v; document.querySelectorAll('#paySeg button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v))); updatePreview(); }
 document.querySelectorAll('#paySeg button').forEach(b=>b.onclick=()=>setPayType(b.dataset.v));
 function readSet(){ return {start:$('sStart').value,end:$('sEnd').value,flex:$('sFlex').checked,from:$('sFrom').value,to:$('sTo').value,
-  pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),al:Math.max(0,+$('sAL').value||0),age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
+  pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),al:Math.max(0,+$('sAL').value||0),mc:Math.max(0,+$('sMC').value||0),leaveAfter:Math.max(0,+$('sLeaveAfter').value||0),eaMc:$('sEaMc').checked,age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
 function updatePreview(){
   const s=readSet(), ok=s.start&&s.end&&s.start!==s.end;
   $('sLen').textContent=ok?`Your day: ${dur(shiftMin(s)*60000)}`:'Start and end need to be different times.';
@@ -1329,7 +1400,7 @@ function fillSettings(){
   const s=S();
   $('sStart').value=s.start; $('sEnd').value=s.end; $('sFlex').checked=s.flex; $('sFrom').value=s.from; $('sTo').value=s.to;
   $('sAmt').value=s.amt; $('sBrk').value=s.brk; $('sDays').value=s.days; $('sCpf').checked=s.cpf; $('sCpfRate').value=s.cpfRate; $('sOt').checked=s.ot; $('sOtMult').value=s.otMult; $('sOtMin').value=s.otMin; $('sPayDay').value=s.payDay; $('sStartDate').value=s.startDate||''; $('sLate').checked=!!s.late; $('sLateAfter').value=s.lateAfter||s.to||'09:00';
-  $('sPayday').value=s.payday; $('sAL').value=s.al; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
+  $('sPayday').value=s.payday; $('sAL').value=s.al; $('sMC').value=s.mc; $('sLeaveAfter').value=s.leaveAfter; $('sEaMc').checked=!!s.eaMc; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
   lateBlock=+s.lateBlock||1; otBlock=+s.otBlock||60; payType=s.pay;
   document.querySelectorAll('#lateSeg button').forEach(b=>b.setAttribute('aria-checked',String(+b.dataset.v===lateBlock)));
   document.querySelectorAll('#otSeg button').forEach(b=>b.setAttribute('aria-checked',String(+b.dataset.v===otBlock)));
@@ -1351,7 +1422,7 @@ function commitSettings(){
 }
 const _up=updatePreview;
 updatePreview=function(){ _up(); commitSettings(); };
-['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sAL','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
+['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
 $('sAge').addEventListener('change',()=>{ $('sCpfRate').value=CPF_RATES[+$('sAge').value][0]; updatePreview(); });
 $('letsGo').onclick=()=>{ commitSettings(); goPage('today'); };
 $('gearBtn').onclick=()=>goPage(page==='settings'?(lastPage||'today'):'settings');
@@ -1386,7 +1457,7 @@ function priceRec(r){
   const t=typeOf(r);
   if(t==='work'){
     if(r.out){ const p=payFor(r.out-r.in,r.rate,r.in);
-      if(p){ const base=r.rate.pay==='monthly'?p.full:p.base; // monthly pay covers the whole day
+      if(p){ const base=p.base; // your share of a full day, up to 100%
         r.base=base; r.earn=base+p.ot-p.late;
         if(p.otMs>0){ r.ot=p.ot; r.otMs=p.otMs; }
         if(p.lateMs>0){ r.late=p.late; r.lateMs=p.lateMs; } } }
@@ -1457,9 +1528,11 @@ function virtualPH(from,to){
 }
 const hhmm=ts=>{ const d=new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 let dType='work';
+function autoMcPaid(){ if(dType!=='mc'||editIdx!=null) return; const v=$('dDate').value; if(!v) return; const [y,m,d]=v.split('-').map(Number), ts=new Date(y,m-1,d,12).getTime(); $('dMcPaid').checked=mcEntitled(ts)>mcUsedPaid(y); }
+$('dDate').addEventListener('change',()=>{ autoMcPaid(); dayPreview(); });
 function setType(v){ dType=v; document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v)));
   $('dTimes').hidden=v!=='work'; $('mcPaidRow').hidden=v!=='mc';
-  $('dDate').max=v==='work'?isoDate(Date.now()):''; dayPreview(); }
+  $('dDate').max=v==='work'?isoDate(Date.now()):''; autoMcPaid(); dayPreview(); }
 document.querySelectorAll('#typeSeg button').forEach(b=>b.onclick=()=>setType(b.dataset.v));
 $('dMcPaid').addEventListener('change',()=>dayPreview());
 function openDay(i){
@@ -1541,20 +1614,29 @@ $('clearBtn').addEventListener('click',e=>{
   state.history=[]; save(); renderDays(); refreshToday(); toast('All days cleared',false);
 });
 function monthsServed(){ const sd=startTs(); if(!sd) return null; const a=new Date(sd), b=new Date(); let m=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth(); if(b.getDate()<a.getDate()) m--; return Math.max(0,m); }
+// when leave kicks in, and how many paid MC days you get at a given date
+function leaveStart(){ const sd=startTs(); if(!sd) return null; const d=new Date(sd); d.setMonth(d.getMonth()+(+S().leaveAfter||0)); return d.getTime(); }
+function mcEntitled(at=Date.now()){
+  const sd=startTs(); if(!sd) return +S().mc||0;
+  const a=new Date(sd), b=new Date(at); let m=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth(); if(b.getDate()<a.getDate()) m--;
+  if(S().eaMc) return m<3?0:m===3?5:m===4?8:m===5?11:14;
+  return at>=leaveStart()?(+S().mc||0):0;
+}
+function mcUsedPaid(year,exceptIn){ return state.history.filter(r=>typeOf(r)==='mc'&&r.paid&&new Date(r.in).getFullYear()===year&&r.in!==exceptIn).length; }
 function renderLeave(){
-  const y=new Date().getFullYear(), inYear=r=>new Date(r.in).getFullYear()===y;
-  const al=state.history.filter(r=>typeOf(r)==='al'&&inYear(r)).length, ent=+S().al||0, left=Math.max(0,ent-al);
-  const mc=state.history.filter(r=>typeOf(r)==='mc'&&inYear(r)).length, ms=monthsServed();
-  const mcEnt=ms==null?null:ms<3?0:ms===3?5:ms===4?8:ms===5?11:14;
-  let mcNote='';
-  if(ms==null) mcNote='Set your start date in Settings to see your MC entitlement.';
-  else if(mcEnt===0){ const d=new Date(startTs()); d.setMonth(d.getMonth()+3); mcNote=`Paid sick leave starts on ${d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}, after 3 months of service.`; }
-  else if(mcEnt<14) mcNote=`Your paid MC days go up each month until 14 at 6 months of service.`;
+  const y=new Date().getFullYear(), inYear=r=>new Date(r.in).getFullYear()===y, ls=leaveStart(), started=!ls||Date.now()>=ls;
+  const al=state.history.filter(r=>typeOf(r)==='al'&&inYear(r)).length, ent=started?(+S().al||0):0, left=Math.max(0,ent-al);
+  const mc=state.history.filter(r=>typeOf(r)==='mc'&&inYear(r)).length, mcP=mcUsedPaid(y), mcEnt=mcEntitled();
+  const when=ls?new Date(ls).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'';
+  let note='';
+  if(!startTs()) note='Set your start date in Settings to see when your leave starts.';
+  else if(!started) note=`Your ${S().al} days of leave and ${S().eaMc?'paid MC':S().mc+' paid MC days'} start on ${when}. MC before then is unpaid.`;
+  else if(S().eaMc&&mcEnt<14) note='Your paid MC days go up each month until 14 at 6 months of service.';
   const bar=(frac,grad)=>`<div class="lvTrack"><div class="lvFill" style="width:${Math.max(4,frac*100)}%;background-image:${grad}"></div></div>`;
   $('leaveCard').innerHTML=`
-    <div class="lvRow"><div class="lvTop"><span>Annual leave</span><span>${left} of ${ent} days left</span></div>${bar(ent?left/ent:0,'linear-gradient(90deg,#19D9A0,#3FB8FF 50%,#19D9A0)')}</div>
-    <div class="lvRow"><div class="lvTop"><span>MC this year</span><span>${mcEnt==null?`${mc} used`:mcEnt===0?`${mc} used, none paid yet`:`${Math.max(0,mcEnt-mc)} of ${mcEnt} paid days left`}</span></div>${bar(mcEnt?Math.max(0,mcEnt-mc)/mcEnt:0,'linear-gradient(90deg,#3FB8FF,#7B5CFF 50%,#3FB8FF)')}</div>
-    ${mcNote?`<p class="lvNote">${mcNote}</p>`:''}`;
+    <div class="lvRow"><div class="lvTop"><span>Annual leave</span><span>${started?`${left} of ${ent} days left`:`starts ${when}`}</span></div>${bar(ent?left/ent:0,'linear-gradient(90deg,#19D9A0,#3FB8FF 50%,#19D9A0)')}</div>
+    <div class="lvRow"><div class="lvTop"><span>Paid MC</span><span>${mcEnt?`${Math.max(0,mcEnt-mcP)} of ${mcEnt} days left`:(startTs()?`starts ${when}`:`${mc} used`)}</span></div>${bar(mcEnt?Math.max(0,mcEnt-mcP)/mcEnt:0,'linear-gradient(90deg,#3FB8FF,#7B5CFF 50%,#3FB8FF)')}</div>
+    ${note?`<p class="lvNote">${note}</p>`:''}`;
   if(ANIM&&page==='days') G.from('#leaveCard .lvFill',{width:'4%',duration:1.2,stagger:.12,ease:'elastic.out(1,.7)'});
 }
 function animateDays(){ if(ANIM&&page==='days') G.from('#dayGroups .dayItem',{y:24,opacity:0,scale:.96,stagger:.035,duration:.45,ease:'back.out(1.6)',clearProps:'all'}); }
@@ -1569,7 +1651,7 @@ function monthData(off){
   const act=state.active&&inP(state.active)?state.active:null;
   const rows=items.map(r=>({in:r.in,type:typeOf(r),rec:r,ms:typeOf(r)==='work'?r.out-r.in:0,shift:r.shift||SHIFT(),otMs:r.otMs||0,ot:r.ot||0,late:r.late||0,base:r.base||0,rate:r.rate}));
   if(act){ const ms=now-act.in, pay=payFor(ms,rates(),act.in); rows.push({in:act.in,type:'work',ms,shift:SHIFT(),otMs:pay?pay.otMs:0,ot:pay?pay.ot:0,late:pay?pay.late:0,base:pay?pay.base:0,rate:rates(),live:true}); }
-  const rate=[...rows].reverse().find(r=>r.rate)?.rate || (off===0?rates():null);
+  const rate=[...rows].reverse().find(r=>r.rate)?.rate || rates();
   virtualPH(p.start,p.end).forEach(v=>rows.push({in:v.in,type:'ph',rec:v,ms:0,shift:SHIFT(),otMs:0,ot:0,late:0,base:rate?dailyBase(rate,v.in)*rate.keep:0}));
   rows.sort((a,b)=>a.in-b.in);
   const work=rows.filter(r=>r.type==='work');
@@ -1599,7 +1681,10 @@ function renderMonth(animate){
   const hasPay=!!m.rate, monthly=m.kind==='monthly';
   const tail=m.cpf?' after CPF':'';
   $('heroLbl').textContent=hasPay?(monthly?`Expected payslip${tail}`:`Earned so far${tail}`):'Time at work';
-  const target=hasPay?(monthly?m.expected:m.earned):m.totalMs;
+  const slip=hasPay?slipOf(m.p):null;
+  if(slip) $('heroLbl').textContent=`Your payslip${m.cpf?' after CPF':''}`;
+  const target=hasPay?(slip?takeHome(m):(monthly?m.expected:m.earned)):m.totalMs;
+  $('slipBtn').hidden=!hasPay; $('slipBtn').textContent=slip?'🧾 Payslip entered · Edit':'🧾 Enter payslip';
   const show=v=>hasPay?money(v):dur(v);
   if(animate&&ANIM){ const o={v:0}; G.to(o,{v:target,duration:1.4,ease:'power3.out',onUpdate:()=>$('heroAmt').textContent=show(o.v)}); }
   else $('heroAmt').textContent=show(target);
@@ -1619,6 +1704,7 @@ function renderMonth(animate){
     if(m.unpaid) bits.push(`${m.unpaid} unpaid day${m.unpaid>1?'s':''} taken off.`);
     note=bits.join(' ')||`Full salary${tail} plus overtime${pOff===0?' so far':''}.`;
   } else note=`Your paid days plus overtime${pOff===0?' so far':''}.`;
+  if(slip){ const est=monthly?m.expected:m.earned, diff=takeHome(m)-est; note=`Estimate was ${money(est)} (${diff>=0?'+':'−'}${money(Math.abs(diff))}).`; }
   $('heroNote').textContent=note;
   let st='';
   if(hasPay&&monthly) st+=stat(m.emp<m.wd?'Salary (pro-rated)':'Salary',money(m.salary))+stat('Overtime pay',money(m.ot))
@@ -1704,27 +1790,36 @@ addEventListener('resize',()=>{ if(page==='month') drawChart(performance.now()/1
 
 /* ================= CPF page ================= */
 let cOff=0, jarLv={OA:0,SA:0,MA:0}, jarRAF=null;
+if(!state.payslips) state.payslips={};
+const slipOf=p=>state.payslips[p.start]||null;
+// estimated gross pay (before CPF) for a period
+function estGross(m){ if(!m.rate) return null; const keep=m.rate.keep||1; return Math.max(0,(m.kind==='monthly'?m.expected:m.earned)/keep); }
 function cpfFor(off){
   const m=monthData(off); if(!m.rate) return null;
-  const keep=m.rate.keep||1, net=m.kind==='monthly'?m.expected:m.earned;
-  const gross=Math.max(0,net/keep), wage=Math.min(CPF_CEIL,gross), age=+S().age||0, [ee,er]=CPF_RATES[age], al=CPF_ALLOC[age];
-  const total=wage*(ee+er)/100, mine=wage*ee/100, boss=total-mine;
+  const slip=slipOf(m.p), est=estGross(m);
+  const gross=slip?slip.gross:est, wage=Math.min(CPF_CEIL,gross), age=+S().age||0, [ee,er]=CPF_RATES[age], al=CPF_ALLOC[age];
+  let mine=wage*ee/100, boss=wage*er/100;
+  if(slip&&slip.ee!=null) mine=slip.ee; if(slip&&slip.er!=null) boss=slip.er;
+  const total=mine+boss;
   const MA=total*al[2], SA=total*al[1], OA=total-MA-SA;
-  return {m,gross,wage,ee,er,total,mine,boss,OA,SA,MA,capped:gross>CPF_CEIL,age};
+  return {m,gross,wage,ee,er,total,mine,boss,OA,SA,MA,capped:gross>CPF_CEIL,age,slip,est};
 }
 function renderCpf(animate){
   const c=cpfFor(cOff), p=periodOf(Date.now(),cOff);
   $('cLbl').textContent='Pay period'; $('cRange').textContent=rangeTxt(p)+(cOff===0?' (now)':''); $('cNext').disabled=cOff>=0;
-  if(!c){ $('cAmt').textContent='$0.00'; $('cNote').textContent='Turn on Pay in Settings to see your CPF.'; $('cSplit').innerHTML=''; $('cTotal').innerHTML=''; jarLv={OA:0,SA:0,MA:0}; ['OA','SA','MA'].forEach(k=>$('v'+k).textContent='$0'); startJars(); return; }
+  if(!c){ $('cAmt').textContent='$0.00'; $('cNote').textContent=S().pay==='none'?'Turn on Pay in Settings to see your CPF.':'Enter your salary in Settings to see your CPF.'; $('cSplit').innerHTML=''; $('cTotal').innerHTML=''; jars3d&&jars3d.set({OA:0,SA:0,MA:0},false); ['OA','SA','MA'].forEach(k=>$('v'+k).textContent='$0'); startJars(); return; }
   const show=v=>$('cAmt').textContent=money(v);
   if(animate&&ANIM){ const o={v:0}; G.to(o,{v:c.total,duration:1.4,ease:'power3.out',onUpdate:()=>show(o.v)}); } else show(c.total);
-  $('cNote').textContent=`${c.ee+c.er}% of about ${money(c.wage)} in wages${c.capped?' (capped at the $8,000 ceiling)':''}${c.m.kind==='monthly'&&c.m.emp<c.m.wd?', pro-rated':''}.`;
+  $('cNote').textContent=c.m.kind==='monthly'&&c.m.emp===0&&!c.slip?"You hadn't started yet in this pay period."
+    :c.gross<=0?'No pay recorded for this pay period.'
+    :c.slip?`From your payslip: ${money(c.wage)} in wages${c.capped?' (capped at $8,000)':''}.`
+    :`${c.ee+c.er}% of about ${money(c.wage)} in wages${c.capped?' (capped at the $8,000 ceiling)':''}${c.m.kind==='monthly'&&c.m.emp<c.m.wd?', pro-rated':''}.`;
   $('cSplit').innerHTML=stat(`You (${c.ee}%)`,money(c.mine))+stat(`Employer (${c.er}%)`,money(c.boss));
   $('nSA').textContent=c.age>=4?'Retirement':'Special';
   const mx=Math.max(c.OA,c.SA,c.MA,1);
   ['OA','SA','MA'].forEach(k=>$('v'+k).textContent=money(c[k]));
   const target={OA:c.OA/mx,SA:c.SA/mx,MA:c.MA/mx};
-  if(animate&&ANIM){ jarLv={OA:0,SA:0,MA:0}; ['OA','SA','MA'].forEach((k,i)=>G.to(jarLv,{[k]:target[k],duration:1.6,delay:.2+i*.12,ease:'elastic.out(1,.55)'})); } else jarLv=target;
+  jars3d&&jars3d.set(target,animate);
   // running total since you started
   let sum=0,n=0; for(let off=cOff;off>cOff-36;off--){ const pp=periodOf(Date.now(),off), sd=startTs();
     if(sd&&pp.end<=sd) break; if(!sd&&!state.history.some(r=>r.in>=pp.start&&r.in<pp.end)&&off<cOff) break;
@@ -1734,30 +1829,62 @@ function renderCpf(animate){
   startJars();
 }
 $('cPrev').onclick=()=>{ cOff--; renderCpf(true); }; $('cNext').onclick=()=>{ if(cOff<0){ cOff++; renderCpf(true); } };
-const JAR_COL={OA:['#9BE3FF','#3FB8FF','#1D6FE0'],SA:['#C9B8FF','#7B5CFF','#4B2FC9'],MA:['#A8FFE0','#19D9A0','#0B8F69']};
-function drawJar(k,t){
-  const cv=$('jar'+k), c=cv.getContext('2d'), d=Math.min(devicePixelRatio||1,2), W=cv.clientWidth, H=cv.clientHeight; if(!W) return;
-  if(cv.width!==Math.round(W*d)){ cv.width=Math.round(W*d); cv.height=Math.round(H*d); }
-  c.setTransform(d,0,0,d,0,0); c.clearRect(0,0,W,H);
-  const x=8,y=10,w=W-16,h=H-18,r=Math.min(22,w/3);
-  const jar=()=>{ c.beginPath(); c.moveTo(x,y+8); c.lineTo(x,y+h-r); c.quadraticCurveTo(x,y+h,x+r,y+h); c.lineTo(x+w-r,y+h); c.quadraticCurveTo(x+w,y+h,x+w,y+h-r); c.lineTo(x+w,y+8); c.closePath(); };
-  // liquid: one path with a moving wavy surface, filled with a single gradient
-  const lv=Math.max(0,Math.min(1,jarLv[k])), top=y+h-(h-10)*lv, amp=lv>0?3.2:0;
-  c.save(); jar(); c.clip();
-  const g=c.createLinearGradient(0,top,0,y+h); g.addColorStop(0,JAR_COL[k][0]); g.addColorStop(.35,JAR_COL[k][1]); g.addColorStop(1,JAR_COL[k][2]);
-  c.fillStyle=g; c.beginPath(); c.moveTo(x-2,y+h+2);
-  for(let i=0;i<=24;i++){ const px=x-2+(w+4)*i/24; c.lineTo(px,top+Math.sin(i/24*Math.PI*2+t*2.2)*amp+Math.sin(i/24*Math.PI*4-t*1.4)*amp*.5); }
-  c.lineTo(x+w+2,y+h+2); c.closePath(); c.fill();
-  // bubbles
-  if(!RM&&lv>.08) for(let b=0;b<4;b++){ const bt=(t*.35+b*.27)%1, bx=x+w*(.25+.5*((b*37%10)/10)), by=y+h-6-(y+h-6-top)*bt; c.fillStyle=`rgba(255,255,255,${.5*(1-bt)})`; c.beginPath(); c.arc(bx+Math.sin(t*3+b)*3,by,2+b%2,0,Math.PI*2); c.fill(); }
-  const sh=c.createLinearGradient(x,0,x+w,0); sh.addColorStop(0,'rgba(20,10,60,.22)'); sh.addColorStop(.25,'rgba(255,255,255,.28)'); sh.addColorStop(.4,'rgba(255,255,255,0)'); sh.addColorStop(1,'rgba(20,10,60,.25)');
-  c.fillStyle=sh; c.fillRect(x,y,w,h); c.restore();
-  // glass
-  c.save(); jar(); c.fillStyle='rgba(255,255,255,.12)'; c.fill(); c.lineWidth=2.5; c.strokeStyle='rgba(255,255,255,.75)'; c.stroke();
-  c.strokeStyle='rgba(255,255,255,.55)'; c.lineWidth=3; c.lineCap='round'; c.beginPath(); c.moveTo(x+7,y+18); c.lineTo(x+7,y+h-r); c.stroke();
-  c.fillStyle='rgba(255,255,255,.35)'; c.beginPath(); c.ellipse(x+w/2,y+8,w/2,4,0,0,Math.PI*2); c.fill(); c.restore();
-}
-function startJars(){ if(jarRAF) return; const step=()=>{ if(page!=='cpf'||document.hidden){ jarRAF=null; return; } const t=performance.now()/1000; ['OA','SA','MA'].forEach(k=>drawJar(k,t)); jarRAF=requestAnimationFrame(step); }; jarRAF=requestAnimationFrame(step); }
+// three glass jars in one small 3D scene, lit like the rest of the app
+const jars3d=(function(){
+  if(!T) return null;
+  const cv=$('jarCv'), renderer=glRenderer(cv); if(!renderer) return null;
+  const scene=new T.Scene(), cam=new T.PerspectiveCamera(30,2,.1,50); cam.position.set(0,.85,4.5); cam.lookAt(0,-.02,0); lights(scene);
+  const R=.5, H=1.5, xs=[-1.35,0,1.35], keys=['OA','SA','MA'];
+  const cols={OA:[0x1D8FE8,0x9BE3FF],SA:[0x6A45F0,0xC9B8FF],MA:[0x10B98A,0xA8FFE0]};
+  // glass: one continuous outline (rounded base, wall, rolled lip) spun into a jar
+  const gpts=[]; const cr=.12;
+  gpts.push(new T.Vector2(1e-4,-H/2));
+  for(let i=0;i<=10;i++){ const a=-Math.PI/2+Math.PI/2*i/10; gpts.push(new T.Vector2(R-cr+Math.cos(a)*cr,-H/2+cr+Math.sin(a)*cr)); }
+  gpts.push(new T.Vector2(R,H/2-.04));
+  for(let i=0;i<=10;i++){ const a=Math.PI*i/10; gpts.push(new T.Vector2(R-.035+Math.cos(a)*.035,H/2-.04+Math.sin(a)*.05)); }
+  gpts.push(new T.Vector2(R-.07,H/2-.25));
+  const glassGeo=new T.LatheGeometry(gpts,64);
+  const glassMat=gloss(0xffffff,{transparent:true,opacity:.22,roughness:.02,clearcoatRoughness:.02,side:T.DoubleSide,depthWrite:false});
+  const jars={};
+  keys.forEach((k,i)=>{
+    const g=new T.Group(); g.position.x=xs[i]; scene.add(g);
+    // liquid: a cylinder whose top ring and cap ripple together, so the surface stays watertight
+    const lg=new T.CylinderGeometry(R-.06,R-.06,1,56,1,false); lg.translate(0,.5,0);
+    const pos=lg.attributes.position, orig=pos.array.slice();
+    const lm=gloss(cols[k][0],{roughness:.08,clearcoatRoughness:.03,emissive:new T.Color(cols[k][0]).multiplyScalar(.06)});
+    const liquid=new T.Mesh(lg,lm); liquid.position.y=-H/2+.05; liquid.scale.y=.001; g.add(liquid);
+    const bubbles=[...Array(7)].map(()=>{ const b=new T.Mesh(new T.SphereGeometry(.035+Math.random()*.03,12,10),gloss(cols[k][1],{transparent:true,opacity:.85})); b.userData={x:(Math.random()-.5)*.55,z:(Math.random()-.5)*.55,t:Math.random(),sp:.12+Math.random()*.18}; g.add(b); return b; });
+    const glass=new T.Mesh(glassGeo,glassMat); glass.renderOrder=2; g.add(glass);
+    jars[k]={g,liquid,pos,orig,bubbles,level:0,target:0,amp:.02,phase:Math.random()*6};
+  });
+  const maxH=H-.22;
+  function frame(t){
+    keys.forEach(k=>{ const j=jars[k], h=Math.max(.001,j.level*maxH);
+      j.liquid.scale.y=h;
+      const a=j.level>.04?j.amp:0, arr=j.pos.array;
+      for(let i=0;i<arr.length;i+=3){ if(j.orig[i+1]>.99){ const x=j.orig[i], z=j.orig[i+2];
+        arr[i+1]=1+(a*Math.sin(x*6+t*2.6+j.phase)+a*.6*Math.sin(z*7-t*2.1)+a*.5*Math.sin((x+z)*9+t*3.3))/h; } }
+      j.pos.needsUpdate=true; j.liquid.geometry.computeVertexNormals();
+      const top=-H/2+.05+h;
+      j.bubbles.forEach(b=>{ const u=b.userData; u.t=(u.t+u.sp*.016)%1; b.position.set(u.x+Math.sin(t*3+u.t*9)*.03,-H/2+.1+(h-.08)*u.t,u.z); b.visible=j.level>.06&&b.position.y<top-.04; });
+      j.g.rotation.y=Math.sin(t*.4+j.phase)*.12; });
+    renderer.render(scene,cam);
+  }
+  function size(){ const w=cv.clientWidth, h=cv.clientHeight; if(!w) return; renderer.setSize(w,h,false); cam.aspect=w/h; cam.fov=w/h<1.5?38:34; cam.updateProjectionMatrix(); }
+  addEventListener('resize',size);
+  let raf=null; const t0=performance.now();
+  function loop(){ if(page!=='cpf'||document.hidden){ raf=null; return; } size(); frame((performance.now()-t0)/1000); raf=requestAnimationFrame(loop); }
+  // tap a jar to swirl it
+  const ray=new T.Raycaster(), v=new T.Vector2();
+  cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1); ray.setFromCamera(v,cam);
+    keys.forEach(k=>{ if(ray.intersectObject(jars[k].g,true).length){ slosh(k); Sound.bubble&&Sound.bubble(); haptic(); } }); });
+  function slosh(k){ const j=jars[k]; if(!ANIM) return; G.killTweensOf(j,'amp'); G.fromTo(j,{amp:.1},{amp:.02,duration:1.8,ease:'power2.out'}); G.fromTo(j.g.rotation,{z:.12},{z:0,duration:1.4,ease:'elastic.out(1,.35)'}); }
+  return {
+    set(levels,animate){ keys.forEach((k,i)=>{ const j=jars[k]; if(animate&&ANIM){ j.level=0; G.to(j,{level:levels[k],duration:1.6,delay:.25+i*.15,ease:'elastic.out(1,.6)'}); G.fromTo(j,{amp:.09},{amp:.02,duration:2.2,delay:.25+i*.15}); } else j.level=levels[k]; }); },
+    start(){ if(!raf) raf=requestAnimationFrame(loop); if(RM){ size(); frame(0); } }
+  };
+})();
+function startJars(){ if(jars3d) jars3d.start(); }
 
 /* ================= Year page ================= */
 let yOff=0, yearAnimStart=0, yearRAF=null;
@@ -1853,13 +1980,40 @@ function renderStats(animate){
 }
 $('sPrev').onclick=()=>{ sOff--; renderStats(true); }; $('sNext').onclick=()=>{ if(sOff<0){ sOff++; renderStats(true); } };
 
+/* ================= payslip entry ================= */
+let slipP=null;
+function openSlip(){
+  const m=monthData(pOff); slipP=m.p; const s=slipOf(m.p);
+  $('slipTitle').textContent=`Payslip for ${rangeTxt(m.p)}`;
+  $('slGross').value=s?s.gross:''; $('slEe').value=s&&s.ee!=null?s.ee:''; $('slEr').value=s&&s.er!=null?s.er:'';
+  $('slipHint').textContent='Enter the amounts from your payslip for this pay period. The app will use them instead of its estimate.'; $('slipHint').style.color='';
+  $('slClear').hidden=!s; slipPreview(); openSheet('slipSheet');
+}
+function slipPreview(){
+  const m=monthData(pOff), est=estGross(m), g=parseFloat($('slGross').value);
+  if(!(g>0)){ $('slPreview').textContent=est!=null?`The estimate before CPF is ${money(est)}.`:''; return; }
+  const d=g-(est||0);
+  $('slPreview').textContent=`${d>=0?'+':'−'}${money(Math.abs(d))} compared with the estimate of ${money(est||0)} before CPF.`;
+}
+['slGross','slEe','slEr'].forEach(id=>$(id).addEventListener('input',slipPreview));
+$('slipBtn').onclick=openSlip; $('slCancel').onclick=closeSheet;
+$('slSave').onclick=()=>{
+  const g=parseFloat($('slGross').value); if(!(g>0)){ $('slipHint').textContent='Enter the gross pay from your payslip.'; $('slipHint').style.color='var(--coral)'; shake('#slGross'); return; }
+  const num=id=>{ const v=parseFloat($(id).value); return v>=0?v:null; };
+  state.payslips[slipP.start]={gross:g,ee:num('slEe'),er:num('slEr')}; save();
+  closeSheet(); renderMonth(true); toast('Payslip saved',false);
+};
+$('slClear').onclick=()=>{ delete state.payslips[slipP.start]; save(); closeSheet(); renderMonth(true); toast('Back to the estimate',false); };
+
 /* ================= payday ================= */
 function paydayOf(y,m){ const last=new Date(y,m+1,0).getDate(); return new Date(y,m,Math.min(+S().payday||28,last),12).getTime(); }
 function nextPayday(){ const n=new Date(), t=paydayOf(n.getFullYear(),n.getMonth()); if(sameDay(t,n)||t>n.getTime()) return t; return paydayOf(n.getFullYear(),n.getMonth()+1); }
 const isPayday=()=>sameDay(nextPayday(),Date.now());
+function takeHome(m){ const slip=slipOf(m.p); if(slip){ const c=cpfForM(m,slip); return slip.gross-c; } return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
+function cpfForM(m,slip){ if(slip.ee!=null) return slip.ee; if(!(m.rate&&m.rate.cpf)) return 0; const [ee]=CPF_RATES[+S().age||0]; return Math.min(CPF_CEIL,slip.gross)*ee/100; }
 function paydayAmount(){
   const pd=nextPayday();
-  for(let off=-1;off<=1;off++){ const m=monthData(off); if(pd>=m.p.start&&pd<m.p.end) return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
+  for(let off=-1;off<=1;off++){ const m=monthData(off); if(pd>=m.p.start&&pd<m.p.end) return takeHome(m); }
   return null;
 }
 function updatePayPills(){
@@ -1981,7 +2135,7 @@ function goPage(pg){
   const from=page; page=pg; if(from!=='settings') lastPage=from;
   navBtns.forEach(b=>b.dataset.pg===(NAVOF[pg]||pg)?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
   if((NAVOF[pg]||pg)!==(NAVOF[from]||from)) moveInd(pg,true);
-  Sound.swoosh(); Sound.zone(pg==='today'?(state.active?'work':'home'):pg);
+  { const zf=from==='today'?(state.active?'work':'home'):from, zt=pg==='today'?(state.active?'work':'home'):pg; Sound.swoosh(world?world.dir(zf,zt):null); Sound.zone(zt); }
   world&&world.go(pg==='today'?(state.active?'work':'home'):pg);
   const show=()=>{
     $(PAGES[from]).hidden=true; $(PAGES[pg]).hidden=false; if(G) G.set('#'+PAGES[pg],{clearProps:'all'});
