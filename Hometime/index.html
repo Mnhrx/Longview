@@ -182,6 +182,7 @@ details.hist[open] summary::after{transform:rotate(45deg)}
 .bigAmt{margin:0;font-size:clamp(46px,14vw,64px);font-weight:800;letter-spacing:-.045em;line-height:1.05;font-variation-settings:"opsz" 96;font-variant-numeric:tabular-nums;background:linear-gradient(135deg,#FFB020,#FF7A45 45%,#FF4D6D);-webkit-background-clip:text;background-clip:text;color:transparent;padding:0 4px}
 .soFar{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px 6px}
 .soFarTxt{margin:0;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;text-align:center}
+.soCv{display:block;width:100%;height:24px}
 .soTrack{width:100%;height:16px;border-radius:99px;background:var(--card);border:1px solid var(--line);padding:2px;overflow:visible}
 .soFill{height:100%;min-width:12px;border-radius:99px;position:relative;background:linear-gradient(90deg,#FFB020,#FF4D6D 50%,#19D9A0);background-size:200% 100%;animation:flow 6s linear infinite;box-shadow:inset 0 2px 3px rgba(255,255,255,.55),inset 0 -2px 4px rgba(60,20,120,.25),0 3px 8px -2px rgba(255,77,109,.45)}
 .soFill::after{content:"";position:absolute;left:10%;right:10%;top:2px;height:3px;border-radius:99px;background:rgba(255,255,255,.55)}
@@ -249,11 +250,21 @@ label.toggle{cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:5
 .lvRow{display:flex;flex-direction:column;gap:6px}
 .lvTop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-weight:700;font-size:15px}
 .lvTop span:last-child{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.lvCv{display:block;width:100%;height:24px}
 .lvTrack{height:16px;border-radius:99px;background:var(--field);border:1px solid var(--line);padding:2px}
 .lvFill{height:100%;min-width:12px;border-radius:99px;position:relative;background-size:200% 100%;animation:flow 7s linear infinite;box-shadow:inset 0 2px 3px rgba(255,255,255,.55),inset 0 -2px 4px rgba(20,40,60,.25)}
 .lvFill::after{content:"";position:absolute;left:10%;right:10%;top:2px;height:3px;border-radius:99px;background:rgba(255,255,255,.55)}
 .lvNote{margin:0;font-size:13px;color:var(--muted);text-align:center}
-.yearCard{padding:14px 10px 10px}
+.yearCard{padding:14px 10px 10px;position:relative}
+.yTip{position:absolute;z-index:3;transform:translate(-50%,-100%);padding:8px 12px;border-radius:14px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 8px 20px -6px rgba(0,0,0,.4)}
+.yTip::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.holList{padding:6px 14px}
+.hol{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.hol:first-child{border-top:0}
+.hol i{width:12px;height:12px;border-radius:50%}
+.hol b{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.hol.past{opacity:.5}
+#yHols .sec{margin:6px 0 10px;text-align:center;font-size:19px;font-weight:800}
 .yearCard canvas{display:block;width:100%;height:420px}
 .statGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .statGrid .stat b{font-size:19px}
@@ -267,11 +278,15 @@ label.toggle{cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:5
 input[type=range].fld{padding:0 6px;min-height:44px;accent-color:var(--violet)}
 select.fld{text-align-last:center}
 .hapt{position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none}
+#intro{position:fixed;inset:0;z-index:100;background:var(--bg);background-image:radial-gradient(120% 70% at 100% 0%,var(--bg2) 0%,transparent 60%),radial-gradient(90% 60% at 0% 100%,var(--bg2) 0%,transparent 55%);display:none}
+#intro canvas{position:absolute;inset:0;width:100%;height:100%}
+#introT{position:absolute;left:0;right:0;top:calc(50% + 78px);margin:0;text-align:center;font-weight:800;font-size:26px;letter-spacing:-.03em;opacity:0;color:var(--ink)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion: reduce){.ping::before,.ping::after,.halo,.soFill{animation:none!important}}
 </style>
 </head>
 <body>
+<div id="intro" aria-hidden="true"><canvas id="introCv"></canvas><p id="introT">Home Time</p></div>
 <canvas id="bg3d" aria-hidden="true"></canvas>
 <canvas id="fx" aria-hidden="true"></canvas>
 
@@ -351,7 +366,7 @@ select.fld{text-align-last:center}
       <p class="bigAmt" id="heroAmt">$0.00</p>
       <div class="soFar" id="soFar" hidden>
         <p class="soFarTxt" id="soFarTxt"></p>
-        <div class="soTrack"><div class="soFill" id="soFarFill"></div></div>
+        <canvas class="soCv" id="soCv"></canvas>
       </div>
       <p class="sub" id="heroNote"></p>
       <button class="payPill pillBtn" id="payPillMonth" type="button" hidden></button>
@@ -498,8 +513,9 @@ select.fld{text-align-last:center}
       <div class="ptitle"><p class="lbl" id="yLbl"></p><p class="prange" id="yRange"></p></div>
       <button class="arrow" id="yNext" type="button" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
     </div>
-    <div class="card yearCard" id="yCard"><canvas id="yearCv" role="img" aria-label="Every day of the year, coloured by type and hours"></canvas><p class="legend" id="yLegend"></p></div>
+    <div class="card yearCard" id="yCard"><canvas id="yearCv" role="img" aria-label="Every day of the year, coloured by type and hours"></canvas><div class="yTip" id="yTip" hidden></div><p class="legend" id="yLegend"></p><p class="note" style="margin:6px 0 0">Tap a dot to see what that day was.</p></div>
     <div class="grid" id="yStats"></div>
+    <div id="yHols"></div>
   </section>
 
   <section id="pgStats" class="page" hidden>
@@ -709,13 +725,13 @@ const Sound=(function(){
       const src=ctx.createBufferSource(); src.buffer=noiseBuf; src.playbackRate.value=.8+Math.random()*.5;
       const f=ctx.createBiquadFilter(); f.type='bandpass'; f.Q.value=.8+Math.random()*1.6;
       f.frequency.setValueAtTime(up?lo:downw?hi:lo*1.4,t); f.frequency.exponentialRampToValueAtTime(up?hi:downw?lo*1.2:hi,t+d*.5); f.frequency.exponentialRampToValueAtTime(end,t+d);
-      const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.16+Math.random()*.08,t+d*.42); g.gain.exponentialRampToValueAtTime(.001,t+d);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.12+Math.random()*.06,t+d*.42); g.gain.exponentialRampToValueAtTime(.001,t+d);
       let node=g;
       if(ctx.createStereoPanner){ const p=ctx.createStereoPanner(), sx=side?Math.sign(dir.x):(Math.random()-.5)*.6; p.pan.setValueAtTime(side?-sx*.8:sx,t); p.pan.linearRampToValueAtTime(side?sx*.8:-sx,t+d); g.connect(p); node=p; }
       src.connect(f); f.connect(g); node.connect(sfx); src.start(t); src.stop(t+d+.1);
       const extra=Math.random();
-      if(extra<.35) for(let i=0;i<6;i++) tone(1800+Math.random()*1600,.25,{gain:.025,when:d*.45+i*.06});          // sparkle trail
-      else if(extra<.65) noise(d*.9,{f0:90,f1:60,q:.7,gain:.12,type:'lowpass'});                                  // low rumble
+      if(extra<.35) for(let i=0;i<6;i++) tone(1800+Math.random()*1600,.25,{gain:.019,when:d*.45+i*.06});          // sparkle trail
+      else if(extra<.65) noise(d*.9,{f0:90,f1:60,q:.7,gain:.09,type:'lowpass'});                                  // low rumble
     }
   };
 })();
@@ -1007,6 +1023,8 @@ const world=(function(){
       G.timeline().to(smat,{opacity:.85,duration:.35}).to(smat,{opacity:0,duration:.6},.55);
     },
     travel(toWork){ this.go(toWork?'work':'home'); },
+    swoopIn(delay){ if(!ANIM) return; const p=camPos(cur); cam.position.set(p.x,p.y,p.z+30); cam.fov=72; cam.updateProjectionMatrix();
+      G.to(cam.position,{z:p.z,duration:1.3,delay,ease:'power3.out'}); G.to(cam,{fov:40,duration:1.3,delay,ease:'power3.out',onUpdate:()=>cam.updateProjectionMatrix()}); },
     dir(a,b){ const A=ZONES[a],B=ZONES[b]; if(!A||!B) return {x:0,y:0}; const dx=B[0]-A[0],dy=B[1]-A[1],dz=B[2]-A[2], L=Math.hypot(dx,dy,dz)||1; return {x:dx/L,y:dy/L}; },
     get zone(){ return cur; },
     setProgress(p){ p=Math.min(1,Math.max(0,p)); shapes.forEach(o=>{ if(o.userData.zone!=='work') return; const c=o.userData.warm.clone().lerp(o.userData.cool,p); o.userData.mats.forEach(m=>m.color.copy(c)); }); if(RM) frame(0); },
@@ -1444,7 +1462,7 @@ const CPF_CEIL=8000;
 function sortHist(){ state.history.sort((a,b)=>b.in-a.in); state.history=state.history.slice(0,800); }
 // attaches pay to a saved day using the rate that day was saved with
 const TYPES={work:'Worked',al:'Annual leave',ph:'Public holiday',mc:'MC',unpaid:'Unpaid leave'};
-const TYPE_COL={al:'#19D9A0',ph:'#FFC53D',mc:'#3FB8FF',unpaid:'#FF4D6D'};
+const TYPE_COL={al:'#3FB8FF',ph:'#FFC53D',mc:'#7B5CFF',unpaid:'#8A93A6'};
 const typeOf=r=>r.type||'work';
 const isPaidOff=r=>{ const t=typeOf(r); return t==='al'||t==='ph'||(t==='mc'&&r.paid); };
 const isUnpaid=r=>{ const t=typeOf(r); return t==='unpaid'||(t==='mc'&&!r.paid); };
@@ -1502,7 +1520,7 @@ function renderDays(){
       return `<li><button class="dayItem" type="button" data-v="1"><span class="d">${dayName(r.in)}</span><span class="tot">${future?'Upcoming':'Paid'}</span><span class="t"><span class="chip" style="background:${TYPE_COL.ph}">${r.name}</span></span>${v!=null?`<span class="pay">${money(v)}</span>`:'<span></span>'}</button></li>`;
     }
     if(t!=='work'){
-      const chip=`<span class="chip" style="background:${TYPE_COL[t]}${isUnpaid(r)?';color:#fff':''}">${typeLabel(r)}</span>`;
+      const chip=`<span class="chip" style="background:${TYPE_COL[t]}${isUnpaid(r)||t==='mc'?';color:#fff':''}">${typeLabel(r)}</span>`;
       const pay=r.earn!=null&&r.earn!==0?`<span class="pay${r.earn<0?' neg':''}">${r.earn<0?'−'+money(-r.earn):money(r.earn)}</span>`:'<span></span>';
       return `<li><button class="dayItem" type="button" data-i="${i}"><span class="d">${dayName(r.in)}</span><span class="tot">${isPaidOff(r)?'Paid':'Unpaid'}</span><span class="t">${chip}</span>${pay}</button></li>`;
     }
@@ -1623,6 +1641,10 @@ function mcEntitled(at=Date.now()){
   return at>=leaveStart()?(+S().mc||0):0;
 }
 function mcUsedPaid(year,exceptIn){ return state.history.filter(r=>typeOf(r)==='mc'&&r.paid&&new Date(r.in).getFullYear()===year&&r.in!==exceptIn).length; }
+const leaveLv={al:{v:0,target:0},mc:{v:0,target:0}}; let leaveRAF=null;
+function startLeave(){ if(leaveRAF||!Liquid) return; const step=()=>{ if(page!=='days'||document.hidden){ leaveRAF=null; return; } const t=performance.now()/1000;
+  document.querySelectorAll('#leaveCard .lvCv').forEach(cv=>{ const k=cv.dataset.k, W=cv.clientWidth, H=cv.clientHeight; Liquid.draw(cv,{mode:'h',items:[{level:Math.max(.03,leaveLv[k].v),pal:Liquid.ID[k],amp:.8}],slot:W,cw:W-6,ch:H-6,r:(H-6)/2,pad:3,t}); });
+  leaveRAF=requestAnimationFrame(step); }; leaveRAF=requestAnimationFrame(step); }
 function renderLeave(){
   const y=new Date().getFullYear(), inYear=r=>new Date(r.in).getFullYear()===y, ls=leaveStart(), started=!ls||Date.now()>=ls;
   const al=state.history.filter(r=>typeOf(r)==='al'&&inYear(r)).length, ent=started?(+S().al||0):0, left=Math.max(0,ent-al);
@@ -1632,15 +1654,149 @@ function renderLeave(){
   if(!startTs()) note='Set your start date in Settings to see when your leave starts.';
   else if(!started) note=`Your ${S().al} days of leave and ${S().eaMc?'paid MC':S().mc+' paid MC days'} start on ${when}. MC before then is unpaid.`;
   else if(S().eaMc&&mcEnt<14) note='Your paid MC days go up each month until 14 at 6 months of service.';
-  const bar=(frac,grad)=>`<div class="lvTrack"><div class="lvFill" style="width:${Math.max(4,frac*100)}%;background-image:${grad}"></div></div>`;
+  const bar=(frac,grad,key)=>{ leaveLv[key].target=frac; return `<canvas class="lvCv" data-k="${key}"></canvas>`; };
   $('leaveCard').innerHTML=`
-    <div class="lvRow"><div class="lvTop"><span>Annual leave</span><span>${started?`${left} of ${ent} days left`:`starts ${when}`}</span></div>${bar(ent?left/ent:0,'linear-gradient(90deg,#19D9A0,#3FB8FF 50%,#19D9A0)')}</div>
-    <div class="lvRow"><div class="lvTop"><span>Paid MC</span><span>${mcEnt?`${Math.max(0,mcEnt-mcP)} of ${mcEnt} days left`:(startTs()?`starts ${when}`:`${mc} used`)}</span></div>${bar(mcEnt?Math.max(0,mcEnt-mcP)/mcEnt:0,'linear-gradient(90deg,#3FB8FF,#7B5CFF 50%,#3FB8FF)')}</div>
+    <div class="lvRow"><div class="lvTop"><span>Annual leave</span><span>${started?`${left} of ${ent} days left`:`starts ${when}`}</span></div>${bar(ent?left/ent:0,'','al')}</div>
+    <div class="lvRow"><div class="lvTop"><span>Paid MC</span><span>${mcEnt?`${Math.max(0,mcEnt-mcP)} of ${mcEnt} days left`:(startTs()?`starts ${when}`:`${mc} used`)}</span></div>${bar(mcEnt?Math.max(0,mcEnt-mcP)/mcEnt:0,'','mc')}</div>
     ${note?`<p class="lvNote">${note}</p>`:''}`;
-  if(ANIM&&page==='days') G.from('#leaveCard .lvFill',{width:'4%',duration:1.2,stagger:.12,ease:'elastic.out(1,.7)'});
+  ['al','mc'].forEach((k,i)=>{ const L=leaveLv[k]; G&&G.killTweensOf(L); if(ANIM&&page==='days') G.fromTo(L,{v:.02},{v:L.target,duration:1.4,delay:.2+i*.12,ease:'elastic.out(1,.7)'}); else L.v=L.target; });
+  startLeave();
 }
 function animateDays(){ if(ANIM&&page==='days') G.from('#dayGroups .dayItem',{y:24,opacity:0,scale:.96,stagger:.035,duration:.45,ease:'back.out(1.6)',clearProps:'all'}); }
 function refreshToday(){ if(!state.active&&!$('idle').hidden) $('resumeLink').hidden=!todayRec(); }
+
+/* ================= shared liquid engine =================
+   One hidden graphics context draws every liquid widget (chart tubes, jars, progress bars)
+   in the same glossy style as the clock-in ring: flat frosted glass, round-looking liquid with
+   gradient colour, a moving surface and bubbles that merge into it. Each widget copies the
+   result into its own canvas, so the phone only ever runs one extra graphics context. */
+const Liquid=(function(){
+  const cv=document.createElement('canvas'); cv.width=4; cv.height=4;
+  let gl=null; try{ gl=cv.getContext('webgl',{premultipliedAlpha:true,alpha:true,antialias:false}); }catch(e){}
+  if(!gl) return null;
+  const MAXI=32;
+  const vs='attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+  const fs=`precision highp float;
+  #define MAXI ${MAXI}
+  uniform vec2 uRes; uniform float uT, uDpr; uniform int uMode, uN;
+  uniform vec4 uA[MAXI]; uniform vec4 uB[MAXI]; uniform vec3 uPal[24];
+  uniform vec4 uGeo; // slot width, container width, container height, corner radius (css px)
+  uniform float uPad;
+  float sdBox(vec2 p, vec2 b, float r){ vec2 q=abs(p)-b+r; return length(max(q,0.))+min(max(q.x,q.y),0.)-r; }
+  float smin(float a,float b,float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+  float hash(float n){ return fract(sin(n)*43758.5453); }
+  // liquid signed distance for item i at local point p (origin: container bottom-left)
+  float liq(vec2 p, int i, vec4 A, vec4 B, float cw, float ch, float r){
+    float dG=sdBox(p-vec2(cw*.5,ch*.5),vec2(cw*.5,ch*.5)-2.5,max(0.,r-2.5));
+    float lvl=A.x*(ch-5.)+2.5, amp=A.w, fi=float(i);
+    float d;
+    if(uMode==1){ // horizontal: liquid fills from the left, the front edge ripples
+      float front=A.x*(cw-5.)+2.5+amp*(3.*sin(p.y*.35+uT*2.6+fi)+1.6*sin(p.y*.7-uT*1.9));
+      d=max(dG,p.x-front);
+    } else {
+      float top=lvl+amp*(2.6*sin(p.x*.16+uT*2.4+fi*1.7)+1.4*sin(p.x*.33-uT*1.8+fi));
+      d=max(dG,p.y-top);
+      if(B.y>.5&&A.x>.04){ // bubbles that rise and merge into the surface
+        for(int k=0;k<3;k++){ float fk=float(k)+fi*3.1;
+          float u=fract(uT*(.13+hash(fk)*.12)+hash(fk+7.));
+          vec2 c=vec2(cw*(.25+.5*hash(fk+3.)),2.5+u*(lvl+5.));
+          float br=(1.6+2.2*hash(fk+9.))*(.6+.6*u)*clamp(cw/40.,.5,1.4);
+          d=smin(d,length(p-c)-br,4.);
+        }
+      }
+    }
+    return d;
+  }
+  vec3 palAt(int pi,float u){ vec3 a=uPal[0],b=uPal[1],c=uPal[2];
+    for(int k=0;k<8;k++){ if(k==pi){ a=uPal[k*3]; b=uPal[k*3+1]; c=uPal[k*3+2]; } }
+    return u<.5?mix(a,b,u*2.):mix(b,c,u*2.-1.); }
+  void main(){
+    vec2 px=gl_FragCoord.xy/uDpr;
+    float sw=uGeo.x, cw=uGeo.y, ch=uGeo.z, rr=uGeo.w;
+    int i=int(floor(px.x/sw)); if(uMode==1) i=0;
+    if(i>=uN){ gl_FragColor=vec4(0.); return; }
+    vec4 A=vec4(0.),B=vec4(0.);
+    for(int k=0;k<MAXI;k++){ if(k==i){ A=uA[k]; B=uB[k]; } }
+    vec2 org=uMode==1?vec2(uPad,uPad):vec2(float(i)*sw+(sw-cw)*.5,uPad);
+    vec2 p=px-org;
+    float dGlass=sdBox(p-vec2(cw*.5,ch*.5),vec2(cw*.5,ch*.5),rr);
+    // flat frosted glass
+    float aa=1./uDpr;
+    float inside=1.-smoothstep(-aa,aa,dGlass);
+    float rim=1.-smoothstep(1.,2.2,abs(dGlass+.8));
+    float stripe=(uMode==1)?smoothstep(ch*.2,ch*.3,p.y)*(1.-smoothstep(ch*.32,ch*.42,p.y)):smoothstep(cw*.16,cw*.22,p.x)*(1.-smoothstep(cw*.26,cw*.34,p.x));
+    vec4 glass=vec4(vec3(1.),1.)*(inside*(.14+.16*stripe)+rim*.55);
+    // liquid
+    float d=liq(p,i,A,B,cw,ch,rr);
+    float a=1.-smoothstep(-aa,aa,d);
+    if(a<=0.){ gl_FragColor=glass; return; }
+    vec2 e=vec2(.8,0.);
+    vec2 g=vec2(liq(p+e.xy,i,A,B,cw,ch,rr)-liq(p-e.xy,i,A,B,cw,ch,rr),liq(p+e.yx,i,A,B,cw,ch,rr)-liq(p-e.yx,i,A,B,cw,ch,rr));
+    float R=max(4.,min(uMode==1?ch*.5:cw*.5,16.));
+    float h=sqrt(clamp(-d/R,0.,1.));
+    vec3 n=normalize(vec3(g*(1.-h)*1.6,max(h,.08)*1.4));
+    // colour: along the fill, with blends between the stops so there are no seams
+    float lvl=A.x*((uMode==1?cw:ch)-5.)+2.5;
+    float u=clamp((uMode==1?p.x:p.y)/max(lvl,1.),0.,1.);
+    vec3 col;
+    int pi=int(B.x+.5);
+    if(pi==0){ // workday: normal hours, then paid OT, then extra time
+      float nh=A.y, po=A.z;
+      vec3 c1=mix(uPal[0],uPal[1],clamp(u/max(nh,.01),0.,1.));
+      vec3 c2=mix(uPal[3],uPal[4],clamp((u-nh)/max(po-nh,.01),0.,1.));
+      vec3 c3=uPal[5];
+      col=mix(c1,c2,smoothstep(nh-.035,nh+.035,u));
+      col=mix(col,c3,smoothstep(po-.035,po+.035,u)*step(po,.999));
+    } else col=palAt(pi,u);
+    if(B.w>.5){ float s=step(.5,fract((p.x+p.y)*.09)); col=mix(col,col*1.25+.08,s*.35); } // unpaid stripes
+    vec3 L=normalize(vec3(-.45,.6,.75));
+    float dif=.55+.45*max(dot(n,L),0.);
+    float spec=pow(max(dot(reflect(-L,n),vec3(0.,0.,1.)),0.),48.)*.95;
+    float rimL=pow(1.-n.z,2.);
+    vec3 c=col*dif+vec3(1.)*spec; c=mix(c,c*.72,rimL*.5);
+    if(B.z>.5) c+=vec3(.08)*(.5+.5*sin(uT*3.));
+    gl_FragColor=vec4(c*a,a)+glass*(1.-a)*.9;
+  }`;
+  function sh(type,src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); return null; } return s; }
+  const prog=gl.createProgram(); const v=sh(gl.VERTEX_SHADER,vs), f=sh(gl.FRAGMENT_SHADER,fs); if(!v||!f) return null;
+  gl.attachShader(prog,v); gl.attachShader(prog,f); gl.linkProgram(prog); if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+  const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const al=gl.getAttribLocation(prog,'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+  const U={}; ['uRes','uT','uDpr','uMode','uN','uA','uB','uPal','uGeo','uPad'].forEach(k=>U[k]=gl.getUniformLocation(prog,k));
+  const hex=h=>{ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; };
+  // palettes: 0 workday (orange, pink, -, mint, teal, lilac), then 1..7 single gradients
+  // palette slots: 0 is the workday set (six colours in slots 0-5); others use three slots at k*3
+  const PALS={2:['#FFE08A','#FFC53D','#E0A100'],3:['#C9B8FF','#7B5CFF','#4B2FC9'],4:['#C3C9D6','#8A93A6','#5E6678'],
+    5:['#FFB020','#FF7A45','#19D9A0'],6:['#A8FFE0','#19D9A0','#0B8F69'],7:['#9BE3FF','#3FB8FF','#1D6FE0']};
+  const palArr=new Float32Array(72);
+  ['#FFB020','#FF4D6D','#FF4D6D','#19D9A0','#0FA37A','#D9CCFF'].forEach((h,i)=>palArr.set(hex(h),i*3));
+  Object.keys(PALS).forEach(k=>PALS[k].forEach((h,i)=>palArr.set(hex(h),(k*3+i)*3)));
+  const ID={work:0,ph:2,mc:3,SA:3,unpaid:4,sofar:5,MA:6,OA:7,al:7};
+  gl.uniform3fv(U.uPal,palArr);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  const A=new Float32Array(MAXI*4), B=new Float32Array(MAXI*4);
+  return {
+    ID,
+    // draw into a widget's 2D canvas. items: [{level,nh,paidTo,amp,pal,bubbles,live,stripes}]
+    draw(target,{mode='v',items,slot,cw,ch,r,pad=4,t=performance.now()/1000}){
+      const dpr=Math.min(devicePixelRatio||1,2), W=target.clientWidth, H=target.clientHeight; if(!W||!H) return null;
+      const pw=Math.round(W*dpr), ph=Math.round(H*dpr);
+      if(cv.width<pw||cv.height<ph){ cv.width=Math.max(cv.width,pw); cv.height=Math.max(cv.height,ph); }
+      if(target.width!==pw||target.height!==ph){ target.width=pw; target.height=ph; }
+      gl.viewport(0,0,pw,ph); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+      A.fill(0); B.fill(0);
+      items.slice(0,MAXI).forEach((it,i)=>{ A.set([it.level||0,it.nh??1,it.paidTo??1,it.amp??1],i*4); B.set([it.pal||0,it.bubbles?1:0,it.live?1:0,it.stripes?1:0],i*4); });
+      gl.uniform2f(U.uRes,pw,ph); gl.uniform1f(U.uT,RM?0:t); gl.uniform1f(U.uDpr,dpr); gl.uniform1i(U.uMode,mode==='h'?1:0); gl.uniform1i(U.uN,items.length);
+      gl.uniform4fv(U.uA,A); gl.uniform4fv(U.uB,B); gl.uniform4f(U.uGeo,slot||W,cw,ch,r); gl.uniform1f(U.uPad,pad);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+      const c=target.getContext('2d'); c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,pw,ph);
+      c.drawImage(cv,0,cv.height-ph,pw,ph,0,0,pw,ph);
+      c.setTransform(dpr,0,0,dpr,0,0);
+      return c;
+    }
+  };
+})();
 
 /* ================= month page ================= */
 let pOff=0, chartAnim={k:[]}, chartRAF=null, chartData=null;
@@ -1693,8 +1849,8 @@ function renderMonth(animate){
   if(hasPay&&monthly){
     const f=m.expected>0?Math.min(1,Math.max(0,m.earned/m.expected)):0;
     $('soFarTxt').textContent=`Earned so far ${money(Math.max(0,m.earned))}`;
-    if(animate&&ANIM) G.fromTo('#soFarFill',{width:'0%'},{width:(f*100)+'%',duration:1.3,delay:.3,ease:'elastic.out(1,.7)'});
-    else $('soFarFill').style.width=(f*100)+'%';
+    G&&G.killTweensOf(soLevel);
+    if(animate&&ANIM) G.fromTo(soLevel,{v:0},{v:f,duration:1.4,delay:.3,ease:'elastic.out(1,.7)'}); else soLevel.v=f;
   }
   let note='';
   if(!hasPay) note='Turn on Pay in settings to see estimated pay.';
@@ -1715,11 +1871,11 @@ function renderMonth(animate){
   st+=stat('Average day',m.days?dur(m.avg):'—',true);
   $('mStats').innerHTML=st;
   const types=new Set(m.rows.map(r=>r.rec?typeOf(r.rec)+(typeOf(r.rec)==='mc'?(r.rec.paid?'p':'u'):''):'work'));
-  let lg=`<span><i style="background:linear-gradient(135deg,#FFB020,#FF4D6D)"></i>Normal hours</span><span><i style="background:#19D9A0"></i>Paid overtime</span><span><i style="background:#B8A9FF"></i>Extra, not paid</span>`;
-  if(types.has('al')) lg+=`<span><i style="background:${TYPE_COL.al};border-radius:3px"></i>Leave</span>`;
+  let lg=`<span><i style="background:linear-gradient(135deg,#FFB020,#FF4D6D)"></i>Normal hours</span><span><i style="background:linear-gradient(135deg,#19D9A0,#0FA37A)"></i>Paid overtime</span><span><i style="background:#D9CCFF"></i>Extra, not paid</span>`;
+  if(types.has('al')) lg+=`<span><i style="background:${TYPE_COL.al};border-radius:3px"></i>Annual leave</span>`;
   if(types.has('ph')) lg+=`<span><i style="background:${TYPE_COL.ph};border-radius:3px"></i>Holiday</span>`;
   if(types.has('mcp')||types.has('mcu')) lg+=`<span><i style="background:${TYPE_COL.mc};border-radius:3px"></i>MC</span>`;
-  if(types.has('unpaid')||types.has('mcu')) lg+=`<span><i style="background:${TYPE_COL.unpaid};border-radius:3px;opacity:.6"></i>Unpaid</span>`;
+  if(types.has('unpaid')||types.has('mcu')) lg+=`<span><i style="background:${TYPE_COL.unpaid};border-radius:3px"></i>Unpaid</span>`;
   $('legend').innerHTML=lg;
   // bars rise one after another with a jelly bounce
   chartAnim={k:m.rows.map(()=>animate&&ANIM?0:1)};
@@ -1731,9 +1887,32 @@ $('prevP').onclick=()=>{ pOff--; renderMonth(true); };
 $('nextP').onclick=()=>{ if(pOff<0){ pOff++; renderMonth(true); } };
 
 const chartCv=$('chart'), cctx=chartCv.getContext('2d');
-function startChart(){ if(chartRAF) return; const step=()=>{ if(page!=='month'||document.hidden){ chartRAF=null; return; } drawChart(performance.now()/1000); chartRAF=requestAnimationFrame(step); }; chartRAF=requestAnimationFrame(step); }
+function drawChartLiquid(t){
+  const m=chartData; if(!m) return;
+  const W=chartCv.clientWidth, H=chartCv.clientHeight, n=m.rows.length;
+  const muted=getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#5E5585';
+  const labelH=22, ch=H-labelH-6;
+  if(!n){ const c=chartCv.getContext('2d'), d=Math.min(devicePixelRatio||1,2); chartCv.width=W*d; chartCv.height=H*d; c.setTransform(d,0,0,d,0,0); c.fillStyle=muted; c.font='600 15px "Bricolage Grotesque",system-ui,sans-serif'; c.textAlign='center'; c.fillText('No days in this pay period yet',W/2,H/2); return; }
+  const maxMs=Math.max(...m.rows.map(r=>r.ms),...m.rows.map(r=>r.shift))*1.08;
+  const sw=W/n, cw=Math.max(8,Math.min(26,sw*.7));
+  const items=m.rows.map((r,i)=>{ const k=chartAnim.k[i]??1;
+    if(r.type!=='work'){ const unp=r.rec&&isUnpaid(r.rec); return {level:Math.max(.06,r.shift*.32/maxMs*k),pal:Liquid.ID[unp?'unpaid':r.type]??4,amp:.5,stripes:unp}; }
+    return {level:Math.max(.05,r.ms/maxMs*k),nh:Math.min(1,Math.min(r.ms,r.shift)/Math.max(r.ms,1)),paidTo:Math.min(1,(Math.min(r.ms,r.shift)+r.otMs)/Math.max(r.ms,1)),amp:1,pal:0,bubbles:cw>=14,live:r.live}; });
+  const c=Liquid.draw(chartCv,{mode:'v',items,slot:sw,cw,ch,r:cw/2,pad:labelH,t}); if(!c) return;
+  // day-length guide and dates
+  const sh=(m.rows.find(r=>r.type==='work')||m.rows[0]).shift, gy=H-labelH-(sh/maxMs*(ch-5)+2.5);
+  c.save(); c.setLineDash([4,5]); c.strokeStyle=muted; c.globalAlpha=.5; c.lineWidth=1.5; c.beginPath(); c.moveTo(4,gy); c.lineTo(W-4,gy); c.stroke(); c.restore();
+  c.fillStyle=muted; c.font='600 11px "Bricolage Grotesque",system-ui,sans-serif'; c.textAlign='center';
+  m.rows.forEach((r,i)=>{ if(n<=16||i%Math.ceil(n/12)===0||i===n-1) c.fillText(String(new Date(r.in).getDate()),sw*(i+.5),H-6); });
+}
+// earned-so-far bar: a horizontal glass tube of liquid
+let soLevel={v:0};
+function drawSoFar(t){ const cv=$('soCv'); if(!cv||$('soFar').hidden) return;
+  if(Liquid){ const W=cv.clientWidth, H=cv.clientHeight; Liquid.draw(cv,{mode:'h',items:[{level:Math.max(.04,soLevel.v),pal:Liquid.ID.sofar,amp:1}],slot:W,cw:W-6,ch:H-6,r:(H-6)/2,pad:3,t}); } }
+function startChart(){ if(chartRAF) return; const step=()=>{ if(page!=='month'||document.hidden){ chartRAF=null; return; } const t=performance.now()/1000; drawChart(t); drawSoFar(t); chartRAF=requestAnimationFrame(step); }; chartRAF=requestAnimationFrame(step); }
 function capsule(c,x,y,w,h){ const r=Math.min(w/2,h/2); c.beginPath(); c.moveTo(x,y+h-r); c.lineTo(x,y+r); c.arc(x+r,y+r,r,Math.PI,0); c.lineTo(x+w,y+h-r); c.arc(x+r,y+h-r,r,0,Math.PI); c.closePath(); }
 function drawChart(t){
+  if(Liquid) return drawChartLiquid(t);
   const m=chartData; if(!m) return;
   const dpr=Math.min(devicePixelRatio||1,2), W=chartCv.clientWidth, H=chartCv.clientHeight;
   if(chartCv.width!==Math.round(W*dpr)||chartCv.height!==Math.round(H*dpr)){ chartCv.width=Math.round(W*dpr); chartCv.height=Math.round(H*dpr); }
@@ -1829,66 +2008,45 @@ function renderCpf(animate){
   startJars();
 }
 $('cPrev').onclick=()=>{ cOff--; renderCpf(true); }; $('cNext').onclick=()=>{ if(cOff<0){ cOff++; renderCpf(true); } };
-// three glass jars in one small 3D scene, lit like the rest of the app
+// three flat glass jars filled with the same glossy liquid as the ring
 const jars3d=(function(){
-  if(!T) return null;
-  const cv=$('jarCv'), renderer=glRenderer(cv); if(!renderer) return null;
-  const scene=new T.Scene(), cam=new T.PerspectiveCamera(30,2,.1,50); cam.position.set(0,.85,4.5); cam.lookAt(0,-.02,0); lights(scene);
-  const R=.5, H=1.5, xs=[-1.35,0,1.35], keys=['OA','SA','MA'];
-  const cols={OA:[0x1D8FE8,0x9BE3FF],SA:[0x6A45F0,0xC9B8FF],MA:[0x10B98A,0xA8FFE0]};
-  // glass: one continuous outline (rounded base, wall, rolled lip) spun into a jar
-  const gpts=[]; const cr=.12;
-  gpts.push(new T.Vector2(1e-4,-H/2));
-  for(let i=0;i<=10;i++){ const a=-Math.PI/2+Math.PI/2*i/10; gpts.push(new T.Vector2(R-cr+Math.cos(a)*cr,-H/2+cr+Math.sin(a)*cr)); }
-  gpts.push(new T.Vector2(R,H/2-.04));
-  for(let i=0;i<=10;i++){ const a=Math.PI*i/10; gpts.push(new T.Vector2(R-.035+Math.cos(a)*.035,H/2-.04+Math.sin(a)*.05)); }
-  gpts.push(new T.Vector2(R-.07,H/2-.25));
-  const glassGeo=new T.LatheGeometry(gpts,64);
-  const glassMat=gloss(0xffffff,{transparent:true,opacity:.22,roughness:.02,clearcoatRoughness:.02,side:T.DoubleSide,depthWrite:false});
-  const jars={};
-  keys.forEach((k,i)=>{
-    const g=new T.Group(); g.position.x=xs[i]; scene.add(g);
-    // liquid: a cylinder whose top ring and cap ripple together, so the surface stays watertight
-    const lg=new T.CylinderGeometry(R-.06,R-.06,1,56,1,false); lg.translate(0,.5,0);
-    const pos=lg.attributes.position, orig=pos.array.slice();
-    const lm=gloss(cols[k][0],{roughness:.08,clearcoatRoughness:.03,emissive:new T.Color(cols[k][0]).multiplyScalar(.06)});
-    const liquid=new T.Mesh(lg,lm); liquid.position.y=-H/2+.05; liquid.scale.y=.001; g.add(liquid);
-    const bubbles=[...Array(7)].map(()=>{ const b=new T.Mesh(new T.SphereGeometry(.035+Math.random()*.03,12,10),gloss(cols[k][1],{transparent:true,opacity:.85})); b.userData={x:(Math.random()-.5)*.55,z:(Math.random()-.5)*.55,t:Math.random(),sp:.12+Math.random()*.18}; g.add(b); return b; });
-    const glass=new T.Mesh(glassGeo,glassMat); glass.renderOrder=2; g.add(glass);
-    jars[k]={g,liquid,pos,orig,bubbles,level:0,target:0,amp:.02,phase:Math.random()*6};
-  });
-  const maxH=H-.22;
-  function frame(t){
-    keys.forEach(k=>{ const j=jars[k], h=Math.max(.001,j.level*maxH);
-      j.liquid.scale.y=h;
-      const a=j.level>.04?j.amp:0, arr=j.pos.array;
-      for(let i=0;i<arr.length;i+=3){ if(j.orig[i+1]>.99){ const x=j.orig[i], z=j.orig[i+2];
-        arr[i+1]=1+(a*Math.sin(x*6+t*2.6+j.phase)+a*.6*Math.sin(z*7-t*2.1)+a*.5*Math.sin((x+z)*9+t*3.3))/h; } }
-      j.pos.needsUpdate=true; j.liquid.geometry.computeVertexNormals();
-      const top=-H/2+.05+h;
-      j.bubbles.forEach(b=>{ const u=b.userData; u.t=(u.t+u.sp*.016)%1; b.position.set(u.x+Math.sin(t*3+u.t*9)*.03,-H/2+.1+(h-.08)*u.t,u.z); b.visible=j.level>.06&&b.position.y<top-.04; });
-      j.g.rotation.y=Math.sin(t*.4+j.phase)*.12; });
-    renderer.render(scene,cam);
-  }
-  function size(){ const w=cv.clientWidth, h=cv.clientHeight; if(!w) return; renderer.setSize(w,h,false); cam.aspect=w/h; cam.fov=w/h<1.5?38:34; cam.updateProjectionMatrix(); }
-  addEventListener('resize',size);
-  let raf=null; const t0=performance.now();
-  function loop(){ if(page!=='cpf'||document.hidden){ raf=null; return; } size(); frame((performance.now()-t0)/1000); raf=requestAnimationFrame(loop); }
-  // tap a jar to swirl it
-  const ray=new T.Raycaster(), v=new T.Vector2();
-  cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1); ray.setFromCamera(v,cam);
-    keys.forEach(k=>{ if(ray.intersectObject(jars[k].g,true).length){ slosh(k); Sound.bubble&&Sound.bubble(); haptic(); } }); });
-  function slosh(k){ const j=jars[k]; if(!ANIM) return; G.killTweensOf(j,'amp'); G.fromTo(j,{amp:.1},{amp:.02,duration:1.8,ease:'power2.out'}); G.fromTo(j.g.rotation,{z:.12},{z:0,duration:1.4,ease:'elastic.out(1,.35)'}); }
+  if(!Liquid) return null;
+  const cv=$('jarCv'), keys=['OA','SA','MA'], J={}; keys.forEach(k=>J[k]={level:0,amp:1});
+  let raf=null;
+  function frame(t){ const W=cv.clientWidth, H=cv.clientHeight, sw=W/3, cw=Math.min(88,sw*.74);
+    Liquid.draw(cv,{mode:'v',items:keys.map(k=>({level:Math.max(.03,J[k].level),pal:Liquid.ID[k],amp:J[k].amp,bubbles:true})),slot:sw,cw,ch:H-10,r:20,pad:5,t}); }
+  function loop(){ if(page!=='cpf'||document.hidden){ raf=null; return; } frame(performance.now()/1000); raf=requestAnimationFrame(loop); }
+  cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(), k=keys[Math.min(2,Math.floor((e.clientX-r.left)/r.width*3))];
+    if(ANIM){ G.killTweensOf(J[k],'amp'); G.fromTo(J[k],{amp:4},{amp:1,duration:1.8,ease:'power2.out'}); } Sound.bubble(); haptic(); });
   return {
-    set(levels,animate){ keys.forEach((k,i)=>{ const j=jars[k]; if(animate&&ANIM){ j.level=0; G.to(j,{level:levels[k],duration:1.6,delay:.25+i*.15,ease:'elastic.out(1,.6)'}); G.fromTo(j,{amp:.09},{amp:.02,duration:2.2,delay:.25+i*.15}); } else j.level=levels[k]; }); },
-    start(){ if(!raf) raf=requestAnimationFrame(loop); if(RM){ size(); frame(0); } }
+    set(levels,animate){ keys.forEach((k,i)=>{ G&&G.killTweensOf(J[k]); if(animate&&ANIM){ J[k].level=0; G.to(J[k],{level:levels[k]*.9,duration:1.6,delay:.25+i*.15,ease:'elastic.out(1,.6)'}); G.fromTo(J[k],{amp:3.5},{amp:1,duration:2.2,delay:.25+i*.15}); } else J[k].level=levels[k]*.9; }); },
+    start(){ if(!raf) raf=requestAnimationFrame(loop); if(RM) frame(0); }
   };
 })();
 function startJars(){ if(jars3d) jars3d.start(); }
 
 /* ================= Year page ================= */
-let yOff=0, yearAnimStart=0, yearRAF=null;
-const Y_COL={work:['#FFB020','#FF4D6D'],ot:'#7B5CFF',al:'#19D9A0',ph:'#FFC53D',mc:'#3FB8FF',unpaid:'#FF4D6D'};
+let yOff=0, yearAnimStart=0, yearRAF=null, yMap={}, yYear=0, tipTimer=null;
+$('yearCv').addEventListener('pointerdown',e=>{
+  const cv=$('yearCv'), r=cv.getBoundingClientRect(), x=e.clientX-r.left, yy=e.clientY-r.top, W=r.width, H=r.height, lw=30, colW=(W-lw-4)/31, rowH=(H-6)/12;
+  const m=Math.floor((yy-3)/rowH), d=Math.floor((x-lw)/colW)+1; if(m<0||m>11||d<1||d>new Date(yYear,m+1,0).getDate()) return;
+  const ts=new Date(yYear,m,d,12).getTime(), rec=yMap[isoDate(ts)], name=PH[isoDate(ts)];
+  let what;
+  if(rec){ const t=typeOf(rec);
+    if(t==='work') what=rec.out?`worked ${dur(rec.out-rec.in)}${rec.otMs?`, ${dur(rec.otMs)} OT`:''}`:'clocked in, no clock-out';
+    else if(t==='ph') what=rec.name||name||'Public holiday';
+    else what=typeLabel(rec); }
+  else what=name?`${name} (weekend)`:ts>Date.now()?'upcoming':isWorkday(ts)?'nothing recorded':'weekend';
+  const tip=$('yTip'), cr=$('yCard').getBoundingClientRect();
+  tip.textContent=`${new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}: ${what}`;
+  tip.hidden=false;
+  const tx=Math.min(Math.max(r.left-cr.left+lw+colW*(d-.5),tip.offsetWidth/2+6),cr.width-tip.offsetWidth/2-6);
+  tip.style.left=tx+'px'; tip.style.top=(r.top-cr.top+3+rowH*m-4)+'px';
+  if(ANIM) G.fromTo(tip,{scale:.6,opacity:0},{scale:1,opacity:1,duration:.35,ease:'back.out(2.5)'});
+  clearTimeout(tipTimer); tipTimer=setTimeout(()=>tip.hidden=true,2600);
+});
+const Y_COL={work:['#FFB020','#FF5E5E'],ot:['#19D9A0','#0FA37A'],al:['#3FB8FF','#1D8FE8'],ph:['#FFC53D','#E0A100'],mc:['#7B5CFF','#4B2FC9'],unpaid:['#8A93A6','#5E6678']};
+const glossDot=c=>`radial-gradient(circle at 35% 30%,#fff 0,${c[0]} 42%,${c[1]} 100%)`;
 function yearData(y){
   const map={}, from=new Date(y,0,1).getTime(), to=new Date(y+1,0,1).getTime();
   state.history.forEach(r=>{ if(r.in<from||r.in>=to) return; map[isoDate(r.in)]=r; });
@@ -1903,7 +2061,14 @@ function renderYear(animate){
   const hrs=work.reduce((a,r)=>a+(r.out-r.in),0), ot=work.reduce((a,r)=>a+(r.otMs||0),0);
   $('yStats').innerHTML=stat('Days worked',String(work.length))+stat('Hours at work',dur(hrs))+stat('Overtime',ot?dur(ot):'0h')
     +stat('Leave and holidays',String(vals.filter(r=>isPaidOff(r)&&r.in<=Date.now()).length));
-  $('yLegend').innerHTML=[['Worked','linear-gradient(135deg,#FFB020,#FF4D6D)'],['Overtime',Y_COL.ot],['Leave',Y_COL.al],['Holiday',Y_COL.ph],['MC',Y_COL.mc],['Unpaid',Y_COL.unpaid]].map(([n,c])=>`<span><i style="background:${c}"></i>${n}</span>`).join('');
+  $('yLegend').innerHTML=[['Worked',Y_COL.work],['Overtime',Y_COL.ot],['Annual leave',Y_COL.al],['Holiday',Y_COL.ph],['MC',Y_COL.mc],['Unpaid',Y_COL.unpaid]].map(([n,c])=>`<span><i style="background:${glossDot(c)}"></i>${n}</span>`).join('')
+    +`<span><i style="background:var(--muted);opacity:.35"></i>Nothing recorded</span><span><i style="background:var(--muted);opacity:.2;transform:scale(.6)"></i>Weekend</span><span><i style="border:1.5px solid var(--muted);opacity:.5;box-sizing:border-box"></i>Upcoming</span>`;
+  // holidays this year, by name
+  const hol=Object.keys(PH).filter(k=>k.startsWith(y+'-')).sort();
+  $('yHols').innerHTML=hol.length?`<p class="sec">Holidays in ${y}</p><div class="card holList">${hol.map(k=>{ const [yy,mm,dd]=k.split('-').map(Number), ts=new Date(yy,mm-1,dd,12).getTime(), past=ts<Date.now();
+      return `<div class="hol${past?' past':''}"><i style="background:${glossDot(Y_COL.ph)}"></i><span>${PH[k]}</span><b>${new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}</b></div>`; }).join('')}</div>`
+    :`<p class="note">Holiday dates for ${y} haven't been announced yet.</p>`;
+  yMap=map; yYear=y;
   yearAnimStart=animate&&ANIM?performance.now():-1e9;
   if(animate&&ANIM) G.from(['#yCard','#yStats .stat'],{y:24,opacity:0,stagger:.05,duration:.5,ease:'power4.out',clearProps:'transform,opacity'});
   cancelAnimationFrame(yearRAF); const step=()=>{ const done=drawYear(y,map); if(!done&&page==='year') yearRAF=requestAnimationFrame(step); }; step();
@@ -1929,14 +2094,14 @@ function drawYear(y,map){
       const rr=rad*Math.max(0,pop); if(rr<=.3) continue;
       let col=null, faint=false;
       if(r){ const t=typeOf(r);
-        if(t==='work'){ if(r.otMs) col=Y_COL.ot; else { const f=r.out?Math.min(1,(r.out-r.in)/SHIFT()):.5; col=f<.9?Y_COL.work[0]:Y_COL.work[1]; } }
+        if(t==='work'){ if(r.otMs) col=Y_COL.ot; else { const f=r.out?Math.min(1,(r.out-r.in)/SHIFT()):.5; col=f<.9?['#FFD27A','#FF8A6B']:Y_COL.work; } }
         else if(t==='mc') col=r.paid?Y_COL.mc:Y_COL.unpaid; else col=Y_COL[t]; }
       else if(ts>now) faint='future'; else faint=isWorkday(ts)?'empty':'weekend';
       c.save(); c.translate(cx,cy);
       if(col){
-        const g=c.createRadialGradient(-rr*.35,-rr*.4,rr*.1,0,0,rr); g.addColorStop(0,'#FFFFFF'); g.addColorStop(.35,col); g.addColorStop(1,col);
+        const g=c.createRadialGradient(-rr*.3,-rr*.35,0,0,0,rr); g.addColorStop(0,'#FFFFFF'); g.addColorStop(.42,col[0]); g.addColorStop(1,col[1]);
         c.fillStyle=g; c.shadowColor='rgba(40,20,90,.25)'; c.shadowBlur=3; c.shadowOffsetY=1; c.beginPath(); c.arc(0,0,rr,0,Math.PI*2); c.fill();
-        if(r&&typeOf(r)!=='work'&&isUnpaid(r)){ c.globalAlpha=.6; c.strokeStyle='#fff'; c.lineWidth=1; c.beginPath(); c.moveTo(-rr*.6,rr*.6); c.lineTo(rr*.6,-rr*.6); c.stroke(); }
+        if(r&&typeOf(r)!=='work'&&isUnpaid(r)){ c.shadowColor='transparent'; c.globalAlpha=.6; c.strokeStyle='#fff'; c.lineWidth=1; c.beginPath(); c.moveTo(-rr*.6,rr*.6); c.lineTo(rr*.6,-rr*.6); c.stroke(); }
       } else { c.globalAlpha=faint==='weekend'?.18:faint==='future'?.35:.28; c.strokeStyle=muted; c.lineWidth=1; c.beginPath(); c.arc(0,0,rr*(faint==='weekend'?.55:.8),0,Math.PI*2); faint==='future'?c.stroke():(c.fillStyle=muted,c.fill()); }
       c.restore();
     }
@@ -2177,14 +2342,54 @@ $('clockIn').addEventListener('click',e=>startDay(Date.now(),e.currentTarget));
 $('manualBtn').onclick=openTime; $('editBtn').onclick=openTime; $('outBtn').onclick=clockOut;
 
 updateIdleSub(); renderDays(); tick(); moveInd('today',false); Sound.zone(state.active?'work':'home');
-if(ANIM) G.from('#nav',{y:120,opacity:0,duration:.9,delay:.3,ease:'elastic.out(1,.7)',clearProps:'transform,opacity'});
-if(state.active) showActive(true); else showIdle(true);
-if(firstRun){
-  $('setTitle').textContent='Set up Home Time'; $('letsGo').hidden=false;
-  setTimeout(()=>goPage('settings'),ANIM?500:0);
-  const done=()=>{ $('setTitle').textContent='Settings'; $('letsGo').hidden=true; };
-  $('letsGo').addEventListener('click',done);
+/* ================= opening transition =================
+   Glossy blobs slide in and melt into the Home Time orb, it bounces, then bursts open
+   while the camera swoops into the home zone. About a second and a half. */
+function runIntro(done){
+  const ov=$('intro'), cv=$('introCv');
+  let gl=null; if(ANIM&&T){ try{ gl=cv.getContext('webgl',{premultipliedAlpha:true,alpha:true}); }catch(e){} }
+  if(!gl){ done(); return; }
+  ov.style.display='block';
+  const d=Math.min(devicePixelRatio||1,2), W=innerWidth, H=innerHeight; cv.width=W*d; cv.height=H*d; gl.viewport(0,0,W*d,H*d);
+  const fsrc=`precision highp float; uniform vec3 uB[6]; uniform vec2 uRes; uniform float uD,uT;
+    void main(){ vec2 p=gl_FragCoord.xy/uD; float f=0.; vec2 g=vec2(0.);
+      for(int i=0;i<6;i++){ vec2 q=p-uB[i].xy; float r2=dot(q,q)+1.; float s=uB[i].z*uB[i].z; f+=s/r2; g+=-2.*s*q/(r2*r2); }
+      float edge=max(length(g)/uD,1e-4), a=smoothstep(1.-edge,1.+edge,f); if(a<=0.){ gl_FragColor=vec4(0.); return; }
+      vec2 c=uB[0].xy; float R=max(uB[0].z,24.);
+      float fr=clamp(.5+((p.x-c.x)-(p.y-c.y))/(3.2*R)+.08*sin(uT*2.),0.,1.);
+      vec3 base=fr<.5?mix(vec3(1.,.72,.2),vec3(1.,.30,.43),fr*2.):mix(vec3(1.,.30,.43),vec3(.48,.36,1.),fr*2.-1.);
+      float h=sqrt(clamp(1.-1./f,0.,1.)); vec2 dh=(1./(f*f))*g/(2.*max(h,.05)); vec3 n=normalize(vec3(-dh*R,1.));
+      vec3 L=normalize(vec3(-.45,.6,.75)); float dif=.55+.45*max(dot(n,L),0.), sp=pow(max(dot(reflect(-L,n),vec3(0.,0.,1.)),0.),50.);
+      vec3 col=base*dif+vec3(sp); col=mix(col,col*.72,pow(1.-n.z,2.)*.5); gl_FragColor=vec4(col*a,a); }`;
+  const mk=(t,src)=>{ const x=gl.createShader(t); gl.shaderSource(x,src); gl.compileShader(x); return x; };
+  const pr=gl.createProgram(); gl.attachShader(pr,mk(gl.VERTEX_SHADER,'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}')); gl.attachShader(pr,mk(gl.FRAGMENT_SHADER,fsrc)); gl.linkProgram(pr);
+  if(!gl.getProgramParameter(pr,gl.LINK_STATUS)){ ov.style.display='none'; done(); return; }
+  gl.useProgram(pr); const bf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,bf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const la=gl.getAttribLocation(pr,'a'); gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la,2,gl.FLOAT,false,0,0);
+  const uB=gl.getUniformLocation(pr,'uB'), uD=gl.getUniformLocation(pr,'uD'), uT=gl.getUniformLocation(pr,'uT'); gl.uniform1f(uD,d);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+  const cx=W/2, cy=H/2;
+  const balls=[{x:cx,y:cy,r:0}].concat([0,1,2,3,4].map(i=>{ const a=i/5*Math.PI*2+.4, R=150+Math.random()*80; return {x:cx+Math.cos(a)*R,y:cy+Math.sin(a)*R,r:18+Math.random()*14}; }));
+  const arr=new Float32Array(18), t0=performance.now(); let live=true;
+  (function draw(){ if(!live) return; arr.fill(0); balls.forEach((b,i)=>arr.set([b.x,H-b.y,b.r],i*3)); gl.uniform3fv(uB,arr); gl.uniform1f(uT,(performance.now()-t0)/1000);
+    gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLE_STRIP,0,4); requestAnimationFrame(draw); })();
+  const tl=G.timeline({onComplete:()=>{ live=false; ov.style.display='none'; const ext=gl.getExtension('WEBGL_lose_context'); ext&&ext.loseContext(); }});
+  balls.slice(1).forEach((b,i)=>tl.to(b,{x:cx,y:cy,r:b.r*.6,duration:.62,ease:'power3.inOut'},i*.04));
+  tl.to(balls[0],{r:46,duration:.5,ease:'power2.out'},.25)
+    .to(balls[0],{r:58,duration:.45,ease:'elastic.out(1.2,.35)'},.75)
+    .to('#introT',{opacity:1,y:-6,duration:.3},.8)
+    .add(()=>{ world&&world.swoopIn(0); done(); },1.0)
+    .to(balls[0],{r:Math.hypot(W,H),duration:.45,ease:'power3.in'},1.02)
+    .to('#introT',{opacity:0,duration:.2},1.02)
+    .to(ov,{opacity:0,duration:.35,ease:'power1.in'},1.15);
 }
+runIntro(()=>{
+  if(ANIM) G.from('#nav',{y:120,opacity:0,duration:.9,delay:.2,ease:'elastic.out(1,.7)',clearProps:'transform,opacity'});
+  if(state.active) showActive(true); else showIdle(true);
+  if(firstRun){ $('setTitle').textContent='Set up Home Time'; $('letsGo').hidden=false; setTimeout(()=>goPage('settings'),ANIM?500:0);
+    $('letsGo').addEventListener('click',()=>{ $('setTitle').textContent='Settings'; $('letsGo').hidden=true; }); }
+});
+
 setInterval(tick,1000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });
 })();
