@@ -129,7 +129,8 @@ details.hist[open] summary::after{transform:rotate(45deg)}
 .fld::-webkit-calendar-picker-indicator{display:none}
 .fld::-webkit-inner-spin-button,.fld::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 #timeIn{font-size:32px;margin-bottom:16px}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;align-items:end}
+.pair .lab{justify-content:flex-end}
 .lab{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted);font-weight:500;min-width:0;text-align:center}
 .lab.full{margin-bottom:12px}
 @media (max-width:359px){.pair{grid-template-columns:1fr}}
@@ -360,8 +361,8 @@ label.toggle{cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:5
     <label class="toggle"><span>Pay overtime past day length</span><span class="switch"><input type="checkbox" id="sOt" aria-label="Pay overtime past day length"><span></span></span></label>
     <div id="otWrap">
       <div class="pair">
-        <label class="lab">OT rate (× hourly)<input type="number" class="fld" id="sOtMult" inputmode="decimal" min="1" max="3" step="0.25"></label>
-        <label class="lab">Min. stay before OT (min)<input type="number" class="fld" id="sOtMin" inputmode="numeric" min="0" step="5"></label>
+        <label class="lab">OT rate (×)<input type="number" class="fld" id="sOtMult" inputmode="decimal" min="1" max="3" step="0.25"></label>
+        <label class="lab">OT after (min)<input type="number" class="fld" id="sOtMin" inputmode="numeric" min="0" step="5"></label>
       </div>
       <p class="note" style="margin:0 0 8px">OT counted in</p>
       <div class="seg" role="radiogroup" aria-label="OT counted in" id="otSeg">
