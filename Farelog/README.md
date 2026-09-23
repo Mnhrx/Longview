@@ -34,6 +34,18 @@ Tap **Read screenshots** to run text extraction on everything queued. This
 happens entirely on-device (via Tesseract.js) — no images are uploaded
 anywhere.
 
+Two screen layouts are understood: Grab's route-detail screen and TADA's
+"Trip Detail" screen. They're structured completely differently, so there's a
+separate reader for each and the app picks by what the screen actually says.
+On TADA screens the two addresses aren't labelled at all — origin and
+destination are distinguished only by coloured icons, which extraction can't
+see — so they're read by position instead (origin first, destination second).
+That holds regardless of whether the screenshot was taken at the PICK UP or
+DROP OFF stage; that green badge is the trip's current status, not a label for
+either address. TADA's `Ride Fare` is taken as what he earned and `Total Fare`
+as what the passenger paid, with any "Rider's Platform Fee" sitting between
+the two as a charge added on top of the passenger's side.
+
 **Review tab** — every screenshot lands here after extraction with its fields
 pre-filled and editable: date/time, platform, what he earned, what the
 passenger paid, pickup/drop-off address + postal code, service type, stop
@@ -41,6 +53,15 @@ count, and a boost/priority toggle (that one has to be checked by hand — it's
 a colour badge on screen, not text, so extraction can't read it). Fix
 anything that's off, then **Save**, or **Discard** if a screenshot isn't a
 route-details screen at all. Nothing is saved until you tap Save.
+
+If a screenshot looks like a trip that's already saved — same platform, same
+two postal codes, same fare, within six hours — Review shows a warning. That
+usually means one fare got photographed twice, at pick-up and again at
+drop-off. It's only a warning, not a block, since genuinely repeating the same
+route at the same fare is possible.
+
+Passenger names appear on these screens but are deliberately never captured —
+third-party personal data that nothing in the app would use.
 
 **Dashboard tab** — a platform filter (All / Grab / TADA / …) at the top that
 narrows *everything* below it to one platform, once more than one has data
@@ -132,6 +153,19 @@ page's URL. That means:
   app text reasonably well, but the Review step exists because it *will*
   occasionally misread a digit or split an address oddly. Worth double-checking
   for the first couple of weeks especially.
+- **Only Grab and TADA screens are understood.** Anything else falls through to
+  the Grab reader, which will mostly come back blank and have to be typed in by
+  hand. A new layout (or either app redesigning theirs) needs a new reader.
+- **Photos of paper aren't really supported.** Extraction is tuned for flat,
+  sharp, high-contrast phone screenshots. A photo of a receipt or printed sheet
+  will be attempted but tends to read badly — skew, shadows, glare and curled
+  thermal paper all hurt — and there's no reader that would understand the
+  resulting text anyway.
+- **TADA's fare split is an assumption.** `Ride Fare` is treated as his earnings
+  and `Total Fare` as what the passenger paid. That's consistent with the
+  "Rider's Platform Fee" being added on top of the passenger's side, but it's
+  inferred from the screen layout rather than documented — worth confirming
+  against an actual payout statement before trusting the commission figures.
 - **Pickup-area grouping is approximate.** It buckets by Singapore's published
   28 postal districts (from the first two digits of the postal code) — a good
   enough proxy for "which part of the island," not precise geocoding. The

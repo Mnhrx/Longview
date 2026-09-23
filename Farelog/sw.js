@@ -2,7 +2,7 @@
 // (the network-first fetch handler below is what keeps things current), but a
 // fresh name still guarantees a clean slate per release, so keep it in step
 // with APP_VERSION in index.html.
-const CACHE_NAME = "farelog-shell-v3.1.1";
+const CACHE_NAME = "farelog-shell-v3.2.0";
 const SHELL_FILES = [
   "./",
   "./index.html",

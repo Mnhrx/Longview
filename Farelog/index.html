@@ -126,6 +126,12 @@
     display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--surface-2);
   }
   .review-progress { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+  .dup-warn {
+    display: flex; gap: 9px; align-items: flex-start; margin-bottom: 12px;
+    padding: 11px 13px; border-radius: 12px; font-size: 13.5px; line-height: 1.45;
+    background: rgba(250, 178, 25, .12); border: 1px solid rgba(250, 178, 25, .4); color: var(--warning);
+  }
+  .dup-warn .ic { margin-top: 1px; }
 
   .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
@@ -558,9 +564,13 @@
    App metadata / changelog
 --------------------------------------------------------------------- */
 
-const APP_VERSION = "3.1.1";
+const APP_VERSION = "3.2.0";
 const LAST_SEEN_KEY = "farelog_last_seen_version";
 const CHANGELOG = [
+  { version: "3.2.0", notes: [
+    "TADA trip screens are now read properly. They're laid out differently from Grab's, so previously they came back as a blank form — and on a \"DROP OFF\" screen the pick-up address was read into the drop-off field by mistake. Both are fixed. Anything saved from a TADA screenshot before this is worth checking on the Data tab.",
+    "Review now warns you if a screenshot looks like a trip already saved — useful when the same fare gets photographed at both pick-up and drop-off.",
+  ]},
   { version: "3.1.1", notes: [
     "The app now picks up new versions on its own. Before this, it kept showing the copy saved on your device until it was cleared by hand — which is why a phone and a computer could sit on different versions. It still works offline the same way.",
   ]},
@@ -602,6 +612,7 @@ const ICON = {
   calendarDay: '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></svg>',
   flame: '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3c1 3-3 4-3 7.5a3 3 0 0 0 6 0c1.2.9 2 2.3 2 3.9A5 5 0 0 1 7 14.4C6.6 10 12 8 12 3z"/></svg>',
   clock: '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  warn:  '<svg class="ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 2.8 20h18.4z"/><path d="M12 10v4.2M12 17.2v.1"/></svg>',
 };
 
 /* ---------------------------------------------------------------------
@@ -875,12 +886,111 @@ function emptyParsed() {
     dropoffAddr: "", dropoffPostal: "", serviceType: "", stopsTotal: 2, surge: false };
 }
 
-/* ---- OCR text parsing (best-effort — this is what the Review step is for) ---- */
+/* ---- OCR text parsing (best-effort — this is what the Review step is for) ----
+
+   Grab and TADA lay their screens out completely differently, so there are two
+   readers and a sniffer that picks between them. Anything unrecognised falls
+   through to the Grab reader, which is the more forgiving of the two.        */
 
 function parseOcrText(text) {
-  const out = emptyParsed();
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   const full = text.replace(/\s+/g, " ");
+  if (looksLikeTadaTripDetail(full)) return parseTadaTripDetail(lines);
+  return parseGrabRouteDetail(lines, full);
+}
+
+function looksLikeTadaTripDetail(full) {
+  const hasFareBlock = /pre[\s\-]?invoice/i.test(full) || /total\s*fare/i.test(full) || /ride\s*fare/i.test(full);
+  return hasFareBlock && (/trip\s*detail/i.test(full) || /tada/i.test(full));
+}
+
+// Strip the postal code and country off the end of an address, and tidy up the
+// commas that leaves behind. Handles both "Singapore 307591" (Grab) and
+// "(S)307591" (TADA).
+function cleanAddress(parts) {
+  const cleaned = parts
+    .map(p => p
+      .replace(/,?\s*\(\s*s\s*\)\s*\d{6}\b/i, "")
+      .replace(/,?\s*singapore\s*,?\s*\d{6}\b/i, "")
+      .replace(/,?\s*\b\d{6}\b/, "")
+      .replace(/^[,\s]+|[,\s]+$/g, "")
+      .trim())
+    .filter(Boolean);
+
+  // TADA prints the place name and its street address on consecutive lines, and
+  // they're usually the same thing ("BLK 2A Eunos Crescent" / "2A Eunos
+  // Crescent"). Keep the first spelling and drop anything that restates it.
+  const norm = s => s.toLowerCase().replace(/^blk\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const kept = [];
+  for (const part of cleaned) {
+    const n = norm(part);
+    if (!n) continue;
+    if (kept.some(q => { const m = norm(q); return m === n || m.includes(n) || n.includes(m); })) continue;
+    kept.push(part);
+  }
+  return kept.join(", ");
+}
+
+// Find a money amount on the line carrying a label, or on the line after it
+// (OCR sometimes splits a label and its right-aligned value onto two lines).
+function amountNear(lines, labelRegex) {
+  const idx = lines.findIndex(l => labelRegex.test(l));
+  if (idx === -1) return null;
+  for (let j = idx; j < Math.min(idx + 2, lines.length); j++) {
+    const m = lines[j].match(/(\d+[.,]\d{2})/);
+    if (m) return parseFloat(m[1].replace(",", "."));
+  }
+  return null;
+}
+
+function parseTadaTripDetail(lines) {
+  const out = emptyParsed();
+  out.platform = "TADA";
+
+  // TADA marks the two addresses with coloured icons rather than words, and the
+  // green PICK UP / DROP OFF badge at the top is the *trip status* — what he's
+  // doing right now — not a label for either address. Icons are graphics, so
+  // OCR can't see them at all. Read the addresses positionally instead: origin
+  // always comes first and destination second, each block ending in a postal
+  // code. That stays correct whichever status the screenshot was taken in.
+  const startIdx = lines.findIndex(l => /trip\s*detail/i.test(l));
+  const stops = [];
+  let block = [];
+  for (let i = (startIdx === -1 ? 0 : startIdx + 1); i < lines.length; i++) {
+    const line = lines[i];
+    if (/^(pick\s*up|drop\s*off|pre[\s\-]?invoice|trip\s*detail)$/i.test(line)) { block = []; continue; }
+    if (/customer\s*name|payment\s*method|car\s*type|ride\s*fare|total\s*fare|platform\s*fee/i.test(line)) break;
+    block.push(line);
+    const m = line.match(/\(\s*s\s*\)\s*(\d{6})\b/i) || line.match(/\b(\d{6})\b/);
+    if (m) { stops.push({ parts: block.slice(), postal: m[1] }); block = []; }
+    if (stops.length >= 2) break;
+  }
+  if (stops[0]) { out.pickupAddr = cleanAddress(stops[0].parts); out.pickupPostal = stops[0].postal; }
+  if (stops[1]) { out.dropoffAddr = cleanAddress(stops[1].parts); out.dropoffPostal = stops[1].postal; }
+
+  // "Ride Fare" is what he keeps; "Total Fare" is what the passenger paid. Any
+  // "Rider's Platform Fee" sits between the two — it's charged on top to the
+  // passenger rather than deducted from him, so Ride + Fee = Total.
+  const ride = amountNear(lines, /ride\s*fare/i);
+  const total = amountNear(lines, /total\s*fare/i);
+  if (ride !== null) out.earn = ride;
+  if (total !== null) out.paid = total;
+  else if (ride !== null) out.paid = ride;
+
+  const carIdx = lines.findIndex(l => /car\s*type/i.test(l));
+  if (carIdx !== -1) {
+    let v = lines[carIdx].replace(/.*car\s*type\s*:?\s*/i, "").trim();
+    if (!v) v = (lines[carIdx + 1] || "").trim();
+    if (v && !/customer|payment|pre[\s\-]?invoice|fare/i.test(v)) out.serviceType = v;
+  }
+
+  // Passenger names are on these screens too. Deliberately not captured —
+  // third-party personal data, and nothing in the app would use it.
+  return out;
+}
+
+function parseGrabRouteDetail(lines, full) {
+  const out = emptyParsed();
 
   if (/tada/i.test(full)) out.platform = "TADA";
   else out.platform = "Grab";
@@ -917,9 +1027,8 @@ function parseOcrText(text) {
       if (/\b\d{6}\b/.test(lines[j])) break;
       if (/service|payment method|passenger paid/i.test(lines[j])) { blockLines.pop(); break; }
     }
-    const joined = blockLines.join(", ");
-    const postalMatch = joined.match(/\b(\d{6})\b/);
-    return { addr: joined.replace(/,?\s*singapore,?\s*\d{6}/i, "").replace(/\b\d{6}\b/, "").trim(), postal: postalMatch ? postalMatch[1] : "" };
+    const postalMatch = blockLines.join(", ").match(/\b(\d{6})\b/);
+    return { addr: cleanAddress(blockLines), postal: postalMatch ? postalMatch[1] : "" };
   }
 
   const pickup = grabBlock(/pick\s*up/i);
@@ -949,6 +1058,28 @@ function localDateTimeInputValue(ms) {
   return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
 }
 
+// He sometimes screenshots the same trip twice — once at pick-up and again at
+// drop-off — which would otherwise get logged as two separate fares. Same
+// platform, same two postal codes, same amount, within a few hours of each
+// other is almost certainly one trip counted twice. This only warns; a genuine
+// repeat of the same route at the same fare is possible, so he can still save.
+function findLikelyDuplicate(parsed, whenMs) {
+  const pPostal = String(parsed.pickupPostal || "").trim();
+  const dPostal = String(parsed.dropoffPostal || "").trim();
+  if (!pPostal || !dPostal || isNaN(whenMs)) return null;
+  const fare = parsed.earn === "" || parsed.earn === null ? null : Number(parsed.earn);
+  const WINDOW_MS = 6 * 60 * 60 * 1000;
+
+  return records.find(r => {
+    if ((r.platform || "") !== (parsed.platform || "")) return false;
+    if (String(r.pickupPostal || "").trim() !== pPostal) return false;
+    if (String(r.dropoffPostal || "").trim() !== dPostal) return false;
+    if (fare !== null && typeof r.earn === "number" && Math.abs(r.earn - fare) > 0.005) return false;
+    const t = r.dateTime ? new Date(r.dateTime).getTime() : NaN;
+    return !isNaN(t) && Math.abs(t - whenMs) <= WINDOW_MS;
+  }) || null;
+}
+
 function renderReviewQueue() {
   const list = document.getElementById("reviewList");
   const empty = document.getElementById("reviewEmpty");
@@ -958,6 +1089,10 @@ function renderReviewQueue() {
 
   reviewQueue.forEach((item, idx) => {
     const p = item.parsed;
+    const dup = findLikelyDuplicate(p, item.lastModified);
+    const dupWhen = dup && dup.dateTime
+      ? new Date(dup.dateTime).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
+      : "";
     const card = document.createElement("div");
     card.className = "card review-card";
     card.innerHTML = `
@@ -965,6 +1100,7 @@ function renderReviewQueue() {
       <div class="fields">
         ${reviewQueue.length > 1 ? `<div class="review-progress">${idx + 1} of ${reviewQueue.length}</div>` : ""}
         <div class="review-meta">${item.error ? "Couldn't auto-read — fill in by hand" : "Auto-read — check before saving"}</div>
+        ${dup ? `<div class="dup-warn">${ICON.warn} <span>Same trip already saved${dupWhen ? " (" + escapeAttr(dupWhen) + ")" : ""} — this may be the pick-up and drop-off shot of one fare. Discard it unless it really was a second trip.</span></div>` : ""}
         <div class="field-row">
           <div class="field"><label>Date &amp; time</label><input type="datetime-local" data-f="dateTime" value="${localDateTimeInputValue(item.lastModified)}"></div>
           <div class="field"><label>Platform</label>
