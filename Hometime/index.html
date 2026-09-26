@@ -205,6 +205,7 @@ details.hist[open] summary::after{transform:rotate(45deg)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .stat{padding:14px 10px;text-align:center}
 .stat span{display:block;color:var(--muted);font-size:14px}
+.stat small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .stat b{display:block;font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
 .stat.wide{grid-column:1/-1}
 .row2{display:flex;gap:10px}
@@ -508,6 +509,7 @@ body.booting .app,body.booting .nav{opacity:0}
   <p class="sec">Pay</p>
 <div class="card">
   <label class="lab full">Payday (day of month)<input type="number" class="fld" id="sPayday" inputmode="numeric" min="1" max="31" step="1"></label>
+  <label class="toggle"><span>Paid earlier if payday is a weekend or public holiday</span><span class="switch"><input type="checkbox" id="sPayEarly" aria-label="Paid earlier if payday is a weekend or public holiday"><span></span></span></label>
   <label class="lab full">Pay period starts on day (1–28)<input type="number" class="fld" id="sPayDay" inputmode="numeric" min="1" max="28" step="1"></label>
 
   <div class="seg" role="radiogroup" aria-label="Pay type" id="paySeg">
@@ -670,8 +672,13 @@ body.booting .app,body.booting .nav{opacity:0}
 <div class="sheet" id="slipSheet" role="dialog" aria-modal="true" aria-labelledby="slipTitle">
   <h2 id="slipTitle">Your payslip</h2>
   <p id="slipHint">Enter the amounts from your payslip for this pay period. The app will use them instead of its estimate.</p>
-  <label class="lab full">Gross pay, before CPF (S$)<input type="number" class="fld" id="slGross" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label>
-  <div class="pair">
+  <div class="seg" role="radiogroup" aria-label="What you're entering" id="slSeg" style="grid-template-columns:1fr 1fr">
+    <button type="button" role="radio" data-v="net">Amount in bank</button>
+    <button type="button" role="radio" data-v="gross">Gross pay</button>
+  </div>
+  <label class="lab full" id="slNetWrap">Amount that arrived in your bank (S$)<input type="number" class="fld" id="slNet" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label>
+  <label class="lab full" id="slGrossWrap">Gross pay, before CPF (S$)<input type="number" class="fld" id="slGross" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label>
+  <div class="pair" id="slCpfPair">
     <label class="lab">Your CPF (optional)<input type="number" class="fld" id="slEe" inputmode="decimal" min="0" step="0.01" placeholder="auto"></label>
     <label class="lab">Employer CPF (optional)<input type="number" class="fld" id="slEr" inputmode="decimal" min="0" step="0.01" placeholder="auto"></label>
   </div>
@@ -879,7 +886,7 @@ function save(){
   }catch(e){ return false; }
 }
 function adopt(cur){
-  cur.settings=Object.assign({},DEF,cur.settings||{}); if(!Array.isArray(cur.history)) cur.history=[]; if(cur.active===undefined) cur.active=null; if(!cur.payslips) cur.payslips={};
+  cur.settings=Object.assign({},DEF,cur.settings||{}); if(!Array.isArray(cur.history)) cur.history=[]; if(cur.active===undefined) cur.active=null; if(!cur.payslips) cur.payslips={}; if(!cur.paid) cur.paid={}; if(!cur.celebrated) cur.celebrated={};
   state=cur; loadedAt=cur.savedAt||0;
   try{ refreshAll(); }catch(e){}
 }
@@ -887,7 +894,7 @@ function syncFromStorage(){ const cur=load(); if(cur&&(cur.savedAt||0)>loadedAt)
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) syncFromStorage(); });
 addEventListener('pageshow',syncFromStorage); addEventListener('focus',syncFromStorage);
 addEventListener('storage',e=>{ if(e.key===KEY) syncFromStorage(); });
-const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
+const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,payEarly:false,al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
 let state=load()||{}; loadedAt=state.savedAt||0;
 if(!Array.isArray(state.history)) state.history=[];
 if(state.active===undefined) state.active=null;
@@ -1606,7 +1613,7 @@ document.querySelectorAll('#otSeg button').forEach(b=>b.onclick=()=>setOtBlock(b
 function setPayType(v){ payType=v; document.querySelectorAll('#paySeg button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v))); updatePreview(); }
 document.querySelectorAll('#paySeg button').forEach(b=>b.onclick=()=>setPayType(b.dataset.v));
 function readSet(){ return {start:$('sStart').value,end:$('sEnd').value,flex:$('sFlex').checked,from:$('sFrom').value,to:$('sTo').value,
-  pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),al:Math.max(0,+$('sAL').value||0),mc:Math.max(0,+$('sMC').value||0),leaveAfter:Math.max(0,+$('sLeaveAfter').value||0),eaMc:$('sEaMc').checked,age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
+  pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),payEarly:$('sPayEarly').checked,al:Math.max(0,+$('sAL').value||0),mc:Math.max(0,+$('sMC').value||0),leaveAfter:Math.max(0,+$('sLeaveAfter').value||0),eaMc:$('sEaMc').checked,age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
 function updatePreview(){
   const s=readSet(), ok=s.start&&s.end&&s.start!==s.end;
   $('sLen').textContent=ok?`Your day: ${dur(shiftMin(s)*60000)}`:'Start and end need to be different times.';
@@ -1628,7 +1635,7 @@ function fillSettings(){
   const s=S();
   $('sStart').value=s.start; $('sEnd').value=s.end; $('sFlex').checked=s.flex; $('sFrom').value=s.from; $('sTo').value=s.to;
   $('sAmt').value=s.amt; $('sBrk').value=s.brk; $('sDays').value=s.days; $('sCpf').checked=s.cpf; $('sCpfRate').value=s.cpfRate; $('sOt').checked=s.ot; $('sOtMult').value=s.otMult; $('sOtMin').value=s.otMin; $('sPayDay').value=s.payDay; $('sStartDate').value=s.startDate||''; $('sLate').checked=!!s.late; $('sLateAfter').value=s.lateAfter||s.to||'09:00';
-  $('sPayday').value=s.payday; $('sAL').value=s.al; $('sMC').value=s.mc; $('sLeaveAfter').value=s.leaveAfter; $('sEaMc').checked=!!s.eaMc; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
+  $('sPayday').value=s.payday; $('sPayEarly').checked=!!s.payEarly; $('sAL').value=s.al; $('sMC').value=s.mc; $('sLeaveAfter').value=s.leaveAfter; $('sEaMc').checked=!!s.eaMc; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
   lateBlock=+s.lateBlock||1; otBlock=+s.otBlock||60; payType=s.pay;
   document.querySelectorAll('#lateSeg button').forEach(b=>b.setAttribute('aria-checked',String(+b.dataset.v===lateBlock)));
   document.querySelectorAll('#otSeg button').forEach(b=>b.setAttribute('aria-checked',String(+b.dataset.v===otBlock)));
@@ -1650,7 +1657,7 @@ function commitSettings(){
 }
 const _up=updatePreview;
 updatePreview=function(){ _up(); commitSettings(); };
-['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
+['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sPayEarly','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
 $('sAge').addEventListener('change',()=>{ $('sCpfRate').value=CPF_RATES[+$('sAge').value][0]; updatePreview(); });
 $('letsGo').onclick=()=>{ commitSettings(); goPage('today'); };
 $('gearBtn').onclick=()=>goPage(page==='settings'?(lastPage||'today'):'settings');
@@ -2032,7 +2039,7 @@ function monthData(off){
   } else out.kind='hourly';
   return out;
 }
-function stat(label,val,wide){ return `<div class="card stat${wide?' wide':''}"><span>${label}</span><b>${val}</b></div>`; }
+function stat(label,val,wide,sub){ return `<div class="card stat${wide?' wide':''}"><span>${label}</span><b>${val}</b>${sub?`<small>${sub}</small>`:''}</div>`; }
 function renderMonth(animate){
   const m=monthData(pOff); chartData=m;
   $('pRange').textContent=rangeTxt(m.p)+(pOff===0?' (now)':'');
@@ -2041,7 +2048,7 @@ function renderMonth(animate){
   const tail=m.cpf?' after CPF':'';
   $('heroLbl').textContent=hasPay?(monthly?`Expected payslip${tail}`:`Earned so far${tail}`):'Time at work';
   const slip=hasPay?slipOf(m.p):null;
-  if(slip) $('heroLbl').textContent=`Your payslip${m.cpf?' after CPF':''}`;
+  if(slip) $('heroLbl').textContent=slip.net!=null?'Paid into your bank':`Your payslip${m.cpf?' after CPF':''}`;
   const target=hasPay?(slip?takeHome(m):(monthly?m.expected:m.earned)):m.totalMs;
   $('slipBtn').hidden=!hasPay; $('slipBtn').textContent=slip?'🧾 Payslip entered · Edit':'🧾 Enter payslip';
   const show=v=>hasPay?money(v):dur(v);
@@ -2066,7 +2073,12 @@ function renderMonth(animate){
   if(slip){ const est=monthly?m.expected:m.earned, diff=takeHome(m)-est; note=`Estimate was ${money(est)} (${diff>=0?'+':'−'}${money(Math.abs(diff))}).`; }
   $('heroNote').textContent=note;
   let st='';
-  if(hasPay&&monthly) st+=stat(m.emp<m.wd?'Salary (pro-rated)':'Salary',money(m.salary))+stat('Overtime pay',money(m.ot))
+  const sl=hasPay?slipOf(m.p):null;
+  if(sl){ // payslip entered: show its figures, with the estimate alongside
+    const ee=cpfForM(m,sl), est=estGross(m)||0, keep=m.rate.keep||1;
+    st+=stat('Gross pay · payslip',money(sl.gross),false,`estimate ${money(est)}`)+stat('Your CPF · payslip',money(ee),false,`estimate ${money(est*(1-keep))}`)
+      +stat(sl.net!=null?'In your bank':'Take-home · payslip',money(takeHome(m)),true,`estimate ${money(takeHomeEst(m)||0)}`); }
+  else if(hasPay&&monthly) st+=stat(m.emp<m.wd?'Salary (pro-rated)':'Salary',money(m.salary))+stat('Overtime pay',money(m.ot))
     +stat('Deductions',(m.unpaidAmt+m.late)>0?'−'+money(m.unpaidAmt+m.late):'$0.00');
   else if(hasPay) st+=stat('Overtime pay',money(m.ot))+stat('Lateness',m.late>0?'−'+money(m.late):'$0.00');
   st+=stat('Overtime hours',m.otMs?dur(m.otMs):'0h')+stat('Days worked',String(m.days))+stat('Paid days off',String(m.paidOff));
@@ -2359,57 +2371,93 @@ $('sPrev').onclick=()=>{ sOff--; renderStats(true); }; $('sNext').onclick=()=>{ 
 
 /* ================= payslip entry ================= */
 let slipP=null;
+let slMode='net';
+function setSlMode(v){ slMode=v; document.querySelectorAll('#slSeg button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v)));
+  $('slNetWrap').hidden=v!=='net'; $('slGrossWrap').hidden=v!=='gross'; $('slCpfPair').hidden=v!=='gross'; slipPreview(); }
+document.querySelectorAll('#slSeg button').forEach(b=>b.onclick=()=>setSlMode(b.dataset.v));
+// from the amount that arrived in the bank, work back to gross pay using your CPF rate and the wage ceiling
+function grossFromNet(net){ const r=rates(); if(!(r&&r.cpf)) return net; const ee=CPF_RATES[+S().age||0][0]/100;
+  const g=net/(1-ee); return g<=CPF_CEIL?g:net+CPF_CEIL*ee; }
 function openSlip(){
   const m=monthData(pOff); slipP=m.p; const s=slipOf(m.p);
   $('slipTitle').textContent=`Payslip for ${rangeTxt(m.p)}`;
-  $('slGross').value=s?s.gross:''; $('slEe').value=s&&s.ee!=null?s.ee:''; $('slEr').value=s&&s.er!=null?s.er:'';
+  $('slNet').value=s&&s.net!=null?s.net:''; $('slGross').value=s&&s.net==null?s.gross:''; $('slEe').value=s&&s.ee!=null?s.ee:''; $('slEr').value=s&&s.er!=null?s.er:'';
+  setSlMode(s&&s.net==null?'gross':'net');
   $('slipHint').textContent='Enter the amounts from your payslip for this pay period. The app will use them instead of its estimate.'; $('slipHint').style.color='';
   $('slClear').hidden=!s; slipPreview(); openSheet('slipSheet');
 }
 function slipPreview(){
-  const m=monthData(pOff), est=estGross(m), g=parseFloat($('slGross').value);
+  const m=monthData(pOff), est=estGross(m);
+  if(slMode==='net'){ const n=parseFloat($('slNet').value);
+    if(!(n>0)){ $('slPreview').textContent=est!=null?`The estimate is ${money(takeHomeEst(m))} in your bank.`:''; return; }
+    const g=grossFromNet(n), d=g-(est||0);
+    $('slPreview').textContent=`That's about ${money(g)} before CPF, ${d>=0?'+':'−'}${money(Math.abs(d))} compared with the estimate. Small deductions like CDAC, ECF, MBMF or SINDA can make this a few dollars off.`; return; }
+  const g=parseFloat($('slGross').value);
   if(!(g>0)){ $('slPreview').textContent=est!=null?`The estimate before CPF is ${money(est)}.`:''; return; }
   const d=g-(est||0);
   $('slPreview').textContent=`${d>=0?'+':'−'}${money(Math.abs(d))} compared with the estimate of ${money(est||0)} before CPF.`;
 }
-['slGross','slEe','slEr'].forEach(id=>$(id).addEventListener('input',slipPreview));
+['slNet','slGross','slEe','slEr'].forEach(id=>$(id).addEventListener('input',slipPreview));
 $('slipBtn').onclick=openSlip; $('slCancel').onclick=closeSheet;
 $('slSave').onclick=()=>{
-  const g=parseFloat($('slGross').value); if(!(g>0)){ $('slipHint').textContent='Enter the gross pay from your payslip.'; $('slipHint').style.color='var(--coral)'; shake('#slGross'); return; }
   const num=id=>{ const v=parseFloat($(id).value); return v>=0?v:null; };
-  state.payslips[slipP.start]={gross:g,ee:num('slEe'),er:num('slEr')}; save();
-  closeSheet(); renderMonth(true); toast('Payslip saved',false);
+  let slip;
+  if(slMode==='net'){ const n=parseFloat($('slNet').value); if(!(n>0)){ $('slipHint').textContent='Enter the amount that arrived in your bank.'; $('slipHint').style.color='var(--coral)'; shake('#slNet'); return; }
+    const g=grossFromNet(n); slip={gross:g,net:n,ee:(rates()&&rates().cpf)?g-n:0,er:null}; }
+  else { const g=parseFloat($('slGross').value); if(!(g>0)){ $('slipHint').textContent='Enter the gross pay from your payslip.'; $('slipHint').style.color='var(--coral)'; shake('#slGross'); return; }
+    slip={gross:g,ee:num('slEe'),er:num('slEr')}; }
+  state.payslips[slipP.start]=slip;
+  // saving a payslip for the pay period that's due means you've been paid
+  const due=paidPeriodFor(rawPayday()), isDue=due&&due.start===slipP.start;
+  if(isDue&&!state.paid[slipP.start]) state.paid[slipP.start]=Date.now();
+  save(); closeSheet(); renderMonth(true); updatePayPills(); toast('Payslip saved',false);
+  if(isDue&&!state.celebrated[slipP.start]&&!payRun) setTimeout(()=>playPayday(slipP.start),600);
 };
-$('slClear').onclick=()=>{ delete state.payslips[slipP.start]; save(); closeSheet(); renderMonth(true); toast('Back to the estimate',false); };
+$('slClear').onclick=()=>{ delete state.payslips[slipP.start]; delete state.paid[slipP.start]; save(); closeSheet(); renderMonth(true); updatePayPills(); toast('Back to the estimate',false); };
 
 /* ================= payday ================= */
-function paydayOf(y,m){ const last=new Date(y,m+1,0).getDate(); return new Date(y,m,Math.min(+S().payday||28,last),12).getTime(); }
-function nextPayday(){ const n=new Date(), t=paydayOf(n.getFullYear(),n.getMonth()); if(sameDay(t,n)||t>n.getTime()) return t; return paydayOf(n.getFullYear(),n.getMonth()+1); }
+if(!state.paid) state.paid={}; if(!state.celebrated) state.celebrated={};
+// payday for a month; optionally moved to the working day before if it lands on a weekend or public holiday
+function paydayOf(y,m){ const last=new Date(y,m+1,0).getDate(); const d=new Date(y,m,Math.min(+S().payday||28,last),12);
+  if(S().payEarly){ for(let i=0;i<7&&(d.getDay()===0||d.getDay()===6||PH[isoDate(d.getTime())]);i++) d.setDate(d.getDate()-1); }
+  return d.getTime(); }
+// the pay period a payday pays for
+function paidPeriodFor(ts){ return ts?periodOf(ts):null; }
+const isPaid=ts=>{ const p=paidPeriodFor(ts); return !!(p&&state.paid[p.start]); };
+// the next payday that hasn't been paid yet (today counts if it's payday)
+function rawPayday(){ const n=new Date(); let t=paydayOf(n.getFullYear(),n.getMonth()); if(!(sameDay(t,n)||t>n.getTime())) t=paydayOf(n.getFullYear(),n.getMonth()+1); return t; }
+function nextPayday(){ const n=new Date(); let t=rawPayday(); if(isPaid(t)){ const d=new Date(t); t=paydayOf(d.getFullYear(),d.getMonth()+1); } return t; }
 const isPayday=()=>sameDay(nextPayday(),Date.now());
-function takeHome(m){ const slip=slipOf(m.p); if(slip){ const c=cpfForM(m,slip); return slip.gross-c; } return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
+// paid in the last week? then the pill offers a replay
+function recentPaid(){ let best=null; Object.keys(state.paid).forEach(k=>{ const ts=state.paid[k]; if(Date.now()-ts<7*86400000&&(!best||ts>best.ts)) best={start:+k,ts}; }); return best; }
+function takeHomeEst(m){ return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
+function takeHome(m){ const slip=slipOf(m.p); if(slip){ if(slip.net!=null) return slip.net; const c=cpfForM(m,slip); return slip.gross-c; } return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
 function cpfForM(m,slip){ if(slip.ee!=null) return slip.ee; if(!(m.rate&&m.rate.cpf)) return 0; const [ee]=CPF_RATES[+S().age||0]; return Math.min(CPF_CEIL,slip.gross)*ee/100; }
-function paydayAmount(){
+function paydayAmount(forStart){
+  if(forStart!=null){ for(let off=-2;off<=1;off++){ const m=monthData(off); if(m.p.start===forStart) return takeHome(m); } }
   const pd=nextPayday();
   for(let off=-1;off<=1;off++){ const m=monthData(off); if(pd>=m.p.start&&pd<m.p.end) return takeHome(m); }
   return null;
 }
 function updatePayPills(){
   const has=!!rates(), pd=nextPayday(), today=isPayday(), days=Math.round((new Date(pd).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/86400000);
-  const seen=state.paydaySeen===isoDate(Date.now());
-  const txt=today?(seen?'🎉 It\'s payday! Replay':'🎉 It\'s payday!'):`💰 ${days} day${days===1?'':'s'} to payday (${shortDate(pd)})`;
+  const seen=state.paydaySeen===isoDate(Date.now()), rp=recentPaid();
+  let txt=today?(seen?'🎉 It\'s payday! Replay':'🎉 It\'s payday!'):`💰 ${days} day${days===1?'':'s'} to payday (${shortDate(pd)})`;
+  if(!today&&rp) txt=`🎉 Paid! Replay · ${days}d to next payday`;
   ['payPillIdle','payPillAct','payPillMonth'].forEach(id=>{ const b=$(id); b.hidden=!has; b.textContent=txt; b.classList.toggle('today',today); });
 }
-['payPillIdle','payPillAct','payPillMonth'].forEach(id=>$(id).onclick=()=>{ if(isPayday()){ if(!payRun) playPayday(); } else if(page!=='month') goPage('month'); });
+['payPillIdle','payPillAct','payPillMonth'].forEach(id=>$(id).onclick=()=>{ const rp=recentPaid(); if(isPayday()){ if(!payRun) playPayday(); } else if(rp){ if(!payRun) playPayday(rp.start); } else if(page!=='month') goPage('month'); });
 let payAuto=null, introDone=false;
-function maybePayday(){ const k=isoDate(Date.now()); if(introDone&&rates()&&isPayday()&&state.paydaySeen!==k&&!payAuto&&!payRun){ payAuto=setTimeout(()=>{ payAuto=null; if(!payRun) playPayday(); },1200); } }
+function maybePayday(){ const k=isoDate(Date.now()), p=paidPeriodFor(nextPayday()); if(introDone&&rates()&&isPayday()&&state.paydaySeen!==k&&!(p&&state.celebrated[p.start])&&!payAuto&&!payRun){ payAuto=setTimeout(()=>{ payAuto=null; if(!payRun) playPayday(); },1200); } }
 /* ================= payday =================
    The screen clears, gold blobs keep streaming in and crashing into a growing mass, it explodes
    towards you, and you're left in a zone of floating gold discs. */
 let payRun=null;
-function playPayday(){
-  const ov=$('payday'), amt=paydayAmount(), W=innerWidth, H=innerHeight, d=Math.min(devicePixelRatio||1,2);
+function playPayday(forStart){
+  const ov=$('payday'), amt=paydayAmount(forStart), W=innerWidth, H=innerHeight, d=Math.min(devicePixelRatio||1,2);
   if(payRun) return;                     // only one celebration at a time
   clearTimeout(payAuto); payAuto=null;
+  { const p=forStart!=null?{start:forStart}:paidPeriodFor(nextPayday()); if(p) state.celebrated[p.start]=true; }
   state.paydaySeen=isoDate(Date.now()); save(); updatePayPills();
   if(openId) closeSheet();
   $('pdDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
