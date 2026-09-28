@@ -509,6 +509,7 @@ body.booting .app,body.booting .nav{opacity:0}
   <p class="sec">Pay</p>
 <div class="card">
   <label class="lab full">Payday (day of month)<input type="number" class="fld" id="sPayday" inputmode="numeric" min="1" max="31" step="1"></label>
+  <label class="lab full">Payday pays for<select class="fld" id="sPayFor"><option value="this">This pay period</option><option value="prev">The previous pay period</option></select></label>
   <label class="toggle"><span>Paid earlier if payday is a weekend or public holiday</span><span class="switch"><input type="checkbox" id="sPayEarly" aria-label="Paid earlier if payday is a weekend or public holiday"><span></span></span></label>
   <label class="lab full">Pay period starts on day (1–28)<input type="number" class="fld" id="sPayDay" inputmode="numeric" min="1" max="28" step="1"></label>
 
@@ -894,7 +895,7 @@ function syncFromStorage(){ const cur=load(); if(cur&&(cur.savedAt||0)>loadedAt)
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) syncFromStorage(); });
 addEventListener('pageshow',syncFromStorage); addEventListener('focus',syncFromStorage);
 addEventListener('storage',e=>{ if(e.key===KEY) syncFromStorage(); });
-const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,payEarly:false,al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
+const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,payFor:'this',payEarly:false,al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
 let state=load()||{}; loadedAt=state.savedAt||0;
 if(!Array.isArray(state.history)) state.history=[];
 if(state.active===undefined) state.active=null;
@@ -1613,7 +1614,7 @@ document.querySelectorAll('#otSeg button').forEach(b=>b.onclick=()=>setOtBlock(b
 function setPayType(v){ payType=v; document.querySelectorAll('#paySeg button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v))); updatePreview(); }
 document.querySelectorAll('#paySeg button').forEach(b=>b.onclick=()=>setPayType(b.dataset.v));
 function readSet(){ return {start:$('sStart').value,end:$('sEnd').value,flex:$('sFlex').checked,from:$('sFrom').value,to:$('sTo').value,
-  pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),payEarly:$('sPayEarly').checked,al:Math.max(0,+$('sAL').value||0),mc:Math.max(0,+$('sMC').value||0),leaveAfter:Math.max(0,+$('sLeaveAfter').value||0),eaMc:$('sEaMc').checked,age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
+  pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),payEarly:$('sPayEarly').checked,payFor:$('sPayFor').value||'this',al:Math.max(0,+$('sAL').value||0),mc:Math.max(0,+$('sMC').value||0),leaveAfter:Math.max(0,+$('sLeaveAfter').value||0),eaMc:$('sEaMc').checked,age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
 function updatePreview(){
   const s=readSet(), ok=s.start&&s.end&&s.start!==s.end;
   $('sLen').textContent=ok?`Your day: ${dur(shiftMin(s)*60000)}`:'Start and end need to be different times.';
@@ -1635,7 +1636,7 @@ function fillSettings(){
   const s=S();
   $('sStart').value=s.start; $('sEnd').value=s.end; $('sFlex').checked=s.flex; $('sFrom').value=s.from; $('sTo').value=s.to;
   $('sAmt').value=s.amt; $('sBrk').value=s.brk; $('sDays').value=s.days; $('sCpf').checked=s.cpf; $('sCpfRate').value=s.cpfRate; $('sOt').checked=s.ot; $('sOtMult').value=s.otMult; $('sOtMin').value=s.otMin; $('sPayDay').value=s.payDay; $('sStartDate').value=s.startDate||''; $('sLate').checked=!!s.late; $('sLateAfter').value=s.lateAfter||s.to||'09:00';
-  $('sPayday').value=s.payday; $('sPayEarly').checked=!!s.payEarly; $('sAL').value=s.al; $('sMC').value=s.mc; $('sLeaveAfter').value=s.leaveAfter; $('sEaMc').checked=!!s.eaMc; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
+  $('sPayday').value=s.payday; $('sPayEarly').checked=!!s.payEarly; $('sPayFor').value=s.payFor||'this'; $('sAL').value=s.al; $('sMC').value=s.mc; $('sLeaveAfter').value=s.leaveAfter; $('sEaMc').checked=!!s.eaMc; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
   lateBlock=+s.lateBlock||1; otBlock=+s.otBlock||60; payType=s.pay;
   document.querySelectorAll('#lateSeg button').forEach(b=>b.setAttribute('aria-checked',String(+b.dataset.v===lateBlock)));
   document.querySelectorAll('#otSeg button').forEach(b=>b.setAttribute('aria-checked',String(+b.dataset.v===otBlock)));
@@ -1657,7 +1658,7 @@ function commitSettings(){
 }
 const _up=updatePreview;
 updatePreview=function(){ _up(); commitSettings(); };
-['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sPayEarly','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
+['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sPayFor','sPayEarly','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
 $('sAge').addEventListener('change',()=>{ $('sCpfRate').value=CPF_RATES[+$('sAge').value][0]; updatePreview(); });
 $('letsGo').onclick=()=>{ commitSettings(); goPage('today'); };
 $('gearBtn').onclick=()=>goPage(page==='settings'?(lastPage||'today'):'settings');
@@ -2406,14 +2407,16 @@ $('slSave').onclick=()=>{
     const g=grossFromNet(n); slip={gross:g,net:n,ee:(rates()&&rates().cpf)?g-n:0,er:null}; }
   else { const g=parseFloat($('slGross').value); if(!(g>0)){ $('slipHint').textContent='Enter the gross pay from your payslip.'; $('slipHint').style.color='var(--coral)'; shake('#slGross'); return; }
     slip={gross:g,ee:num('slEe'),er:num('slEr')}; }
+  // remember when it was saved and which payday it belongs to
+  const old=state.payslips[slipP.start];
+  slip.savedAt=old&&old.savedAt||Date.now(); slip.payday=slipPayday(slipP.start,{savedAt:slip.savedAt});
   state.payslips[slipP.start]=slip;
-  // saving a payslip for the pay period that's due means you've been paid
-  const due=paidPeriodFor(rawPayday()), isDue=due&&due.start===slipP.start;
-  if(isDue&&!state.paid[slipP.start]) state.paid[slipP.start]=Date.now();
   save(); closeSheet(); renderMonth(true); updatePayPills(); toast('Payslip saved',false);
-  if(isDue&&!state.celebrated[slipP.start]&&!payRun) setTimeout(()=>playPayday(slipP.start),600);
+  // it's the payday that's due (or one that just happened): you've been paid, so celebrate once
+  const pdKey=slip.payday, pdTs=pdKey?new Date(pdKey+'T12:00:00').getTime():null;
+  if(pdTs&&Math.abs(dayStart(pdTs)-dayStart(Date.now()))<=10*DAY&&!state.celebrated[pdKey]&&!payRun) setTimeout(()=>playPayday(pdTs),600);
 };
-$('slClear').onclick=()=>{ delete state.payslips[slipP.start]; delete state.paid[slipP.start]; save(); closeSheet(); renderMonth(true); updatePayPills(); toast('Back to the estimate',false); };
+$('slClear').onclick=()=>{ delete state.payslips[slipP.start]; if(state.paid) delete state.paid[slipP.start]; save(); closeSheet(); renderMonth(true); updatePayPills(); toast('Back to the estimate',false); };
 
 /* ================= payday ================= */
 if(!state.paid) state.paid={}; if(!state.celebrated) state.celebrated={};
@@ -2421,47 +2424,65 @@ if(!state.paid) state.paid={}; if(!state.celebrated) state.celebrated={};
 function paydayOf(y,m){ const last=new Date(y,m+1,0).getDate(); const d=new Date(y,m,Math.min(+S().payday||28,last),12);
   if(S().payEarly){ for(let i=0;i<7&&(d.getDay()===0||d.getDay()===6||PH[isoDate(d.getTime())]);i++) d.setDate(d.getDate()-1); }
   return d.getTime(); }
-// the pay period a payday pays for
-function paidPeriodFor(ts){ return ts?periodOf(ts):null; }
-const isPaid=ts=>{ const p=paidPeriodFor(ts); return !!(p&&state.paid[p.start]); };
-// the next payday that hasn't been paid yet (today counts if it's payday)
-function rawPayday(){ const n=new Date(); let t=paydayOf(n.getFullYear(),n.getMonth()); if(!(sameDay(t,n)||t>n.getTime())) t=paydayOf(n.getFullYear(),n.getMonth()+1); return t; }
-function nextPayday(){ const n=new Date(); let t=rawPayday(); if(isPaid(t)){ const d=new Date(t); t=paydayOf(d.getFullYear(),d.getMonth()+1); } return t; }
+const DAY=86400000, dayStart=ts=>{ const d=new Date(ts); d.setHours(0,0,0,0); return d.getTime(); };
+// which pay period a payday pays for (set in Settings)
+function forPeriod(pd){ return S().payFor==='prev'?periodOf(pd,-1):periodOf(pd); }
+// paydays for the months around a date
+function paydaysAround(ts,before=2,after=2){ const d=new Date(ts), out=[]; for(let k=-before;k<=after;k++) out.push(paydayOf(d.getFullYear(),d.getMonth()+k)); return out; }
+// Which payday a saved payslip belongs to. A payslip saved in the run-up to a payday (10 days before
+// until 2 days after) belongs to that payday, even if it was filed under a neighbouring pay period.
+// Otherwise it belongs to the payday that pays for its pay period.
+function slipPayday(start,slip){
+  if(slip.payday) return slip.payday;
+  const ts=slip.savedAt||(state.paid&&state.paid[start])||null;
+  if(ts){ let best=null; paydaysAround(ts,1,1).forEach(pd=>{ if(ts>=dayStart(pd)-10*DAY&&ts<dayStart(pd)+3*DAY&&Math.abs(forPeriod(pd).start-start)<45*DAY){ if(!best||Math.abs(pd-ts)<Math.abs(best-ts)) best=pd; } }); if(best) return isoDate(best); }
+  const hit=paydaysAround(start,1,3).find(pd=>forPeriod(pd).start===start);
+  return hit?isoDate(hit):null;
+}
+function slipForPayday(pd){ const k=isoDate(pd); for(const start in state.payslips){ const sl=state.payslips[start]; if(sl&&slipPayday(+start,sl)===k) return {start:+start,slip:sl}; } return null; }
+function paidAtFor(pd){ const x=slipForPayday(pd); if(x) return x.slip.savedAt||(state.paid&&state.paid[x.start])||pd; return null; }
+// the payday to count down to: the first one from today onwards that hasn't been paid yet
+function nextPayday(){ const today=dayStart(Date.now()); return paydaysAround(Date.now(),1,3).filter(pd=>dayStart(pd)>=today&&!slipForPayday(pd)).sort((a,b)=>a-b)[0]; }
 const isPayday=()=>sameDay(nextPayday(),Date.now());
-// paid in the last week? then the pill offers a replay
-function recentPaid(){ let best=null; Object.keys(state.paid).forEach(k=>{ const ts=state.paid[k]; if(Date.now()-ts<7*86400000&&(!best||ts>best.ts)) best={start:+k,ts}; }); return best; }
+// a payday that's been paid in the last week (early by payslip, or its date has passed)
+function recentPayday(){ const now=Date.now(); let best=null, bestAt=0;
+  paydaysAround(now,1,1).forEach(pd=>{ const at=paidAtFor(pd)||(dayStart(pd)<=dayStart(now)?pd:null); if(at&&now-at<7*DAY&&now-at>=-DAY&&at>bestAt&&!sameDay(pd,nextPayday())){ best=pd; bestAt=at; } });
+  return best; }
+function monthForStart(start){ for(let off=-12;off<=3;off++){ const m=monthData(off); if(m.p.start===start) return m; } return null; }
 function takeHomeEst(m){ return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
 function takeHome(m){ const slip=slipOf(m.p); if(slip){ if(slip.net!=null) return slip.net; const c=cpfForM(m,slip); return slip.gross-c; } return m.rate?(m.kind==='monthly'?m.expected:m.earned):null; }
 function cpfForM(m,slip){ if(slip.ee!=null) return slip.ee; if(!(m.rate&&m.rate.cpf)) return 0; const [ee]=CPF_RATES[+S().age||0]; return Math.min(CPF_CEIL,slip.gross)*ee/100; }
-function paydayAmount(forStart){
-  if(forStart!=null){ for(let off=-2;off<=1;off++){ const m=monthData(off); if(m.p.start===forStart) return takeHome(m); } }
-  const pd=nextPayday();
-  for(let off=-1;off<=1;off++){ const m=monthData(off); if(pd>=m.p.start&&pd<m.p.end) return takeHome(m); }
-  return null;
+// what a payday paid: the payslip you entered for it, otherwise the estimate for the period it pays for
+function paydayAmount(pd){
+  const x=slipForPayday(pd);
+  if(x){ const m=monthForStart(x.start); if(x.slip.net!=null) return x.slip.net; return m?takeHome(m):x.slip.gross; }
+  const m=monthForStart(forPeriod(pd).start); return m?takeHomeEst(m):null;
 }
 function updatePayPills(){
-  const has=!!rates(), pd=nextPayday(), today=isPayday(), days=Math.round((new Date(pd).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/86400000);
-  const seen=state.paydaySeen===isoDate(Date.now()), rp=recentPaid();
-  let txt=today?(seen?'🎉 It\'s payday! Replay':'🎉 It\'s payday!'):`💰 ${days} day${days===1?'':'s'} to payday (${shortDate(pd)})`;
+  const has=!!rates(), pd=nextPayday(), today=isPayday(), days=Math.round((dayStart(pd)-dayStart(Date.now()))/DAY), rp=recentPayday();
+  let txt=today?(state.celebrated[isoDate(pd)]?'🎉 It\'s payday! Replay':'🎉 It\'s payday!'):`💰 ${days} day${days===1?'':'s'} to payday (${shortDate(pd)})`;
   if(!today&&rp) txt=`🎉 Paid! Replay · ${days}d to next payday`;
   ['payPillIdle','payPillAct','payPillMonth'].forEach(id=>{ const b=$(id); b.hidden=!has; b.textContent=txt; b.classList.toggle('today',today); });
 }
-['payPillIdle','payPillAct','payPillMonth'].forEach(id=>$(id).onclick=()=>{ const rp=recentPaid(); if(isPayday()){ if(!payRun) playPayday(); } else if(rp){ if(!payRun) playPayday(rp.start); } else if(page!=='month') goPage('month'); });
+['payPillIdle','payPillAct','payPillMonth'].forEach(id=>$(id).onclick=()=>{ const rp=recentPayday(); if(isPayday()){ if(!payRun) playPayday(nextPayday()); } else if(rp){ if(!payRun) playPayday(rp); } else if(page!=='month') goPage('month'); });
 let payAuto=null, introDone=false;
-function maybePayday(){ const k=isoDate(Date.now()), p=paidPeriodFor(nextPayday()); if(introDone&&rates()&&isPayday()&&state.paydaySeen!==k&&!(p&&state.celebrated[p.start])&&!payAuto&&!payRun){ payAuto=setTimeout(()=>{ payAuto=null; if(!payRun) playPayday(); },1200); } }
+// on the payday itself, celebrate once (with your payslip amount if you've entered one)
+function maybePayday(){ const now=new Date(), pd=paydayOf(now.getFullYear(),now.getMonth()); if(introDone&&rates()&&sameDay(pd,now)&&!state.celebrated[isoDate(pd)]&&!payAuto&&!payRun){ payAuto=setTimeout(()=>{ payAuto=null; if(!payRun) playPayday(pd); },1200); } }
 /* ================= payday =================
    The screen clears, gold blobs keep streaming in and crashing into a growing mass, it explodes
    towards you, and you're left in a zone of floating gold discs. */
 let payRun=null;
-function playPayday(forStart){
-  const ov=$('payday'), amt=paydayAmount(forStart), W=innerWidth, H=innerHeight, d=Math.min(devicePixelRatio||1,2);
+function playPayday(pd){
   if(payRun) return;                     // only one celebration at a time
+  if(pd==null) pd=recentPayday()||nextPayday();
+  const ov=$('payday'), amt=paydayAmount(pd), x=slipForPayday(pd), W=innerWidth, H=innerHeight, d=Math.min(devicePixelRatio||1,2);
   clearTimeout(payAuto); payAuto=null;
-  { const p=forStart!=null?{start:forStart}:paidPeriodFor(nextPayday()); if(p) state.celebrated[p.start]=true; }
-  state.paydaySeen=isoDate(Date.now()); save(); updatePayPills();
+  state.celebrated[isoDate(pd)]=true; save(); updatePayPills();
   if(openId) closeSheet();
-  $('pdDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
-  $('pdNote').textContent=amt!=null?`${S().cpf?'Take-home':'Pay'} for this pay period`:'Set up Pay in Settings to see your amount';
+  const paidAt=x&&(x.slip.savedAt||(state.paid&&state.paid[x.start]));
+  const fmtD=ts=>new Date(ts).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
+  $('pdDate').textContent=paidAt&&dayStart(paidAt)<dayStart(pd)?`Paid early · ${fmtD(paidAt)}`:fmtD(pd);
+  $('pdNote').textContent=amt==null?'Set up Pay in Settings to see your amount':x?(x.slip.net!=null?'Paid into your bank':'From your payslip'):`Estimated ${S().cpf?'take-home':'pay'}`;
   $('pdAmt').textContent=amt!=null?money(0):'';
   ov.style.display='flex'; ov.style.opacity=1; ov.classList.remove('gold'); document.body.classList.add('paying');
   if(G){ G.set(['#pdText','#pdBottom'],{opacity:0}); G.set('#goldBg',{opacity:0}); G.ticker.lagSmoothing(0); } // play on schedule even if the phone stutters
