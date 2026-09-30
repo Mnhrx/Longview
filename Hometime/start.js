@@ -41,7 +41,7 @@ function showPageDirect(pg){
   moveInd(pg,false);
 }
 function goPage(pg){
-  lastInput=Date.now();
+  lastInput=Date.now(); try{ RevBlob.hide(); }catch(e){}
   if(pg===page||busy) return;
   if(openId) closeSheet();
   const from=page; page=pg; if(from!=='settings') lastPage=from;
@@ -112,6 +112,6 @@ runIntro(()=>{
 });
 
 setInterval(tick,1000);
-setTimeout(()=>{ creditJars(); checkBadges(); },2500);
+setTimeout(()=>{ creditJars(); checkBadges(); RevBlob.start(); },2500);
 setInterval(()=>{ creditJars(); checkBadges(); },60000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });

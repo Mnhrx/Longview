@@ -1255,6 +1255,26 @@ const Liquid=(function(){
   void main(){
     vec2 px=gl_FragCoord.xy/uDpr, res=uRes/uDpr;
     float sw=uGeo.x, T=uGeo.y, len=uGeo.z;
+    if(uMode==2){
+      // a ring split into coloured segments, same glossy tube as the clock-in ring
+      vec2 c=res*.5; float Rr=min(res.x,res.y)*.5-T*2.2; vec2 q=px-c; float rad=max(length(q),.001), dr=rad-Rr; vec2 nq=q/rad;
+      float u=fract(atan(q.x,q.y)/6.2831853+1.), aa=1./uDpr;
+      vec4 track=vec4(vec3(1.),1.)*(1.-smoothstep(T*.55-aa,T*.55+aa,abs(dr)))*.2;
+      float f=0.; vec2 g=vec2(0.); float bestD=1e9, bu=0.; vec4 bB=vec4(0.);
+      for(int k=0;k<MAXI;k++){ if(k>=uN) break; vec4 Ak=uA[k], Bk=uB[k]; float s0=Ak.x, l=Ak.y; if(l<=.002) continue;
+        float du=fract(u-s0+1.);
+        vec2 p0=c+Rr*vec2(sin(s0*6.2831853),cos(s0*6.2831853)), p1=c+Rr*vec2(sin((s0+l)*6.2831853),cos((s0+l)*6.2831853));
+        if(du<=l){ float tt=T*(1.+Ak.w*.08*sin(du*38.+uT*2.3+float(k)*1.7)); float s2=tt*tt, r2=dr*dr+.4; f+=s2/r2; g+=-2.*s2*dr*nq/(r2*r2); if(bestD>0.){ bestD=0.; bu=du/l; bB=Bk; } }
+        else { float d0=length(px-p0), d1=length(px-p1); if(min(d0,d1)<bestD){ bestD=min(d0,d1); bu=d0<d1?0.:1.; bB=Bk; } }
+        ball(px,p0,T*.98,f,g); ball(px,p1,T*.98,f,g); }
+      float edge=max(length(g)/uDpr,1e-4), al=smoothstep(1.-edge,1.+edge,f);
+      if(al<=0.){ gl_FragColor=track; return; }
+      vec3 col=palAt(int(bB.x+.5),bu);
+      float hh=sqrt(clamp(1.-1./f,0.,1.)); vec2 dh=(1./(f*f))*g/(2.*max(hh,.05)); vec3 n=normalize(vec3(-dh*T*1.05,1.));
+      vec3 Lg=normalize(vec3(-.45,.6,.75)); float dif=.5+.5*max(dot(n,Lg),0.);
+      float spec=pow(max(dot(reflect(-Lg,n),vec3(0.,0.,1.)),0.),60.)*1.05, spec2=pow(max(dot(reflect(-normalize(vec3(.6,-.5,.6)),n),vec3(0.,0.,1.)),0.),20.)*.22;
+      vec3 cc=col*dif+vec3(1.)*spec+vec3(.75,.85,1.)*spec2; cc=mix(cc,cc*.7,pow(1.-n.z,2.)*.55);
+      gl_FragColor=vec4(cc*al,al)+track*(1.-al); return; }
     int i=uMode==1?0:int(floor(px.x/sw));
     if(i>=uN){ gl_FragColor=vec4(0.); return; }
     vec4 A=vec4(0.),B=vec4(0.);
@@ -1343,7 +1363,7 @@ const Liquid=(function(){
       gl.viewport(0,0,pw,ph); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
       A.fill(0); B.fill(0);
       items.slice(0,MAXI).forEach((it,i)=>{ A.set([it.level||0,it.nh??1,it.paidTo??1,it.amp??1],i*4); B.set([it.pal||0,it.bubbles?1:0,it.live?1:0,it.stripes?1:0],i*4); });
-      gl.uniform2f(U.uRes,pw,ph); gl.uniform1f(U.uT,RM?0:t); gl.uniform1f(U.uDpr,dpr); gl.uniform1i(U.uMode,mode==='h'?1:0); gl.uniform1i(U.uN,items.length);
+      gl.uniform2f(U.uRes,pw,ph); gl.uniform1f(U.uT,RM?0:t); gl.uniform1f(U.uDpr,dpr); gl.uniform1i(U.uMode,mode==='h'?1:mode==='ring'?2:0); gl.uniform1i(U.uN,items.length);
       gl.uniform4fv(U.uA,A); gl.uniform4fv(U.uB,B); gl.uniform4f(U.uGeo,slot||W,tube,len||H-pad*2,0); gl.uniform1f(U.uPad,pad);
       gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
       const c=target.getContext('2d'); c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,pw,ph);
@@ -1551,7 +1571,7 @@ function cpfFor(off){
 function renderCpf(animate){
   const c=cpfFor(cOff), p=periodOf(Date.now(),cOff);
   $('cLbl').textContent='Pay period'; $('cRange').textContent=rangeTxt(p)+(cOff===0?' (now)':''); $('cNext').disabled=cOff>=0;
-  if(!c){ $('cAll').hidden=true; $('cAmt').textContent='$0.00'; $('cNote').textContent=S().pay==='none'?'Turn on Pay in Settings to see your CPF.':'Enter your salary in Settings to see your CPF.'; $('cSplit').innerHTML=''; jars3d&&jars3d.set({OA:0,SA:0,MA:0},false); ['OA','SA','MA'].forEach(k=>$('v'+k).textContent='$0'); startJars(); return; }
+  if(!c){ $('cAll').hidden=true; $('cAmt').textContent='$0.00'; $('cNote').textContent=S().pay==='none'?'Turn on Pay in Settings to see your CPF.':'Enter your salary in Settings to see your CPF.'; $('cSplit').innerHTML=''; cpfRing&&cpfRing.set({OA:0,SA:0,MA:0},false); $('rTot').textContent='$0'; ['OA','SA','MA'].forEach(k=>$('v'+k).textContent='$0'); startJars(); return; }
   $('cAll').hidden=false;
   const show=v=>$('cAmt').textContent=money(v);
   if(animate&&ANIM){ const o={v:0}; G.to(o,{v:c.total,duration:1.4,ease:'power3.out',onUpdate:()=>show(o.v)}); } else show(c.total);
@@ -1561,10 +1581,9 @@ function renderCpf(animate){
     :`${c.ee+c.er}% of about ${money(c.wage)} in wages${c.capped?' (capped at the $8,000 ceiling)':''}${c.m.kind==='monthly'&&c.m.emp<c.m.wd?', pro-rated':''}.`;
   $('cSplit').innerHTML=stat(`You (${c.ee}%)`,money(c.mine))+stat(`Employer (${c.er}%)`,money(c.boss));
   $('nSA').textContent=c.age>=4?'Retirement':'Special';
-  const mx=Math.max(c.OA,c.SA,c.MA,1);
-  ['OA','SA','MA'].forEach(k=>$('v'+k).textContent=money(c[k]));
-  const target={OA:c.OA/mx,SA:c.SA/mx,MA:c.MA/mx};
-  jars3d&&jars3d.set(target,animate);
+  ['OA','SA','MA'].forEach(k=>{ $('v'+k).textContent=money(c[k]); $('p'+k).textContent=c.total>0?Math.round(c[k]/c.total*100)+'%':'0%'; });
+  $('rTot').textContent=money(c.total);
+  cpfRing&&cpfRing.set(c,animate);
   renderCpfAll(animate);
   if(animate&&ANIM) G.from(['#cHero','#cSplit .stat','#cJars','#cAll','#cFoot'],{y:24,opacity:0,stagger:.06,duration:.5,ease:'power4.out',clearProps:'transform,opacity'});
   startJars();
@@ -1575,6 +1594,7 @@ function cpfAll(){
   for(let off=0;off>-240;off--){ const pp=periodOf(Date.now(),off);
     if(sd&&pp.end<=sd) break; if(!sd&&off<0&&!state.history.some(r=>r.in>=pp.start&&r.in<pp.end)&&!slipOf(pp)) break;
     const x=cpfFor(off); if(!x||!(x.total>0)) continue;
+    if(pp.end>Date.now()){ t.coming=(t.coming||0)+x.total; continue; }   // this pay period isn't in yet
     ['total','mine','boss','OA','SA','MA'].forEach(k=>t[k]+=x[k]); t.n++;
     if(new Date(pp.start).getFullYear()===yr) t.yr+=x.total;
     if(!x.slip) t.est=true; }
@@ -1588,32 +1608,32 @@ function renderCpfAll(animate){
   const t=cpfAll(), yr=new Date().getFullYear();
   const show=v=>$('allAmt').textContent=money(v);
   if(animate&&ANIM){ const o={v:0}; G.to(o,{v:t.total,duration:1.6,delay:.2,ease:'power3.out',onUpdate:()=>show(o.v)}); } else show(t.total);
-  $('allSub').textContent=`${t.n} pay period${t.n===1?'':'s'}${t.est?', counting estimates where there’s no payslip yet':', all from your payslips'}`;
+  $('allSub').textContent=(t.n?`${t.n} finished pay period${t.n===1?'':'s'}${t.est?', estimated where there’s no payslip':', from your payslips'}`:'Nothing in yet: your first pay period is still going')+(t.coming?`. Plus about ${money(t.coming)} coming for this pay period.`:'.');
   $('allMine').textContent=money(t.mine); $('allBoss').textContent=money(t.boss);
   ['OA','SA','MA'].forEach(k=>$('all'+k).textContent=money(t[k]));
   $('allNSA').textContent=(+S().age||0)>=4?'Retirement':'Special';
   $('allYrLbl').textContent=`In ${yr} so far`; $('allYr').textContent=money(t.yr);
-  const mx=Math.max(t.OA,t.SA,t.MA,1);
-  ['OA','SA','MA'].forEach((k,i)=>{ const to=t[k]/mx*.96; if(animate&&ANIM){ allLv[k]=0; G.to(allLv,{[k]:to,duration:1.5,delay:.4+i*.12,ease:'elastic.out(1,.7)'}); } else allLv[k]=to; });
-  if(!allRAF&&Liquid) allRAF=requestAnimationFrame(allLoop);
+  allRing&&allRing.set(t,animate); startJars();
 }
 $('cPrev').onclick=()=>{ cOff--; renderCpf(true); }; $('cNext').onclick=()=>{ if(cOff<0){ cOff++; renderCpf(true); } };
 // three flat glass jars filled with the same glossy liquid as the ring
-const jars3d=(function(){
+// the CPF rings: one segment per account, sized by its real share of the total
+function makeRing(cv,T){
   if(!Liquid) return null;
-  const cv=$('jarCv'), keys=['OA','SA','MA'], J={}; keys.forEach(k=>J[k]={level:0,amp:1});
-  let raf=null;
-  function frame(t){ const W=cv.clientWidth, H=cv.clientHeight, sw=W/3, cw=Math.min(88,sw*.74);
-    Liquid.draw(cv,{mode:'v',items:keys.map(k=>({level:J[k].level,pal:Liquid.ID[k],amp:J[k].amp,bubbles:true})),slot:sw,T:Math.min(sw*.085,8.5),len:H-10,pad:6,t}); }
+  const keys=['OA','SA','MA'], seg={}; keys.forEach(k=>seg[k]={s:0,l:0,amp:1}); let raf=null;
+  const frame=t=>Liquid.draw(cv,{mode:'ring',items:keys.map(k=>({level:seg[k].s,nh:seg[k].l,amp:seg[k].amp,pal:Liquid.ID[k]})),T:T||Math.max(6,cv.clientWidth*.045),t});
   function loop(){ if(page!=='cpf'||document.hidden){ raf=null; return; } frame(performance.now()/1000); raf=requestAnimationFrame(loop); }
-  cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(), k=keys[Math.min(2,Math.floor((e.clientX-r.left)/r.width*3))];
-    if(ANIM){ G.killTweensOf(J[k],'amp'); G.fromTo(J[k],{amp:3},{amp:1,duration:1.8,ease:'power2.out'}); } Sound.bubble(); haptic(); });
+  cv.addEventListener('pointerdown',()=>{ keys.forEach((k,i)=>{ G&&G.killTweensOf(seg[k],'amp'); if(ANIM) G.fromTo(seg[k],{amp:3.2},{amp:1,duration:1.8,delay:i*.08,ease:'power2.out'}); }); Sound.bubble(); haptic(); });
   return {
-    set(levels,animate){ keys.forEach((k,i)=>{ G&&G.killTweensOf(J[k]); if(animate&&ANIM){ J[k].level=0; G.to(J[k],{level:levels[k]*.9,duration:1.6,delay:.25+i*.15,ease:'elastic.out(1,.6)'}); G.fromTo(J[k],{amp:2.5},{amp:1,duration:2.2,delay:.25+i*.15}); } else J[k].level=levels[k]*.9; }); },
+    set(v,animate){ const tot=keys.reduce((a,k)=>a+(v[k]||0),0), gap=tot>0?.014:0; let at=0;
+      keys.forEach((k,i)=>{ const share=tot>0?(v[k]||0)/tot:0, L=Math.max(0,share-gap); seg[k].s=at+gap/2; at+=share; G&&G.killTweensOf(seg[k]);
+        if(animate&&ANIM){ seg[k].l=0; G.to(seg[k],{l:L,duration:1.1,delay:.25+i*.35,ease:'power3.inOut'}); G.fromTo(seg[k],{amp:2.4},{amp:1,duration:2,delay:.25+i*.35}); } else seg[k].l=L; }); },
     start(){ if(!raf) raf=requestAnimationFrame(loop); if(RM) frame(0); }
   };
-})();
-function startJars(){ if(jars3d) jars3d.start(); }
+}
+const cpfRing=makeRing($('jarCv')), allRing=makeRing($('allCv'),6);
+const jars3d=null;
+function startJars(){ cpfRing&&cpfRing.start(); allRing&&allRing.start(); }
 
 /* ================= Year page ================= */
 let yOff=0, yearAnimStart=0, yearRAF=null, yMap={}, yYear=0, tipTimer=null, yHi=null, yCls=new Set();
@@ -1919,7 +1939,8 @@ let payRun=null, lastPdShown=null;
 function playPayday(pd){
   if(payRun) return;                     // only one celebration at a time
   if(pd==null) pd=recentPayday()||nextPayday();
-  lastPdShown=pd;
+  lastPdShown=pd; try{ PayMusic.start(); }catch(e){}
+  try{ $('pdReview').hidden=!wrapData(forPeriod(pd)); }catch(e){ $('pdReview').hidden=true; }
   const ov=$('payday'), amt=paydayAmount(pd), x=slipForPayday(pd), W=innerWidth, H=innerHeight, d=Math.min(devicePixelRatio||1,2);
   clearTimeout(payAuto); payAuto=null;
   state.celebrated[isoDate(pd)]=true; save(); updatePayPills();
@@ -2007,7 +2028,7 @@ function playPayday(pd){
     // five waves, each one bigger, each ending in a rising "stacking" swell
     [0,.42,.84,1.24,1.62].forEach((at,i)=>timers.push(setTimeout(()=>{ wave=i; spawnWave(4+i); setTimeout(()=>Sound.stack(i),520); },at*1000)));
     timers.push(setTimeout(()=>{ // explode towards the viewer
-      exploded=true; blobs.length=0; Sound.boom(); Sound.fanfare(); haptic();
+      exploded=true; blobs.length=0; Sound.boom(); Sound.fanfare(); haptic(); try{ PayMusic.drop(); }catch(e){}
       for(let i=0;i<22;i++){ const a=Math.random()*Math.PI*2, m=.3+Math.random()*.9; shards.push({dx:Math.cos(a)*m,dy:Math.sin(a)*m,r:10+Math.random()*mass.r*.35,c:GOLDS[i%GOLDS.length],p:0,dur:.55+Math.random()*.35,start:clock()}); }
       G.to(st,{rip:10,duration:.5}); G.to(st,{fade:0,duration:.35,delay:.45,onComplete:release});
       // a solid gold cover, identical to the gold background; the zone switches underneath it
@@ -2016,7 +2037,7 @@ function playPayday(pd){
         .add(()=>{ G.set('#goldBg',{opacity:1}); reveal(); })
         .to(fl,{opacity:0,duration:.6,ease:'power2.inOut'},'+=.12');
     },2450));
-  } else { release(); Sound.fanfare(); reveal(); }
+  } else { release(); Sound.fanfare(); try{ PayMusic.drop(); }catch(e){} reveal(); }
   const tap=e=>{ if(e.target.closest('.pdX')||!world) return; const o=world.pick(e.clientX,e.clientY); if(o) world.poke(o); };
   ov.addEventListener('pointerdown',tap);
   payRun={closing:false,stop(){ timers.forEach(clearTimeout); release(); ov.removeEventListener('pointerdown',tap); }};
@@ -2118,7 +2139,7 @@ function prepareExit(){
 // the words form out of soft blurry blobs that pull together into crisp letters
 function condense(els,delay=0){ if(!ANIM||!G) return; G.fromTo(els,{opacity:0,filter:'blur(12px) contrast(1.8)',scale:1.08},{opacity:1,filter:'blur(0px) contrast(1)',scale:1,duration:.9,stagger:.18,delay,ease:'power2.out',clearProps:'filter,transform,opacity'}); }
 $('pdClose').onclick=()=>{
-  if(!payRun||payRun.closing) return; payRun.closing=true;
+  if(!payRun||payRun.closing) return; payRun.closing=true; try{ PayMusic.out(); }catch(e){}
   const ex=payRun.exit||prepareExit(); payRun.stop();
   const ov=$('payday'), W=innerWidth, H=innerHeight, zone=state.active?'work':'home', idle=!state.active;
   if(G) G.ticker.lagSmoothing(0);   // the whole exit runs on the real clock
@@ -2259,7 +2280,7 @@ function showCat(cat,animate=true){
   Sound.swoosh({x:cat?1:-1,y:0});
   G.to(out,{x:cat?-40:40,opacity:0,duration:.18,ease:'power2.in',onComplete:()=>{ G.set(out,{clearProps:'all'}); swap(); }});
 }
-document.querySelectorAll('.setTile').forEach(t=>t.onclick=()=>showCat(t.dataset.cat));
+document.querySelectorAll('.setTile').forEach(t=>{ t.onclick=()=>showCat(t.dataset.cat); t.addEventListener('pointerdown',()=>{ if(ANIM) G.fromTo(t,{scale:.95},{scale:1,duration:.5,ease:'elastic.out(1,.45)',clearProps:'transform'}); }); });
 document.querySelectorAll('.catBack').forEach(b=>b.onclick=()=>{ if(inSetup()&&setupSteps().includes(setCat)) setupGo(-1); else showCat(null); });
 function ago(ts){ if(!ts) return 'never'; const d=Math.floor((Date.now()-ts)/864e5); return d<=0?'today':d===1?'yesterday':d<30?`${d} days ago`:`${Math.floor(d/30)} month${d<60?'':'s'} ago`; }
 function setSummaries(){

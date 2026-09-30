@@ -145,7 +145,7 @@ function wrapData(p){
   const m=monthForStart(p.start), slip=state.payslips&&state.payslips[p.start];
   const pay=m?(slip?(slip.net!=null?slip.net:slip.gross-(slip.ee||0)-(slip.shg||0)-(slip.other||0)):takeHomeEst(m)):null;
   let cpf=null, mine=0, boss=0; for(let off=0;off>-24;off--){ const pp=periodOf(Date.now(),off); if(pp.start===p.start){ const c=cpfFor(off); if(c){ cpf=c.total; mine=c.mine; boss=c.boss; } break; } if(pp.start<p.start) break; }
-  let cpfAllT=0; try{ cpfAllT=cpfAll().total; }catch(e){}
+  let cpfAllT=0; try{ const sd=startTs(); for(let off=0;off>-240;off--){ const pp=periodOf(Date.now(),off); if(sd&&pp.end<=sd) break; if(pp.start>p.start) continue; if(!sd&&pp.start<p.start&&!state.history.some(r=>r.in>=pp.start&&r.in<pp.end)&&!slipOf(pp)) break; const c=cpfFor(off); if(c) cpfAllT+=c.total; } }catch(e){}
   const jarIn=state.jars.reduce((a,j)=>a+(j.log||[]).filter(l=>l.t>=p.start&&l.t<p.end+10*DAY&&l.amt>0&&l.why!=='Starting amount').reduce((s,l)=>s+l.amt,0),0);
   const inWin=t=>t>=p.start&&t<p.end+10*DAY;
   const badges=[]; Object.entries(state.bdg||{}).forEach(([k,v])=>{ const b=BADGES.find(x=>x.id===k); if(!b) return; (v.t||[]).forEach((t,i)=>{ if(t&&inWin(t)) badges.push({b,lv:i+1}); }); });
@@ -163,39 +163,157 @@ function wrapData(p){
   return {p,x,pay,cpf,mine,boss,cpfAllT,jarIn,badges,monthName,slip:!!slip,days,avgWd,busiest,best,earned,prev,alLeft:Math.max(0,(+S().al||0)-alUsed),leaveOn:!ls||Date.now()>=ls,nights};
 }
 
-/* ---- the music: a small generated loop that grows with the cards ---- */
-const Music=(function(){
-  let A=null, bus=null, dly=null, timer=null, step=0, next=0, scene=0, level=0, on=false;
-  const SPS=60/100/4, N=n=>440*Math.pow(2,(n-69)/12);
-  const CH={D:[62,66,69],Bm:[59,62,66],G:[55,59,62],A:[57,61,64],Em:[52,55,59],Fm:[54,57,61]};
-  const PROG=[['D','Bm','G','A'],['G','A','Fm','Bm'],['Bm','G','D','A'],['Em','G','A','D']];
-  function env(g,t,a,d,pk){ g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(pk,t+a); g.gain.exponentialRampToValueAtTime(.0001,t+a+d); }
-  function osc(type,f,t,d,pk,dest,a=.005){ const c=A.ctx, o=c.createOscillator(), g=c.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); env(g,t,a,d,pk); o.connect(g); g.connect(dest); o.start(t); o.stop(t+a+d+.05); }
-  function nz(t,type,f,q,d,pk){ const c=A.ctx, s=c.createBufferSource(), fl=c.createBiquadFilter(), g=c.createGain(); s.buffer=A.noise; fl.type=type; fl.frequency.value=f; fl.Q.value=q; env(g,t,.002,d,pk); s.connect(fl); fl.connect(g); g.connect(bus); s.start(t,Math.random()*.5); s.stop(t+d+.1); }
-  function kick(t){ const c=A.ctx, o=c.createOscillator(), g=c.createGain(); o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(40,t+.2); env(g,t,.003,.3,.42); o.connect(g); g.connect(bus); o.start(t); o.stop(t+.36); }
-  function pad(t,ch,dur){ const c=A.ctx; ch.forEach(m=>[-7,7].forEach(dt=>{ const o=c.createOscillator(), g=c.createGain(), lp=c.createBiquadFilter(); o.type='sawtooth'; o.frequency.value=N(m); o.detune.value=dt; lp.type='lowpass'; lp.frequency.value=level>=2?1400:850;
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.014,t+.5); g.gain.setValueAtTime(.014,t+dur-.35); g.gain.linearRampToValueAtTime(0,t+dur); o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t+dur+.05); })); }
-  function play(s,t){
-    const bar=Math.floor(s/16)%4, b=s%16, ch=CH[PROG[scene%PROG.length][bar]];
-    if(b===0) pad(t,ch,SPS*16);
-    if(b===0||b===8||(level>=1&&(b===6||b===11))) osc('sine',N(ch[0]-24),t,SPS*(b===0?3.5:2),.2,bus,.012);
-    if(b%2===0){ const k=[0,1,2,3,2,1,2,1][(b/2)%8], m=ch[k%3]+12+(k>=3?12:0); osc('triangle',N(m),t,.24,.045,dly,.004); }
-    if(level>=1&&(b===0||b===8||(b===10&&bar%2))) kick(t);
-    if(level>=2&&(b===4||b===12)) nz(t,'bandpass',1500,.8,.16,.12);
-    if(level>=2&&b%4===2) nz(t,'highpass',7500,.7,b===14?.12:.04,.06);
-    if(level>=3&&b%2===1) nz(t,'highpass',9000,.7,.03,.035);
+
+/* what didn't go so well in a pay period: only things that actually happened */
+function weakStats(p){
+  const L=state.history.filter(r=>r.in>=p.start&&r.in<p.end), x=statsOf(L), out=[];
+  const w=x?x.w:[], lateAfter=toMin(S().lateAfter||S().to||'09:00'), shift=SHIFT();
+  const late=w.filter(r=>tod(r.in)>lateAfter);
+  if(late.length){ const mins=late.reduce((a,r)=>a+tod(r.in)-lateAfter,0); out.push({t:'Late starts',v:`${late.length}`,s:`${dur(mins*60000)} late in total`}); }
+  if(w.length){ const r=w.reduce((a,r)=>tod(r.in)>tod(a.in)?r:a,w[0]); if(tod(r.in)>lateAfter) out.push({t:'Latest arrival',v:fmt(r.in),s:dayName(r.in)}); }
+  const early=w.filter(r=>r.out-r.in<shift-15*60000);
+  if(early.length){ const r=x.shortest; out.push({t:'Short days',v:`${early.length}`,s:`shortest ${dur(r.out-r.in)} on ${dayName(r.in)}`}); }
+  const open=L.filter(r=>typeOf(r)==='work'&&!r.out).length; if(open) out.push({t:'Forgot to clock out',v:`${open}`,s:`day${open===1?'':'s'} with no clock-out`});
+  const mc=L.filter(r=>typeOf(r)==='mc').length; if(mc) out.push({t:'MC days',v:`${mc}`,s:'hope you’re feeling better'});
+  const unpaid=L.filter(r=>isUnpaid(r)).length; if(unpaid) out.push({t:'Unpaid days',v:`${unpaid}`,s:'taken off your pay'});
+  const lp=w.reduce((a,r)=>a+(r.late||0),0); if(lp>0) out.push({t:'Pay lost to lateness',v:money(lp),s:'from late clock-ins'});
+  const pp={start:periodOf(p.start,-1).start,end:p.start}, prev=statsOf(state.history.filter(r=>r.in>=pp.start&&r.in<pp.end));
+  if(x&&prev){ const a=x.hours/x.w.length, b=prev.hours/prev.w.length;
+    if(a<b-15*60000) out.push({t:'Shorter days',v:`−${dur(b-a)}`,s:'a day, compared with last month'});
+    if(prev.otMs>0&&x.otMs<prev.otMs) out.push({t:'Less overtime',v:`−${dur(prev.otMs-x.otMs)}`,s:'than last month'});
+    const ra=x.onTime/x.w.length, rb=prev.onTime/prev.w.length; if(ra<rb-.05) out.push({t:'On-time rate',v:`${Math.round(ra*100)}%`,s:`down from ${Math.round(rb*100)}% last month`}); }
+  return out;
+}
+function renderWeak(){ const box=$('sWeak'); if(!box) return; const p=periodOf(Date.now(),sOff), L=weakStats(p);
+  box.innerHTML=L.length?L.map(o=>`<div class="wkRow"><span class="dn">↓</span><div><b>${esc(o.t)}</b><small>${esc(o.s)}</small></div><em>${esc(o.v)}</em></div>`).join('')
+    :'<p class="note" style="margin:0">Nothing to improve this pay period. Keep it up.</p>';
+  if(ANIM) G.from('#sWeak .wkRow',{x:-20,opacity:0,stagger:.05,duration:.4,ease:'power3.out',clearProps:'all'}); }
+{ const _rs=renderStats; renderStats=function(a){ _rs.apply(this,arguments); try{ renderWeak(); }catch(e){} }; }
+
+/* ---- music: small generated tracks, no audio files ----
+   A tiny sequencer with a few instruments made from oscillators and noise. Each track decides
+   what plays on each 16th note. Everything goes through the app's sound-effects volume. */
+const Synth=(function(){
+  const N=m=>440*Math.pow(2,(m-69)/12);
+  function make(){
+    const A=Sound.raw&&Sound.raw(); if(!A||!A.on()) return null;
+    const c=A.ctx, bus=c.createGain(), lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=20000; lp.Q.value=.8;
+    bus.gain.value=0; bus.connect(lp); lp.connect(A.out);
+    const dly=c.createGain(), d=c.createDelay(1), fb=c.createGain(), dl=c.createBiquadFilter(); fb.gain.value=.3; dl.type='lowpass'; dl.frequency.value=2800;
+    dly.connect(bus); dly.connect(d); d.connect(dl); dl.connect(fb); fb.connect(d); dl.connect(bus);
+    const S={c,A,bus,lp,dly,d,N};
+    const env=(g,t,a,dd,pk)=>{ g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(pk,t+a); g.gain.exponentialRampToValueAtTime(.0001,t+a+dd); };
+    S.osc=(type,f,t,dd,pk,dest=bus,a=.005,bend)=>{ const o=c.createOscillator(), g=c.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); if(bend) o.frequency.exponentialRampToValueAtTime(f*bend,t+dd*.6); env(g,t,a,dd,pk); o.connect(g); g.connect(dest); o.start(t); o.stop(t+a+dd+.05); };
+    S.noise=(t,type,f,q,dd,pk,dest=bus,f2)=>{ const s=c.createBufferSource(), fl=c.createBiquadFilter(), g=c.createGain(); s.buffer=A.noise; fl.type=type; fl.frequency.setValueAtTime(f,t); if(f2) fl.frequency.exponentialRampToValueAtTime(f2,t+dd); fl.Q.value=q; env(g,t,.002,dd,pk); s.connect(fl); fl.connect(g); g.connect(dest); s.start(t,Math.random()*.5); s.stop(t+dd+.1); };
+    S.kick=(t,pk=.45,f0=140)=>{ const o=c.createOscillator(), g=c.createGain(); o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(42,t+.18); env(g,t,.003,.3,pk); o.connect(g); g.connect(bus); o.start(t); o.stop(t+.36); };
+    S.clap=(t,pk=.12)=>{ [0,.012,.024].forEach(k=>S.noise(t+k,'bandpass',1600,.9,.14,pk*(k?0.6:1))); };
+    S.hat=(t,open,pk=.05)=>S.noise(t,'highpass',7800,.7,open?.14:.035,pk);
+    S.rim=(t)=>{ S.osc('triangle',1700,t,.03,.07); S.noise(t,'bandpass',2600,4,.03,.06); };
+    S.pad=(t,ch,dur,cut=900,pk=.013,type='sawtooth')=>ch.forEach(m=>[-7,7].forEach(dt=>{ const o=c.createOscillator(), g=c.createGain(), f=c.createBiquadFilter(); o.type=type; o.frequency.value=N(m); o.detune.value=dt; f.type='lowpass'; f.frequency.value=cut;
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(pk,t+.45); g.gain.setValueAtTime(pk,t+Math.max(.5,dur-.35)); g.gain.linearRampToValueAtTime(0,t+dur); o.connect(f); f.connect(g); g.connect(bus); o.start(t); o.stop(t+dur+.05); }));
+    S.stab=(t,ch,dd=.18,pk=.05,cut=2200)=>ch.forEach(m=>{ const o=c.createOscillator(), o2=c.createOscillator(), g=c.createGain(), f=c.createBiquadFilter(); o.type='square'; o2.type='sawtooth'; o.frequency.value=N(m); o2.frequency.value=N(m)*1.003; f.type='lowpass'; f.frequency.setValueAtTime(cut,t); f.frequency.exponentialRampToValueAtTime(400,t+dd); env(g,t,.004,dd,pk/ch.length*2.2); o.connect(f); o2.connect(f); f.connect(g); g.connect(S.dly); o.start(t); o2.start(t); o.stop(t+dd+.1); o2.stop(t+dd+.1); });
+    S.keys=(t,ch,dd=1,pk=.05)=>ch.forEach((m,i)=>{ S.osc('sine',N(m),t+i*.012,dd,pk/ch.length*2); S.osc('sine',N(m)*2,t+i*.012,dd*.4,pk/ch.length*.5); });
+    S.bell=(t,m,pk=.05)=>{ S.osc('sine',N(m),t,1.4,pk,S.dly,.002); S.osc('sine',N(m)*2.76,t,.5,pk*.35,S.dly,.002); S.osc('sine',N(m)*5.4,t,.2,pk*.15,S.dly,.002); };
+    S.pluck=(t,m,pk=.045)=>S.osc('triangle',N(m),t,.24,pk,S.dly,.004);
+    S.bass=(t,m,dd,pk=.2,glide)=>{ const o=c.createOscillator(), g=c.createGain(), f=c.createBiquadFilter(); o.type='sine'; o.frequency.setValueAtTime(N(m)*(glide?.94:1),t); if(glide) o.frequency.exponentialRampToValueAtTime(N(m),t+.06); f.type='lowpass'; f.frequency.value=600; env(g,t,.01,dd,pk); o.connect(f); f.connect(g); g.connect(bus); o.start(t); o.stop(t+dd+.05); };
+    // a sung "ooh / ah": a buzzy tone shaped by the resonances of a voice
+    const VOW={a:[800,1150,2900],o:[450,800,2830],u:[325,700,2530],e:[400,1700,2600]};
+    S.chop=(t,m,v='a',dd=.22,pk=.09,bend=1)=>{ const o=c.createOscillator(), g=c.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(N(m)*(bend>1?.97:1),t); o.frequency.exponentialRampToValueAtTime(N(m)*bend,t+dd*.5);
+      const vib=c.createOscillator(), vg=c.createGain(); vib.frequency.value=5.5; vg.gain.value=N(m)*.012; vib.connect(vg); vg.connect(o.frequency);
+      env(g,t,.012,dd,pk); o.connect(g); VOW[v].forEach((f,k)=>{ const b=c.createBiquadFilter(), bg=c.createGain(); b.type='bandpass'; b.frequency.value=f; b.Q.value=9-k*2; bg.gain.value=[1,.55,.25][k]; g.connect(b); b.connect(bg); bg.connect(S.dly); });
+      o.start(t); vib.start(t); o.stop(t+dd+.1); vib.stop(t+dd+.1); };
+    return S;
   }
-  function loop(){ if(!on) return; while(next<A.ctx.currentTime+.18){ play(step,next); step++; next+=SPS; } }
+  return {make,N};
+})();
+// a track is a tempo, a chord loop and what to play on each 16th note (level = how busy)
+const TRACKS={
+  pop:{bpm:100,sw:0,ch:[[62,66,69],[59,62,66],[55,59,62],[57,61,64]],play(S,b,bar,ch,t,lv,sp){
+    if(b===0) S.pad(t,ch,sp*16);
+    if(b===0||b===8||(lv>=1&&(b===6||b===11))) S.bass(t,ch[0]-24,sp*(b===0?3.5:2));
+    if(b%2===0){ const k=[0,1,2,3,2,1,2,1][(b/2)%8]; S.pluck(t,ch[k%3]+12+(k>=3?12:0)); }
+    if(lv>=1&&(b===0||b===8||(b===10&&bar%2))) S.kick(t);
+    if(lv>=2&&(b===4||b===12)) S.clap(t);
+    if(lv>=2&&b%4===2) S.hat(t,b===14);
+    if(lv>=3&&b%2===1) S.hat(t,false,.03); }},
+  lofi:{bpm:78,sw:.28,ch:[[52,55,59,62,66],[57,60,64,67,71],[50,54,57,61,64],[55,59,62,66,69]],play(S,b,bar,ch,t,lv,sp){
+    if(b===0) S.keys(t,ch,sp*9,.06); if(b===6) S.keys(t,ch.slice(1),sp*5,.035);
+    if(b===0||b===10) S.bass(t,ch[0]-12,sp*5,.18);
+    if(b===0||b===7||(b===10&&lv>=1)) S.kick(t,.32,110);
+    if(b===4||b===12) S.noise(t,'bandpass',1200,.6,.18,lv>=1?.1:.05);
+    if(b%2===0) S.hat(t,false,lv>=2?.04:.02);
+    if(b%4===0) S.noise(t,'highpass',3000,.3,.3,.006);   // a little vinyl hiss
+    if(lv>=2&&b%8===3) S.bell(t,ch[2]+12,.025); }},
+  house:{bpm:122,sw:0,ch:[[57,60,64,67],[53,57,60,64],[55,59,62,66],[52,55,59,62]],play(S,b,bar,ch,t,lv,sp){
+    if(b===0) S.pad(t,ch,sp*16,1200,.009);
+    if(b%4===0&&lv>=1) S.kick(t,.42,130); if(lv<1&&b===0) S.kick(t,.3);
+    if(b%4===2) S.hat(t,true,lv>=2?.06:.035);
+    if(lv>=2&&(b===4||b===12)) S.clap(t,.1);
+    if([3,6,10,14].includes(b)) S.stab(t,ch,.16,.05);
+    if(lv>=1&&b%4===2) S.bass(t,ch[0]-24,sp*1.6,.18);
+    if(lv>=3&&b%2===1) S.hat(t,false,.025); }},
+  dream:{bpm:88,sw:.12,ch:[[60,64,67,71],[57,60,64,67],[53,57,60,64],[55,59,62,69]],play(S,b,bar,ch,t,lv,sp){
+    if(b===0) S.pad(t,ch,sp*16,700,.012,'triangle');
+    if(b%3===0) S.bell(t,ch[(b/3)%ch.length]+12,.035);
+    if(b===0||b===9) S.bass(t,ch[0]-24,sp*6,.15);
+    if(lv>=1&&(b===0||b===10)) S.kick(t,.28,100);
+    if(lv>=2&&b%4===2) S.noise(t,'highpass',6000,.5,.08,.03);
+    if(lv>=2&&b===12) S.noise(t,'bandpass',1800,.7,.2,.06); }}
+};
+function Player(track){
+  let S=null, timer=null, step=0, next=0, lv=0, on=false;
+  const sp=60/track.bpm/4;
+  function loop(){ if(!on) return; while(next<S.c.currentTime+.2){ const b=step%16, bar=Math.floor(step/16)%track.ch.length, t=next+(b%2?track.sw*sp:0);
+    track.play(S,b,bar,track.ch[bar],t,lv,sp); step++; next+=sp; } }
   return {
-    start(){ A=Sound.raw&&Sound.raw(); if(!A||!A.on()) return; const c=A.ctx; on=true; step=0; scene=0; level=0; next=c.currentTime+.1;
-      bus=c.createGain(); bus.gain.setValueAtTime(0,c.currentTime); bus.gain.linearRampToValueAtTime(.9,c.currentTime+1.2); bus.connect(A.out);
-      dly=c.createGain(); const d=c.createDelay(1), fb=c.createGain(), lp=c.createBiquadFilter(); d.delayTime.value=SPS*3; fb.gain.value=.32; lp.type='lowpass'; lp.frequency.value=2600;
-      dly.connect(bus); dly.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(bus);
-      Sound.duck&&Sound.duck(true); timer=setInterval(loop,25); loop(); },
-    scene(i,lv){ if(!on) return; scene=i; level=lv;
-      const c=A.ctx, t=c.currentTime; CH[PROG[i%PROG.length][0]].forEach((m,k)=>osc('sine',N(m+24),t+k*.03,1.1,.05,dly,.004)); nz(t,'bandpass',900,1.2,.35,.05); },
-    count(p){ if(!on) return; const sc=[0,2,4,7,9,12,14,16,19,21,24], m=62+sc[Math.min(sc.length-1,Math.floor(p*sc.length))]; osc('sine',N(m+12),A.ctx.currentTime,.09,.05,bus,.002); },
-    stop(){ if(!on) return; on=false; clearInterval(timer); const c=A.ctx, b=bus; b.gain.cancelScheduledValues(c.currentTime); b.gain.setTargetAtTime(0,c.currentTime,.25); setTimeout(()=>{ try{ b.disconnect(); }catch(e){} },1500); Sound.duck&&Sound.duck(false); }
+    start(fade=1.2){ S=Synth.make(); if(!S) return false; on=true; step=0; next=S.c.currentTime+.08; const t=S.c.currentTime; S.bus.gain.setValueAtTime(0,t); S.bus.gain.linearRampToValueAtTime(.9,t+fade); timer=setInterval(loop,25); loop(); return true; },
+    level(v){ lv=v; },
+    chord(){ return track.ch[Math.floor(step/16)%track.ch.length]; },
+    S:()=>S,
+    stop(fade=.6){ if(!on) return; on=false; clearInterval(timer); const t=S.c.currentTime, b=S.bus; b.gain.cancelScheduledValues(t); b.gain.setTargetAtTime(0,t,fade/3); setTimeout(()=>{ try{ b.disconnect(); }catch(e){} },fade*1000+800); }
+  };
+}
+// the month-in-review music: a different track each time, never the same one twice in a row
+const Music=(function(){
+  let P=null, cur=null;
+  return {
+    start(){ const keys=Object.keys(TRACKS).filter(k=>k!==state.lastTrack); cur=keys[Math.floor(Math.random()*keys.length)]; state.lastTrack=cur;
+      P=Player(TRACKS[cur]); if(!P.start()){ P=null; return; } Sound.duck&&Sound.duck(true); },
+    scene(i,lv){ if(!P) return; P.level(lv); },
+    // moving between cards: a liquid whoosh, up going forward, down going back
+    whoosh(dir){ const S=P&&P.S(); if(!S) return; const t=S.c.currentTime; S.noise(t,'bandpass',dir>0?500:2600,1.4,.45,.07,S.bus,dir>0?2600:500); S.osc('sine',dir>0?260:520,t,.3,.05,S.bus,.01,dir>0?2:.5); },
+    // each line of text lands with a soft note from the current chord
+    plink(k){ const S=P&&P.S(); if(!S) return; const ch=P.chord(), m=ch[k%ch.length]+24; S.osc('sine',Synth.N(m),S.c.currentTime,.35,.035,S.dly,.003); },
+    count(p){ const S=P&&P.S(); if(!S) return; const sc=[0,2,4,7,9,12,14,16,19,21,24], m=62+sc[Math.min(sc.length-1,Math.floor(p*sc.length))]; S.osc('sine',Synth.N(m+12),S.c.currentTime,.09,.045,S.bus,.002); },
+    stop(){ if(!P) return; P.stop(); P=null; Sound.duck&&Sound.duck(false); },
+    track:()=>cur
+  };
+})();
+// payday: an original 2-step garage track. Muffled while the gold builds up, the beat drops on the explosion.
+const GARAGE={bpm:132,sw:.22,ch:[[61,65,68,72],[60,63,67,70],[53,56,60,63,67],[51,55,58,62]],play(S,b,bar,ch,t,lv,sp){
+  if(b===0) S.pad(t,ch,sp*16,lv>=1?1600:700,.011);
+  // skippy 2-step kick, snare on 2 and 4
+  if(b===0||(b===10)||(lv>=1&&bar%2===1&&b===7)) S.kick(t,.46,125);
+  if(lv>=1&&(b===4||b===12)) { S.clap(t,.11); S.rim(t+sp*.5); }
+  if(lv>=1&&(b===7||b===15)&&bar%2===0) S.rim(t);
+  // shuffled hats and a shaker
+  if(b%4===2) S.hat(t,b===14&&bar%2===1,.055); if(lv>=1&&b%2===1) S.hat(t,false,.022);
+  // organ stabs on the offbeats
+  if(lv>=1&&[3,6,11].includes(b)) S.stab(t,ch.slice(0,3).map(m=>m+12),.15,.045,2600);
+  // rolling sub bass
+  if([0,3,10,13].includes(b)) S.bass(t,ch[0]-24,sp*(b===0?2.5:1.6),.24,b!==0);
+  // chopped vocal hook over two bars
+  if(lv>=1){ const hook=[[0,'a',0,1],[3,'o',2,1],[6,'a',1,1.03],[10,'u',0,1],[14,'e',2,1.05]]; const h=hook.find(x=>x[0]===b); if(h&&(bar%2===0||b<8)) S.chop(t,ch[h[2]%ch.length]+12,h[1],sp*(b===14?2.5:1.6),.08,h[3]); } }};
+const PayMusic=(function(){
+  let P=null, riseT=null;
+  return {
+    start(){ if(P) return; P=Player(GARAGE); if(!P.start(1.6)){ P=null; return; } Sound.duck&&Sound.duck(true); P.level(0);
+      const S=P.S(), t=S.c.currentTime; S.lp.frequency.setValueAtTime(380,t); S.lp.frequency.exponentialRampToValueAtTime(900,t+2);
+      S.noise(t,'bandpass',300,1.2,2.1,.05,S.bus,4000); },
+    drop(){ if(!P) return; const S=P.S(), t=S.c.currentTime; P.level(1); S.lp.frequency.cancelScheduledValues(t); S.lp.frequency.setValueAtTime(900,t); S.lp.frequency.exponentialRampToValueAtTime(20000,t+.25);
+      S.noise(t,'highpass',5000,.5,1.6,.08); S.kick(t,.55,160); },
+    out(){ if(!P) return; const S=P.S(), t=S.c.currentTime; S.lp.frequency.cancelScheduledValues(t); S.lp.frequency.setValueAtTime(S.lp.frequency.value,t); S.lp.frequency.exponentialRampToValueAtTime(300,t+1.8); const p=P; P=null; setTimeout(()=>{ p.stop(.8); Sound.duck&&Sound.duck(false); },1400); },
+    playing:()=>!!P
   };
 })();
 
@@ -266,6 +384,7 @@ function wrapCards(d){
   const lo=Math.min(...x.w.map(r=>tod(r.in)),7*60), hi=Math.max(...x.w.map(r=>tod(r.in)),9*60+30), A=Math.floor(lo/30)*30, Z=Math.ceil(hi/30)*30;
   card({s:'rain',p:WP.gold,b:WB[3],lv:2,h:`<p class="k">Early bird</p><p class="big">${fmt(x.early.in)}</p><div class="wrStrip">${x.w.map(r=>`<i style="left:${(tod(r.in)-A)/(Z-A)*100}%"></i>`).join('')}<span style="left:0">${hm(A)}</span><span style="left:100%">${hm(Z)}</span></div><p class="s">was your earliest, on ${dayName(x.early.in)}. You usually arrived around <b>${hm(x.avgIn)}</b>.</p>`});
   card({s:'ring',p:WP.mint,b:WB[2],lv:2,h:`<p class="k">Right on time</p><div class="row"><div class="chip2">On time<b>${x.onTime} / ${x.w.length}</b></div><div class="chip2">Longest streak<b>${d.best} day${d.best===1?'':'s'}</b></div></div><p class="s">${x.onTime===x.w.length?'Never late once. Nice.':`${x.w.length-x.onTime} late start${x.w.length-x.onTime===1?'':'s'}. Next month’s yours.`}</p>`});
+  { const W2=weakStats(d.p); if(W2.length) card({s:'corners',p:WP.pink,b:WB[4],lv:1,h:`<p class="k">Room to grow</p><div class="wrWeak">${W2.slice(0,4).map(o=>`<div><span>↓</span><div><b>${esc(o.t)}</b><small>${esc(o.s)}</small></div><em>${esc(o.v)}</em></div>`).join('')}</div><p class="s">Something to aim for next month.</p>`}); }
   card(x.otMs>0?{s:'low',p:WP.pink,b:WB[4],lv:2,h:`<p class="k">Overtime</p><p class="big" data-n="${(x.otMs/3.6e6).toFixed(1)}" data-f="h">0</p><p class="s">hours of OT${x.ot?`, worth about <b>${money(x.ot)}</b>`:''}.</p>`}
     :{s:'low',p:WP.mint,b:WB[2],lv:2,h:`<p class="k">Home on time</p><p class="big">${hm(x.avgOut)}</p><p class="s">was when you usually left. No overtime this month.</p>`});
   if(d.pay!=null) card({s:'low',p:WP.gold,b:WB[3],lv:3,h:`<p class="k">${d.slip?'Your pay':'Your pay (estimate)'}</p><p class="big mny" data-n="${d.pay.toFixed(2)}" data-f="$">$0</p><p class="s">went into your bank${x.ot?`, including about ${money(x.ot)} of overtime`:''}.</p>`});
@@ -299,7 +418,8 @@ function wrGo(i){
   const el=document.createElement('div'); el.className='wrCard'; el.innerHTML=c.h; stage.appendChild(el);
   wr.i=i;
   if(G) WrapGL.shape(c.s,c.p,c.b,c.k);
-  Music.scene(i,c.lv); Sound.pop&&Sound.pop();
+  Music.scene(i,c.lv); Music.whoosh(dir);
+  [...el.querySelectorAll('.k,.t,.big,.s,.row,.wrBadges,.wrWeak,.wrWk,.wrStrip,.wrCmp,.wrJars')].forEach((n,k)=>setTimeout(()=>Music.plink(k),180+k*85));
   if(ANIM){ G.fromTo(el.querySelectorAll('.k,.t,.big,.s,.row,.wrBadges,.wrBtn,.wrWk,.wrStrip,.wrCmp,.wrJars,canvas,.wrDays'),{y:34*dir>0?34:-34,opacity:0,scale:.94},{y:0,opacity:1,scale:1,duration:.7,stagger:.08,delay:.15,ease:'back.out(1.8)'}); }
   el.querySelectorAll('[data-n]').forEach(n=>{ const v=+n.dataset.n, f=n.dataset.f, put=q=>n.textContent=f==='$'?money(q):f==='$0'?moneyR(q):f==='n'?String(Math.round(q)):`${q.toFixed(1)}h`;
     if(ANIM){ const o={v:0}; let last=0; G.to(o,{v,duration:1.4,delay:.3,ease:'power3.out',onUpdate:()=>{ put(o.v); const now=performance.now(); if(now-last>70){ last=now; Music.count(o.v/v); } }}); } else put(v); });
@@ -308,6 +428,7 @@ function wrGo(i){
   if(bc&&Liquid){ const items=c.bars.map(b=>({level:0,pal:b.ot?6:5,amp:1,bubbles:false})), t0=performance.now();
     items.forEach((it,k)=>{ if(ANIM) G.to(it,{level:c.bars[k].v*.92,duration:1.1,delay:.4+k*.06,ease:'elastic.out(1,.65)',onStart:()=>Sound.bubble&&Sound.bubble(400+c.bars[k].v*600)}); else it.level=c.bars[k].v*.92; });
     const loop=()=>{ if(!wr||!bc.isConnected) return; const w=bc.clientWidth, sw=w/items.length; Liquid.draw(bc,{mode:'v',items,slot:sw,T:Math.min(sw*.3,7),len:bc.clientHeight-8,pad:4,t:performance.now()/1000}); wr.raf=requestAnimationFrame(loop); }; loop(); }
+  if(ANIM) G.from(el.querySelectorAll('.wrWeak>div'),{x:-40,opacity:0,stagger:.12,delay:.35,duration:.6,ease:'back.out(1.6)'});
   if(ANIM){ el.querySelectorAll('.wrWk i').forEach((b,k)=>G.from(b,{scaleY:0,transformOrigin:'50% 100%',duration:.9,delay:.4+k*.08,ease:'elastic.out(1,.5)'}));
     G.from(el.querySelectorAll('.wrStrip i'),{y:-60,opacity:0,duration:.8,stagger:.05,delay:.4,ease:'bounce.out'});
     G.from(el.querySelectorAll('.wrCmp i, .wrJars b'),{width:0,duration:1.1,stagger:.15,delay:.45,ease:'power3.out'});
@@ -322,9 +443,11 @@ function closeWrap(){ if(!wr) return; clearTimeout(wr.timer); cancelAnimationFra
   if(ANIM) G.to('#wrap',{opacity:0,duration:.35,onComplete:()=>{ done(); G.set('#wrap',{clearProps:'all'}); }}); else done(); }
 $('wrNext').onclick=()=>wr&&wrGo(wr.i+1); $('wrPrev').onclick=()=>wr&&wrGo(wr.i-1); $('wrX').onclick=closeWrap;
 addEventListener('keydown',e=>{ if(!wr) return; if(e.key==='Escape') closeWrap(); if(e.key==='ArrowRight') wrGo(wr.i+1); if(e.key==='ArrowLeft') wrGo(wr.i-1); });
+let wantReview=false;
+$('pdReview').onclick=()=>{ wantReview=true; $('pdClose').onclick(); };
 function afterPayday(pd){
-  const credited=creditJars(), p=forPeriod(pd||Date.now());
-  setTimeout(()=>{ if(!state.wrapped[p.start]&&wrapData(p)) openWrap(p); else if(credited) toast(`${money(credited)} went into your jars`,false); },900);
+  const credited=creditJars(), p=forPeriod(pd||Date.now()), force=wantReview; wantReview=false;
+  setTimeout(()=>{ if((force||!state.wrapped[p.start])&&wrapData(p)) openWrap(p); else if(credited) toast(`${money(credited)} went into your jars`,false); },900);
 }
 
 /* ================= badges =================
@@ -517,4 +640,36 @@ function showCalDay(k){
   const e=$('cdEdit'); if(e) e.onclick=()=>{ const i=I.r?state.history.indexOf(I.r):-1; if(i>=0) openDay(i); else { openDay(null); $('dDate').value=k; dayPreview(); } };
   if(ANIM) G.fromTo(box,{y:14,opacity:0},{y:0,opacity:1,duration:.35,ease:'power3.out',clearProps:'transform,opacity'});
 }
+
+
+/* ---- the recap blob on Today: a glossy drop that drifts in from the edge now and then ---- */
+const RevBlob=(function(){
+  const el=$('revBlob'); let timer=null, out=true, tl=null;
+  function target(){ const now=new Date(); let pd=paydayOf(now.getFullYear(),now.getMonth()); if(dayStart(pd)>dayStart(now.getTime())) pd=paydayOf(now.getFullYear(),now.getMonth()-1);
+    if(Date.now()-pd>10*DAY) return null; const p=forPeriod(pd); return wrapData(p)?p:null; }
+  function free(){ return page==='today'&&!openId&&!payRun&&!wr&&!inSetup()&&$('scan').hidden&&$('pick').hidden&&!document.hidden; }
+  function hide(fast){ if(tl) tl.kill(); tl=null; if(out){ el.hidden=true; return; } out=true;
+    if(ANIM&&!fast){ const side=el.dataset.side==='l'?-1:1; G.to(el,{x:side*140,duration:.7,ease:'back.in(1.4)',onComplete:()=>{ el.hidden=true; }}); } else el.hidden=true; }
+  function visit(){
+    if(!out) return;
+    const p=target(); if(!p||!free()) { schedule(); return; }
+    const watched=!!state.wrapped[p.start], side=Math.random()<.5?'l':'r';
+    el.dataset.side=side; el.style.top=Math.round(innerHeight*(.3+Math.random()*.35))+'px';
+    const mon=new Date(p.start+15*DAY).toLocaleDateString(undefined,{month:'short'}); el.querySelector('small').textContent=mon; el.querySelector('.rbTag').textContent=`Your ${mon} recap`;
+    el.onclick=()=>{ hide(true); Sound.pop(); haptic(); openWrap(p); };
+    el.hidden=false; out=false; const s=side==='l'?-1:1;
+    el.style.left=side==='l'?'-4px':'auto'; el.style.right=side==='r'?'-4px':'auto';
+    if(ANIM){ tl=G.timeline({onComplete:()=>{ hide(); schedule(); }})
+        .fromTo(el,{x:s*140,rotation:s*30},{x:0,rotation:0,duration:1.1,ease:'elastic.out(1,.55)'})
+        .to(el,{y:'-=14',duration:1.1,yoyo:true,repeat:3,ease:'sine.inOut'},.6)
+        .to(el,{scaleX:1.12,scaleY:.9,duration:.18,yoyo:true,repeat:1,ease:'power2.inOut'},1.4)
+        .fromTo(el.querySelector('.rbTag'),{opacity:0,x:s*-10,scale:.8},{opacity:1,x:0,scale:1,duration:.5,ease:'back.out(2)'},.7)
+        .to(el.querySelector('.rbTag'),{opacity:0,duration:.3},4.6)
+        .to({},{duration:watched?.8:2.2}); Sound.bubble&&Sound.bubble(520); }
+    else { setTimeout(()=>{ hide(); schedule(); },6000); }
+  }
+  function schedule(){ clearTimeout(timer); const p=target(); if(!p) { timer=setTimeout(schedule,60000); return; }
+    timer=setTimeout(visit,(state.wrapped[p.start]?45:12)*1000*(0.8+Math.random()*.4)); }
+  return {start(){ schedule(); }, hide, poke(){ clearTimeout(timer); timer=setTimeout(visit,2500); }};
+})();
 

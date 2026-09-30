@@ -17,12 +17,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script defer src="core.js?v=29"></script>
-<script defer src="scan.js?v=29"></script>
-<script defer src="school.js?v=29"></script>
-<script defer src="extras.js?v=29"></script>
-<script defer src="start.js?v=29"></script>
-<link rel="stylesheet" href="app.css?v=29">
+<script defer src="core.js?v=30"></script>
+<script defer src="scan.js?v=30"></script>
+<script defer src="school.js?v=30"></script>
+<script defer src="extras.js?v=30"></script>
+<script defer src="start.js?v=30"></script>
+<link rel="stylesheet" href="app.css?v=30">
 </head>
 <body class="booting">
 <div id="rotate" role="alert"><div class="rotPhone"><i></i></div><p>Turn your phone upright</p><small>Home Time works in portrait</small></div>
@@ -417,24 +417,27 @@
       <p class="sub" id="cNote"></p>
     </div>
     <div class="split" id="cSplit"></div>
-    <div class="card jars3" id="cJars">
-      <canvas id="jarCv" aria-label="Your CPF split into three accounts, shown as jars of liquid" role="img"></canvas>
-      <div class="jarLbls">
-        <div class="jar"><b id="vOA">$0</b><span>Ordinary</span></div>
-        <div class="jar"><b id="vSA">$0</b><span id="nSA">Special</span></div>
-        <div class="jar"><b id="vMA">$0</b><span>MediSave</span></div>
+    <div class="card ringCard" id="cJars">
+      <div class="ringWrap"><canvas id="jarCv" aria-label="Your CPF split into its three accounts, as a ring" role="img"></canvas><div class="ringMid"><b id="rTot">$0</b><span>this pay period</span></div></div>
+      <div class="ringLeg">
+        <div><i style="background:linear-gradient(135deg,#9BE3FF,#3FB8FF)"></i><span>Ordinary</span><em id="pOA">0%</em><b id="vOA">$0</b></div>
+        <div><i style="background:linear-gradient(135deg,#C9B8FF,#7B5CFF)"></i><span id="nSA">Special</span><em id="pSA">0%</em><b id="vSA">$0</b></div>
+        <div><i style="background:linear-gradient(135deg,#A8FFE0,#19D9A0)"></i><span>MediSave</span><em id="pMA">0%</em><b id="vMA">$0</b></div>
       </div>
-      <p class="note" style="margin:6px 0 0">Tap a column to give it a wobble.</p>
+      <p class="note" style="margin:0">Each colour is its real share. Tap the ring to give it a wobble.</p>
     </div>
     <div class="card cAll" id="cAll">
       <p class="cardT">Your CPF so far</p>
       <p class="allAmt" id="allAmt">$0.00</p>
       <p class="allSub" id="allSub"></p>
       <div class="allSplit"><div><span>You put in</span><b id="allMine">$0</b></div><div><span>Your employer</span><b id="allBoss">$0</b></div></div>
-      <div class="allRows">
-        <div class="allRow"><div class="lvTop"><span>Ordinary</span><span id="allOA">$0</span></div><canvas class="lvCv" id="allCvOA"></canvas></div>
-        <div class="allRow"><div class="lvTop"><span id="allNSA">Special</span><span id="allSA">$0</span></div><canvas class="lvCv" id="allCvSA"></canvas></div>
-        <div class="allRow"><div class="lvTop"><span>MediSave</span><span id="allMA">$0</span></div><canvas class="lvCv" id="allCvMA"></canvas></div>
+      <div class="allRing">
+        <canvas id="allCv" aria-label="Your CPF so far, split into its three accounts" role="img"></canvas>
+        <div class="ringLeg">
+          <div><i style="background:linear-gradient(135deg,#9BE3FF,#3FB8FF)"></i><span>Ordinary</span><b id="allOA">$0</b></div>
+          <div><i style="background:linear-gradient(135deg,#C9B8FF,#7B5CFF)"></i><span id="allNSA">Special</span><b id="allSA">$0</b></div>
+          <div><i style="background:linear-gradient(135deg,#A8FFE0,#19D9A0)"></i><span>MediSave</span><b id="allMA">$0</b></div>
+        </div>
       </div>
       <div class="allYear"><span id="allYrLbl">This year</span><b id="allYr">$0</b></div>
     </div>
@@ -465,7 +468,7 @@
       <div class="ptitle"><p class="lbl" id="yLbl"></p><p class="prange" id="yRange"></p></div>
       <button class="arrow" id="yNext" type="button" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
     </div>
-    <div class="seg" role="radiogroup" aria-label="View" id="yMode" style="grid-template-columns:1fr 1fr;margin:0">
+    <div class="seg seg2" role="radiogroup" aria-label="View" id="yMode">
       <button type="button" role="radio" data-v="year" aria-checked="true">Year</button>
       <button type="button" role="radio" data-v="month" aria-checked="false">Month</button>
     </div>
@@ -486,6 +489,8 @@
     <div class="statGrid" id="sGrid"></div>
     <p class="sec" style="margin:8px 0 0;text-align:center;font-size:19px;font-weight:800">All-time records</p>
     <div class="statGrid" id="sAll"></div>
+    <p class="sec" style="margin:8px 0 0;text-align:center;font-size:19px;font-weight:800">Could be better</p>
+    <div class="card weakCard" id="sWeak"></div>
     <p class="sec" id="bdHead" style="margin:8px 0 0;text-align:center;font-size:19px;font-weight:800">Badges</p>
     <div class="bdGrid" id="bdGrid"></div>
   </section>
@@ -495,7 +500,7 @@
       <h1 class="hello">Your days</h1>
       <p class="sub">Tap a day to fix its times.</p>
     </div>
-    <div class="seg dTabs" role="tablist" aria-label="Days or leave" id="dTabs" style="grid-template-columns:1fr 1fr">
+    <div class="seg seg2 dTabs" role="tablist" aria-label="Days or leave" id="dTabs">
       <button type="button" role="tab" data-v="days" aria-checked="true">Days</button>
       <button type="button" role="tab" data-v="leave" aria-checked="false">Leave</button>
     </div>
@@ -532,7 +537,7 @@
   </div>
   <div class="pdBottom" id="pdBottom">
     <p class="pdHint">Tap a disc to spin it</p>
-    <button class="pdX" id="pdClose" type="button">Nice, close</button>
+    <div class="pdBtns"><button class="pdX pdRev" id="pdReview" type="button" hidden><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right:6px;vertical-align:-2px"><path d="M8 5.5v13l11-6.5z"/></svg>Month in review</button><button class="pdX" id="pdClose" type="button">Nice, close</button></div>
   </div>
 </div>
 <label class="hapt" aria-hidden="true"><input type="checkbox" switch id="hapt" tabindex="-1"></label>
@@ -549,7 +554,7 @@
     <p class="note" style="margin:0">Different? Scan it, or type what's on your payslip below.</p>
   </div>
   <button class="btn ghost scanBtn" id="slScan" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="margin-right:8px"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.6"/></svg>Scan or paste your payslip</button>
-  <div class="seg" role="radiogroup" aria-label="What you're entering" id="slSeg" style="grid-template-columns:1fr 1fr">
+  <div class="seg seg2" role="radiogroup" aria-label="What you're entering" id="slSeg">
     <button type="button" role="radio" data-v="net">Amount in bank</button>
     <button type="button" role="radio" data-v="gross">Gross pay</button>
   </div>
@@ -771,6 +776,7 @@
 </div>
 
 <div class="bdPop" id="bdPop" role="status" hidden></div>
+<button class="revBlob" id="revBlob" type="button" aria-label="Watch your month in review" hidden><span class="rbGloss"></span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg><small></small><span class="rbTag"></span></button>
 <div class="toast" id="toast" role="status"><span id="toastTxt"></span><button id="undoBtn" type="button" hidden>Undo</button><button id="toastAct" type="button" hidden></button></div>
 
 
