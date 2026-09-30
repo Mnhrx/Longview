@@ -4,7 +4,7 @@ let page='today';
 function refreshAll(){
   updateIdleSub(); renderDays(); updatePayPills();
   if(page==='today'){ if(state.active){ showActive(false); world&&world.go('work'); } else { showIdle(false); world&&world.go('home'); } }
-  else if(page==='month') renderMonth(false); else if(page==='cpf') renderCpf(false); else if(page==='year') renderYear(false); else if(page==='stats'){ renderStats(false); renderBadges(false); } else if(page==='jars') renderJars(false); else if(page==='settings') fillSettings();
+  else if(page==='month') renderMonth(false); else if(page==='cpf') renderCpf(false); else if(page==='year'){ if(yMode==='month') renderCal(false); else renderYear(false); } else if(page==='stats'){ renderStats(false); renderBadges(false); } else if(page==='jars') renderJars(false); else if(page==='settings') fillSettings();
 }
 const PAGES={today:'pgToday',month:'pgMonth',days:'pgDays',settings:'pgSettings',cpf:'pgCpf',year:'pgYear',stats:'pgStats',jars:'pgJars'};
 const NAVOF={year:'month',stats:'month',jars:'month'};
@@ -49,17 +49,18 @@ function goPage(pg){
   if((NAVOF[pg]||pg)!==(NAVOF[from]||from)) moveInd(pg,true);
   { const zf=from==='today'?(state.active?'work':'home'):from, zt=pg==='today'?(state.active?'work':'home'):pg; Sound.swoosh(world?world.dir(zf,zt):null); Sound.zone(zt); }
   world&&world.go(pg==='today'?(state.active?'work':'home'):pg);
+  (state.seen=state.seen||{})[pg]=1;
   const show=()=>{
     $(PAGES[from]).hidden=true; $(PAGES[pg]).hidden=false; if(G) G.set('#'+PAGES[pg],{clearProps:'all'});
     scrollTo(0,0);
     if(pg==='today'){ if(state.active) showActive(true); else showIdle(true); }
     if(pg==='month'){ if(!NAVOF[from]) pOff=0; renderMonth(true); updatePayPills(); }
     if(pg==='cpf'){ cOff=0; renderCpf(true); }
-    if(pg==='year'){ yOff=0; renderYear(true); }
+    if(pg==='year'){ yOff=0; calOff=0; calSel=null; if(yMode==='month') setYMode('month'); else renderYear(true); }
     if(pg==='stats'){ sOff=pOff; renderStats(true); renderBadges(true); }
     if(pg==='jars'){ renderJars(true); }
     if(pg==='settings'){ showCat(inSetup()?setupSteps()[Math.min(state.setup.step||0,setupSteps().length-1)]:null,false); fillSettings(); $('savedTag').textContent=''; if(ANIM) G.from(['#sHead','#setMenu .setTile'],{y:24,opacity:0,stagger:.035,duration:.45,ease:'power4.out',clearProps:'all'}); }
-    if(pg==='days'){ renderDays(); if(ANIM) G.from(['#dHead','#addDay'],{y:24,opacity:0,stagger:.06,duration:.45,ease:'power4.out',clearProps:'all'}); animateDays(); }
+    if(pg==='days'){ renderDays(); if(ANIM) G.from(['#dHead','#dTabs','#dSum','#addDay'],{y:24,opacity:0,stagger:.05,duration:.45,ease:'power4.out',clearProps:'all'}); animateDays(); }
   };
   if(!ANIM){ show(); return; }
   G.to('#'+PAGES[from],{opacity:0,y:-18,scale:.98,duration:.28,ease:'power2.in',onComplete:()=>setTimeout(show,300)});

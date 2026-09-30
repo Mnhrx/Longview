@@ -212,7 +212,7 @@ function saveSlipTpl(){
 function finishSlip(auto){
   const g=valOf('gross'), net=valOf('net');
   if(g==null&&net==null){ sc.role='gross'; renderTag(); $('scAsk').textContent='Tap at least the gross pay or the net pay'; shake('#scAsk'); return; }
-  saveSlipTpl(); save();
+  saveSlipTpl(); state.scanCount=(state.scanCount||0)+1; save();
   let fund=''; const fw=(sc.assign.shg||[]).length&&sc.nums.find(n=>n.i===sc.assign.shg[0]); const fl=normT(fw?fw.label:'');
   if(/mbmf|mendaki/.test(fl)) fund='MBMF'; else if(/cdac/.test(fl)) fund='CDAC'; else if(/sinda/.test(fl)) fund='SINDA'; else if(/ecf|eurasian/.test(fl)) fund='ECF'; else if(fw) fund=S().shg||'';
   const out={gross:g,ee:valOf('ee'),er:valOf('er'),shg:valOf('shg'),fund,other:valOf('other'),net};
@@ -320,6 +320,6 @@ function finishTT(){
   if(!list.length){ toast('Pick at least one class, or tag one yourself.',false); return; }
   const id=sc.tpl?sc.tpl.id:'t'+Date.now().toString(36), old=(state.templates||{})[id]||{};
   state.templates=state.templates||{}; state.templates[id]={kind:'tt',name:old.name||'Timetable layout',words:sc.fp,nameX:sc.nameX??old.nameX??null,uses:(old.uses||0)+1,at:Date.now()};
-  save(); const cb=sc.cb; closeScan(); cb&&cb(list.map(c=>({name:c.name,dow:c.dow,date:c.date,start:c.start,end:c.end})),'scan');
+  state.scanCount=(state.scanCount||0)+1; save(); const cb=sc.cb; closeScan(); cb&&cb(list.map(c=>({name:c.name,dow:c.dow,date:c.date,start:c.start,end:c.end})),'scan');
 }
 

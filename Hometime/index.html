@@ -17,12 +17,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script defer src="core.js?v=28"></script>
-<script defer src="scan.js?v=28"></script>
-<script defer src="school.js?v=28"></script>
-<script defer src="extras.js?v=28"></script>
-<script defer src="start.js?v=28"></script>
-<link rel="stylesheet" href="app.css?v=28">
+<script defer src="core.js?v=29"></script>
+<script defer src="scan.js?v=29"></script>
+<script defer src="school.js?v=29"></script>
+<script defer src="extras.js?v=29"></script>
+<script defer src="start.js?v=29"></script>
+<link rel="stylesheet" href="app.css?v=29">
 </head>
 <body class="booting">
 <div id="rotate" role="alert"><div class="rotPhone"><i></i></div><p>Turn your phone upright</p><small>Home Time works in portrait</small></div>
@@ -465,6 +465,12 @@
       <div class="ptitle"><p class="lbl" id="yLbl"></p><p class="prange" id="yRange"></p></div>
       <button class="arrow" id="yNext" type="button" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
     </div>
+    <div class="seg" role="radiogroup" aria-label="View" id="yMode" style="grid-template-columns:1fr 1fr;margin:0">
+      <button type="button" role="radio" data-v="year" aria-checked="true">Year</button>
+      <button type="button" role="radio" data-v="month" aria-checked="false">Month</button>
+    </div>
+    <div class="card calCard" id="calCard" hidden><div class="calGrid" id="calGrid"></div><p class="legend" id="calLeg"></p></div>
+    <div class="card calDay" id="calDay" hidden></div>
     <div class="card yearCard" id="yCard"><canvas id="yearCv" role="img" aria-label="Every day of the year, coloured by type and hours"></canvas><div class="yTip" id="yTip" hidden></div><p class="legend" id="yLegend"></p><p class="note" style="margin:6px 0 0">Tap a dot to see what that day was.</p></div>
     <div class="grid" id="yStats"></div>
     <div id="yHols"></div>
@@ -489,12 +495,21 @@
       <h1 class="hello">Your days</h1>
       <p class="sub">Tap a day to fix its times.</p>
     </div>
-    <div class="card leaveCard" id="leaveCard"></div>
-    <div class="card lwCard" id="lwCard"><p class="cardT">Long weekends</p><div id="lwList"></div></div>
-    <button class="btn solid" id="addDay" type="button">Add a day or leave</button>
-    <div id="dayGroups"></div>
-    <p class="empty" id="dEmpty" style="text-align:center;padding:10px 0">No saved days yet. Days you clock out show up here.</p>
-    <button class="clear" id="clearBtn" type="button" hidden>Clear all days</button>
+    <div class="seg dTabs" role="tablist" aria-label="Days or leave" id="dTabs" style="grid-template-columns:1fr 1fr">
+      <button type="button" role="tab" data-v="days" aria-checked="true">Days</button>
+      <button type="button" role="tab" data-v="leave" aria-checked="false">Leave</button>
+    </div>
+    <div class="dPane" id="dPaneDays">
+      <button class="dSum" id="dSum" type="button"></button>
+      <button class="btn solid" id="addDay" type="button">Add a day or leave</button>
+      <div id="dayGroups"></div>
+      <p class="empty" id="dEmpty" style="text-align:center;padding:10px 0">No saved days yet. Days you clock out show up here.</p>
+      <button class="clear" id="clearBtn" type="button" hidden>Clear all days</button>
+    </div>
+    <div class="dPane" id="dPaneLeave" hidden>
+      <div class="card leaveCard" id="leaveCard"></div>
+      <div class="card lwCard" id="lwCard"><p class="cardT">Long weekends</p><div id="lwList"></div></div>
+    </div>
   </section>
 </main>
 
@@ -748,12 +763,14 @@
 </div>
 
 <div id="wrap" class="wrap" role="dialog" aria-modal="true" aria-label="Your month in review" hidden>
+  <canvas id="wrCv"></canvas>
   <div class="wrBars" id="wrBars"></div>
   <button class="wrX" id="wrX" type="button" aria-label="Close">✕</button>
   <div class="wrStage" id="wrStage"></div>
   <div class="wrTap wrPrev" id="wrPrev"></div><div class="wrTap wrNext" id="wrNext"></div>
 </div>
 
+<div class="bdPop" id="bdPop" role="status" hidden></div>
 <div class="toast" id="toast" role="status"><span id="toastTxt"></span><button id="undoBtn" type="button" hidden>Undo</button><button id="toastAct" type="button" hidden></button></div>
 
 

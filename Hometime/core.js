@@ -76,6 +76,8 @@ const Sound=(function(){
       const o=ctx.createOscillator(), g=ctx.createGain(), tt=ctx.currentTime; o.frequency.value=n; g.gain.setValueAtTime(0,tt); g.gain.linearRampToValueAtTime(.012,tt+.02); g.gain.exponentialRampToValueAtTime(.0001,tt+1.6); o.connect(g); g.connect(amb); o.start(tt); o.stop(tt+1.7); } },2600);
   }
   return {
+    raw(){ if(!init()) return null; return {ctx,out:sfx,noise:noiseBuf,on:()=>ctx.state==='running'&&!!set().sfx}; },
+    duck(on){ if(!ctx) return; amb.gain.setTargetAtTime(on?0:(set().amb?1:0),ctx.currentTime,.3); },
     apply(){ init(); apply(); },
     zone,
     // a single water droplet: a quick upward pitch flick with a fast fade
@@ -1053,7 +1055,7 @@ const rangeTxt=p=>`${shortDate(p.start)} – ${shortDate(p.end-86400000)}`;
 /* ================= days page ================= */
 function renderDays(){
   const h=state.history, box=$('dayGroups');
-  renderLeave();
+  renderLeave(); try{ renderDSum(); }catch(e){}
   $('dEmpty').hidden=!!h.length; $('clearBtn').hidden=!h.length; disarmClear();
   // saved days plus public holidays, from when you started up to the end of this pay period
   const first=Math.min(startTs()||Infinity,...h.map(r=>r.in));
@@ -1210,6 +1212,19 @@ function renderLeave(){
   ['al','mc'].forEach((k,i)=>{ const L=leaveLv[k]; G&&G.killTweensOf(L); if(ANIM&&page==='days') G.fromTo(L,{v:.02},{v:L.target,duration:1.4,delay:.2+i*.12,ease:'elastic.out(1,.7)'}); else L.v=L.target; });
   startLeave();
 }
+let dTab='days';
+function setDTab(v,animate=true){ if(v===dTab&&animate) return; dTab=v;
+  document.querySelectorAll('#dTabs button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v)));
+  $('dPaneDays').hidden=v!=='days'; $('dPaneLeave').hidden=v!=='leave';
+  if(v==='leave'){ renderLeave(); if(typeof renderLong==='function') renderLong(); }
+  if(animate&&ANIM){ const el=v==='days'?$('dPaneDays'):$('dPaneLeave'); G.fromTo(el.children,{x:v==='days'?-30:30,opacity:0},{x:0,opacity:1,stagger:.05,duration:.4,ease:'power4.out',clearProps:'all'}); Sound.swoosh({x:v==='days'?-1:1,y:0}); } }
+document.querySelectorAll('#dTabs button').forEach(b=>b.onclick=()=>setDTab(b.dataset.v));
+$('dSum').onclick=()=>setDTab('leave');
+function renderDSum(){ const y=new Date().getFullYear(), ls=leaveStart(), started=!ls||Date.now()>=ls;
+  const al=state.history.filter(r=>typeOf(r)==='al'&&new Date(r.in).getFullYear()===y).length, left=Math.max(0,(+S().al||0)-al);
+  const mcEnt=mcEntitled(), mcLeft=Math.max(0,mcEnt-mcUsedPaid(y));
+  let lw=null; try{ lw=longWeekends().find(o=>o.need>0); }catch(e){}
+  $('dSum').innerHTML=(started?`<span>Leave <b>${left}</b> left</span><span>MC <b>${mcLeft}</b> left</span>`:`<span>Leave starts <b>${new Date(ls).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</b></span>`)+(lw?`<span><i>Next long weekend: ${lw.len} days →</i></span>`:''); }
 function animateDays(){ if(ANIM&&page==='days') G.from('#dayGroups .dayItem',{y:24,opacity:0,scale:.96,stagger:.035,duration:.45,ease:'back.out(1.6)',clearProps:'all'}); }
 function refreshToday(){ if(!state.active&&!$('idle').hidden) $('resumeLink').hidden=!todayRec(); }
 
@@ -1601,7 +1616,7 @@ const jars3d=(function(){
 function startJars(){ if(jars3d) jars3d.start(); }
 
 /* ================= Year page ================= */
-let yOff=0, yearAnimStart=0, yearRAF=null, yMap={}, yYear=0, tipTimer=null, yHi=null;
+let yOff=0, yearAnimStart=0, yearRAF=null, yMap={}, yYear=0, tipTimer=null, yHi=null, yCls=new Set();
 function kickYear(){ cancelAnimationFrame(yearRAF); const step=()=>{ const done=drawYear(yYear,yMap); if((!done||yHi)&&page==='year') yearRAF=requestAnimationFrame(step); }; step(); }
 $('yearCv').addEventListener('pointerdown',e=>{
   const cv=$('yearCv'), r=cv.getBoundingClientRect(), x=e.clientX-r.left, yy=e.clientY-r.top, W=r.width, H=r.height, lw=30, colW=(W-lw-4)/31, rowH=(H-6)/12;
@@ -1613,6 +1628,7 @@ $('yearCv').addEventListener('pointerdown',e=>{
     else if(t==='ph') what=rec.name||name||'Public holiday';
     else what=typeLabel(rec); }
   else what=name?`${name} (weekend)`:ts>Date.now()?'upcoming':isWorkday(ts)?'nothing recorded':'weekend';
+  { const cl=typeof clsOn==='function'?clsOn(ts):[]; if(cl.length) what+=` · class ${cl.map(s=>`${s.name.split(' ')[0]} ${fmtHM(s.start)}`).join(', ')}`; }
   const tip=$('yTip'), cr=$('yCard').getBoundingClientRect();
   tip.textContent=`${new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}: ${what}`;
   tip.hidden=false;
@@ -1652,9 +1668,11 @@ function renderYear(animate){
   yMap=map; yYear=y;
   yearAnimStart=animate&&ANIM?performance.now():-1e9;
   if(animate&&ANIM) G.from(['#yCard','#yStats .stat'],{y:24,opacity:0,stagger:.05,duration:.5,ease:'power4.out',clearProps:'transform,opacity'});
+  yCls=new Set(); if(typeof clsOn==='function'){ for(let t=new Date(y,0,1,12).getTime();t<new Date(y+1,0,1).getTime();t+=86400000) if(clsOn(t).length) yCls.add(isoDate(t)); }
+  if(yCls.size) $('yLegend').innerHTML+='<span><i style="border:2px solid #3FB8FF;box-sizing:border-box"></i>Class night</span>';
   yMap=map; yYear=y; yHi=null; $('yTip').hidden=true; kickYear();
 }
-$('yPrev').onclick=()=>{ yOff--; renderYear(true); }; $('yNext').onclick=()=>{ if(yOff<0){ yOff++; renderYear(true); } };
+$('yPrev').onclick=()=>{ if(yMode==='month'){ calOff--; renderCal(true); return; } yOff--; renderYear(true); }; $('yNext').onclick=()=>{ if(yMode==='month'){ if(calOff<12){ calOff++; renderCal(true); } return; } if(yOff<0){ yOff++; renderYear(true); } };
 function drawYear(y,map){
   const cv=$('yearCv'), c=cv.getContext('2d'), d=Math.min(devicePixelRatio||1,2), W=cv.clientWidth, H=cv.clientHeight;
   if(cv.width!==Math.round(W*d)){ cv.width=Math.round(W*d); cv.height=Math.round(H*d); }
@@ -1685,6 +1703,7 @@ function drawYear(y,map){
         if(r&&typeOf(r)!=='work'&&isUnpaid(r)){ c.shadowColor='transparent'; c.globalAlpha=.6; c.strokeStyle='#fff'; c.lineWidth=1; c.beginPath(); c.moveTo(-rr*.6,rr*.6); c.lineTo(rr*.6,-rr*.6); c.stroke(); }
       } else { c.globalAlpha=faint==='weekend'?.18:faint==='future'?.35:.28; c.strokeStyle=muted; c.lineWidth=1; c.beginPath(); c.arc(0,0,rr*(faint==='weekend'?.55:.8),0,Math.PI*2); faint==='future'?c.stroke():(c.fillStyle=muted,c.fill()); }
       c.restore();
+      if(yCls.has(isoDate(ts))){ c.save(); c.strokeStyle='#3FB8FF'; c.lineWidth=1.6; c.globalAlpha=.95; c.beginPath(); c.arc(cx,cy,rr+2.2,0,Math.PI*2); c.stroke(); c.restore(); }
       if(yHi&&yHi.m===m&&yHi.d===dd){ const ph=((performance.now()-yHi.t0)/700)%1; c.save(); c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()||'#1B1240';
         c.lineWidth=2; c.globalAlpha=.9; c.beginPath(); c.arc(cx,cy,rad+2.5,0,Math.PI*2); c.stroke(); c.globalAlpha=.5*(1-ph); c.beginPath(); c.arc(cx,cy,rad+2.5+ph*7,0,Math.PI*2); c.stroke(); c.restore(); }
     }
@@ -2288,7 +2307,7 @@ function doBackup(){
   const name=`home-time-backup-${isoDate(Date.now())}.json`;
   const snap=Object.assign({},state,{lastBackup:Date.now()});
   const blob=new Blob([JSON.stringify({app:'home-time',v:1,exportedAt:Date.now(),data:snap})],{type:'application/json'});
-  const done=()=>{ state.lastBackup=Date.now(); save(); renderDataCat(); setSummaries(); toast('Backup saved ✓',false); };
+  const done=()=>{ state.lastBackup=Date.now(); state.bkCount=(state.bkCount||0)+1; save(); renderDataCat(); setSummaries(); toast('Backup saved ✓',false); };
   let file=null; try{ file=new File([blob],name,{type:'application/json'}); }catch(e){}
   if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
     navigator.share({files:[file],title:'Home Time backup'}).then(done).catch(e=>{ if(e&&e.name!=='AbortError') dl(); });

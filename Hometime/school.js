@@ -245,7 +245,7 @@ $('pkTerm').onchange=()=>{ const [ay,sem]=$('pkTerm').value.split('|'); const ke
 let pkT=null;
 $('pkQ').addEventListener('input',()=>{ clearTimeout(pkT); pkT=setTimeout(pkSearch,120); });
 $('pkQ').addEventListener('keydown',e=>{ if(e.key==='Enter'){ const b=$('pkRes').querySelector('button'); b&&b.click(); } });
-$('pkQ').addEventListener('blur',()=>setTimeout(()=>{ $('pkRes').hidden=true; },200));
+document.addEventListener('pointerdown',e=>{ if(!$('pkRes').hidden&&!e.target.closest('.pkSearch')) $('pkRes').hidden=true; },true);
 $('pkQ').addEventListener('focus',()=>{ if($('pkQ').value.trim()) pkSearch(); });
 async function pkSearch(){
   const q=$('pkQ').value.trim(), box=$('pkRes'); if(q.length<2){ box.hidden=true; return; }
@@ -261,8 +261,7 @@ async function pkSearch(){
   box.innerHTML=hits.length?hits.map(m=>`<button type="button" data-c="${esc(m.moduleCode)}"${have.has(m.moduleCode)?' disabled style="opacity:.45"':''}><b>${esc(m.moduleCode)}</b><small>${esc(m.title)}${have.has(m.moduleCode)?' · added':''}</small></button>`).join('')
     :`<div class="hint">${list?`No Semester ${pk.sem} module matches “${esc(q)}”.`:'Can’t reach NUSMods right now. Type the full module code to try it directly.'}</div>`;
   box.hidden=false;
-  box.querySelectorAll('button[data-c]').forEach(b=>b.onmousedown=b.ontouchstart=e=>e.preventDefault());
-  box.querySelectorAll('button[data-c]').forEach(b=>b.onclick=()=>{ box.hidden=true; $('pkQ').value=''; addMod(b.dataset.c); });
+  box.querySelectorAll('button[data-c]').forEach(b=>b.onclick=()=>{ box.hidden=true; $('pkQ').value=''; $('pkQ').blur(); addMod(b.dataset.c); });
 }
 async function addMod(code,pick,quiet){
   if(pk.mods.some(m=>m.code===code)) return;
