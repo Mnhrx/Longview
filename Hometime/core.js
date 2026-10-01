@@ -1257,21 +1257,36 @@ const Liquid=(function(){
     vec2 px=gl_FragCoord.xy/uDpr, res=uRes/uDpr;
     float sw=uGeo.x, T=uGeo.y, len=uGeo.z;
     if(uMode==2){
-      // one continuous glossy tube round the ring; the account colours flow into each other
+      // one glossy tube that grows round the ring from the top. It is drawn as a single shape with
+      // rounded ends (no separate end balls), so it keeps the same thickness everywhere, and the two
+      // ends melt into each other as it closes, so the full ring is exactly the last frame of the sweep.
       vec2 c=res*.5; float Rr=min(res.x,res.y)*.5-T*2.2; vec2 q=px-c; float rad=max(length(q),.001), dr=rad-Rr; vec2 nq=q/rad;
       float u=fract(atan(q.x,q.y)/6.2831853+1.), aa=1./uDpr;
       vec4 track=vec4(vec3(1.),1.)*(1.-smoothstep(T*.55-aa,T*.55+aa,abs(dr)))*.2;
-      float tot=0., amp=0.; vec3 c0=vec3(0.), cl=vec3(0.), clast=vec3(0.); float w=.035;
+      float tot=0., amp=0.; vec3 c0=vec3(0.), clast=vec3(0.); float w=.035;
       for(int k=0;k<MAXI;k++){ if(k>=uN) break; vec4 Ak=uA[k]; vec3 ck=palAt(int(uB[k].x+.5),.55);
-        if(k==0){ c0=ck; cl=ck; } else cl=mix(cl,ck,smoothstep(Ak.x-w,Ak.x+w,u));
-        if(Ak.y>.001) clast=ck; tot=max(tot,Ak.x+Ak.y); amp=max(amp,Ak.w); }
-      bool full=tot>.995;
-      if(full){ if(u<.5) cl=mix(clast,cl,smoothstep(-w,w,u)); else cl=mix(cl,c0,smoothstep(-w,w,u-1.)); }
-      float f=0.; vec2 g=vec2(0.);
-      if(tot>.002){
-        if(full||u<=tot){ float tt=T*(1.+amp*.07*sin(u*44.+uT*2.3)); float s2=tt*tt, r2=dr*dr+.4; f+=s2/r2; g+=-2.*s2*dr*nq/(r2*r2); }
-        if(!full){ vec2 p0=c+Rr*vec2(0.,1.), p1=c+Rr*vec2(sin(tot*6.2831853),cos(tot*6.2831853)); ball(px,p0,T*.98,f,g); ball(px,p1,T*mix(.98,1.15,smoothstep(.02,.2,tot)),f,g);
-          if(u>tot&&length(px-p1)<length(px-p0)) cl=clast; else if(u>tot) cl=c0; } }
+        if(k==0) c0=ck; if(Ak.y>.001){ clast=ck; tot=max(tot,Ak.x+Ak.y); } amp=max(amp,Ak.w); }
+      if(tot<=.002){ gl_FragColor=track; return; }
+      bool full=tot>.9995;
+      vec2 v=dr*nq; float uh=u; bool gap=!full&&u>tot; vec3 capC=c0;
+      if(gap){
+        vec2 p0=c+Rr*vec2(0.,1.), p1=c+Rr*vec2(sin(tot*6.2831853),cos(tot*6.2831853)), v0=px-p0, v1=px-p1;
+        float d0=length(v0), d1=length(v1), k=T*.9*(1.-smoothstep(.985,.9995,tot));
+        v=d0<d1?v0:v1;
+        if(k>.01){ float h=clamp(.5+.5*(d1-d0)/k,0.,1.); float dd=mix(d1,d0,h)-k*h*(1.-h);
+          // the bridge between the two ends can fill the notch but never be fatter than the tube itself
+          if(dd<length(v)) v=max(dd,abs(dr))*normalize(mix(v1/max(d1,.001),v0/max(d0,.001),h)+1e-5); }
+        uh=d1<d0?tot:0.; capC=mix(clast,c0,smoothstep(tot,1.,u)); }
+      // colour along the tube, blending smoothly where one account meets the next
+      vec3 cl=c0;
+      for(int k=1;k<MAXI;k++){ if(k>=uN) break; vec4 Ak=uA[k]; cl=mix(cl,palAt(int(uB[k].x+.5),.55),smoothstep(Ak.x-w,Ak.x+w,u)); }
+      float sb=smoothstep(.95,.9995,tot);
+      if(u<.5) cl=mix(cl,mix(clast,cl,smoothstep(-w,w,u)),sb); else cl=mix(cl,mix(cl,c0,smoothstep(-w,w,u-1.)),sb);
+      if(gap) cl=mix(capC,cl,sb);
+      // a gentle wobble that repeats a whole number of times round the ring (no seam), and a swell at the leading edge
+      float tt=T*(1.+amp*.07*sin(u*6.2831853*7.+uT*2.3));
+      if(!full){ float head=.13*smoothstep(.02,.2,tot)*(1.-smoothstep(.9,.99,tot)); tt*=1.+head*smoothstep(.14,0.,tot-uh)*step(uh,tot+.001)*(gap&&uh<.5?0.:1.); }
+      float s2=tt*tt, r2=dot(v,v)+.4, f=s2/r2; vec2 g=-2.*s2*v/(r2*r2);
       float edge=max(length(g)/uDpr,1e-4), al=smoothstep(1.-edge,1.+edge,f);
       if(al<=0.){ gl_FragColor=track; return; }
       vec3 col=cl;

@@ -226,6 +226,12 @@ const Synth=(function(){
       g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(pk,t+.04); g.gain.setValueAtTime(pk,t+dd*.7); g.gain.exponentialRampToValueAtTime(.0001,t+dd+.15); g.connect(S.dly);
       S.noise(t,'bandpass',N(m)*2,6,.06,pk*.25,S.dly); [o,o2,v].forEach(x=>{ x.start(t); x.stop(t+dd+.2); }); };
     S.guitar=(t,m,dd=.14,pk=.05)=>{ const o=c.createOscillator(), f=c.createBiquadFilter(), g=c.createGain(); o.type='sawtooth'; o.frequency.value=N(m); f.type='lowpass'; f.Q.value=4; f.frequency.setValueAtTime(3500,t); f.frequency.exponentialRampToValueAtTime(500,t+dd); env(g,t,.002,dd,pk); o.connect(f); f.connect(g); g.connect(S.dly); o.start(t); o.stop(t+dd+.1); };
+    // the UK garage "bassline": two detuned saws through a filter that wobbles, sliding into each note
+    S.wob=(t,m,dd,pk=.12,rate=4,from)=>{ const f=c.createBiquadFilter(), g=c.createGain(), lfo=c.createOscillator(), lg=c.createGain(); f.type='lowpass'; f.Q.value=7; f.frequency.value=520;
+      lfo.type='sine'; lfo.frequency.value=rate; lg.gain.value=380; lfo.connect(lg); lg.connect(f.frequency);
+      [['sawtooth',-9],['square',9]].forEach(([ty,dt])=>{ const o=c.createOscillator(); o.type=ty; o.detune.value=dt; o.frequency.setValueAtTime(N(from!=null?from:m),t); if(from!=null) o.frequency.exponentialRampToValueAtTime(N(m),t+.07); o.connect(f); o.start(t); o.stop(t+dd+.08); });
+      const sub=c.createOscillator(); sub.type='sine'; sub.frequency.value=N(m-12); sub.connect(g); sub.start(t); sub.stop(t+dd+.08);
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(pk,t+.012); g.gain.setValueAtTime(pk,t+dd*.8); g.gain.linearRampToValueAtTime(0,t+dd); f.connect(g); g.connect(bus); lfo.start(t); lfo.stop(t+dd+.08); };
     // a sung "ooh / ah": a buzzy tone shaped by the resonances of a voice
     const VOW={a:[800,1150,2900],o:[450,800,2830],u:[325,700,2530],e:[400,1700,2600]};
     S.chop=(t,m,v='a',dd=.22,pk=.09,bend=1)=>{ const o=c.createOscillator(), g=c.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(N(m)*(bend>1?.97:1),t); o.frequency.exponentialRampToValueAtTime(N(m)*bend,t+dd*.5);
@@ -281,14 +287,25 @@ const TRACKS={
     if(lv>=1&&(b===4||b===12)){ S.noise(t,'bandpass',1900,.7,.18,.13); S.osc('triangle',200,t,.09,.07); }
     if(b%2===0) S.hat(t,false,lv>=2?.035:.02);
     if(lv>=2){ const m={0:[ch[2]+12,'u'],6:[ch[1]+12,'o'],10:[ch[2]+12,'u'],12:[ch[0]+24,'a']}[b]; if(m) S.chop(t,m[0],m[1],sp*(b===12?3.5:2),.075,b===12?1.03:1); } }},
-  italo:{bpm:136,sw:0,ch:[[57,60,64],[53,57,60],[55,60,64],[55,59,62]],play(S,b,bar,ch,t,lv,sp){
-    if(b%4===0){ S.kick(t,.48,130); S.duckOn(t,.4,sp*2.5); }
-    if(b===0) S.pad(t,ch,sp*16,1400,.008);
-    if(b%4===2){ S.bass(t,ch[0]-12,sp*1.4,.22); S.hat(t,true,.045); }
-    if(lv>=1&&(b===4||b===12)) S.clap(t,.1);
-    const hook=[[76,76,79,76,74,72,74,76],[72,72,74,72,71,69,71,72],[76,76,79,76,74,72,74,79],[79,77,76,74,72,71,72,74]];
-    if(lv>=1&&b%2===0&&(lv>=2||bar<2)) S.flute(t,hook[bar%4][b/2],sp*1.7,.05);
-    if(lv>=3&&b%2===1) S.hat(t,false,.02); }},
+  garage:{bpm:138,sw:.16,ch:[[65,68,72],[63,67,70],[61,65,68],[60,64,67]],play(S,b,bar,ch,t,lv,sp){
+    const r=ch[0]-24;
+    if(b===0&&lv<1) S.pad(t,ch,sp*16,800,.01);
+    if(b===0&&lv>=2) S.pad(t,ch.map(m=>m+12),sp*16,2400,.006);
+    // kick: skippy 2-step, then straight four-to-the-floor at the top level
+    const k=lv>=3?b%4===0:(b===0||b===9||(bar%2===1&&b===14)); if(k){ S.kick(t,.5,140); if(lv>=1) S.duckOn(t,.5,sp*2.2); }
+    if(lv<1&&b===8) S.bass(t,r,sp*6,.18);
+    if(lv>=1&&(b===4||b===12)){ S.clap(t,.12); S.noise(t,'bandpass',2400,1.2,.09,.07); }
+    if(lv>=1&&(b===7||(b===15&&bar%2===0))) S.rim(t);
+    // hats: shuffled, with a little roll at the end of every other bar
+    if(b%4===2) S.hat(t,true,.05); else if(lv>=1&&b%2===1) S.hat(t,false,.03);
+    if(lv>=2&&bar%2===1&&b>=13){ S.hat(t+sp*.5,false,.022); }
+    // the bouncing bassline
+    if(lv>=1){ const bl=[[0,0,3],[3,0,2],[6,7,2],[8,0,2],[11,-2,3],[14,3,2]]; const x=bl.find(q=>q[0]===b);
+      if(x){ const prev=bl[(bl.indexOf(x)+bl.length-1)%bl.length]; S.wob(t,r+x[1],sp*x[2]*.95,lv>=2?.13:.11,lv>=2?6:4,b===6||b===14?r+prev[1]:null); } }
+    // stuttering vocal chops
+    if(lv>=1){ const v={2:[ch[2]+12,'e',.6,1],3:[ch[2]+12,'e',.6,1],5:[ch[1]+12,'a',1.4,1.02],10:[ch[0]+24,'o',.6,1],11:[ch[0]+24,'o',1.8,1.04]}[b]; if(v&&(lv>=2||bar%2===0)) S.chop(t,v[0],v[1],sp*v[2],.08,v[3]); }
+    // organ stabs
+    if(lv>=2&&(b===6||b===14)) S.stab(t,ch.map(m=>m+12),.12,.04,3000); }},
   dream:{bpm:88,sw:.12,ch:[[60,64,67,71],[57,60,64,67],[53,57,60,64],[55,59,62,69]],play(S,b,bar,ch,t,lv,sp){
     if(b===0) S.pad(t,ch,sp*16,700,.012,'triangle');
     if(b%3===0) S.bell(t,ch[(b/3)%ch.length]+12,.035);
@@ -311,19 +328,40 @@ function Player(track){
     playing:()=>on
   };
 }
-const TNAME={pop:'Pop',lofi:'Lo-fi',house:'House',dream:'Dreamy',anthem:'Electro anthem',indie:'Indie electronic',italo:'Italo dance'};
+const TNAME={pop:'Pop',lofi:'Lo-fi',house:'House',dream:'Dreamy',anthem:'Electro anthem',indie:'Indie electronic',garage:'UK garage'};
 // the month-in-review music: a different track each time, never the same one twice in a row
 const Music=(function(){
-  let P=null, cur=null;
+  let P=null, cur=null, vbase=0;
   return {
-    start(){ const keys=Object.keys(TRACKS).filter(k=>k!==state.lastTrack); cur=keys[Math.floor(Math.random()*keys.length)]; state.lastTrack=cur;
+    start(){ vbase=Math.floor(Math.random()*3); const keys=Object.keys(TRACKS).filter(k=>k!==state.lastTrack); cur=keys[Math.floor(Math.random()*keys.length)]; state.lastTrack=cur;
       P=Player(TRACKS[cur]); if(!P.start()){ P=null; $('wrTrk').hidden=true; return; } Sound.duck&&Sound.duck(true); $('wrTrk').textContent='♪ '+TNAME[cur]; $('wrTrk').hidden=false; },
     scene(i,lv){ if(!P) return; P.level(lv); },
     // moving between cards: a liquid whoosh, up going forward, down going back
     whoosh(dir){ const S=P&&P.S(); if(!S) return; const t=S.c.currentTime; S.noise(t,'bandpass',dir>0?500:2600,1.4,.45,.07,S.bus,dir>0?2600:500); S.osc('sine',dir>0?260:520,t,.3,.05,S.bus,.01,dir>0?2:.5); },
     // each line of text lands with a soft note from the current chord
     plink(k){ const S=P&&P.S(); if(!S) return; const ch=P.chord(), m=ch[k%ch.length]+24; S.osc('sine',Synth.N(m),S.c.currentTime,.35,.035,S.dly,.003); },
-    count(p){ const S=P&&P.S(); if(!S) return; const sc=[0,2,4,7,9,12,14,16,19,21,24], m=62+sc[Math.min(sc.length-1,Math.floor(p*sc.length))]; S.osc('sine',Synth.N(m+12),S.c.currentTime,.09,.045,S.bus,.002); },
+    // numbers counting up: each kind of number has its own voice (three versions each, so cards differ),
+    // the notes climb the current chord so they sit in key with whatever song is on
+    count(kind,i,card){ const S=P&&P.S(); if(!S) return; const t=S.c.currentTime, N=Synth.N, ch=P.chord(), vr=(vbase+card)%3;
+      const m=ch[i%ch.length]+12*Math.floor(i/ch.length);
+      if(kind==='$'){ // coins
+        if(vr===0){ S.osc('sine',N(m+36),t,.07,.022,S.dly,.001); S.osc('sine',N(m+36)*2.4,t,.04,.01,S.dly,.001); }
+        else if(vr===1){ S.osc('triangle',N(m+31),t,.09,.024,S.dly,.002); S.osc('sine',N(m+43),t+.012,.05,.01,S.dly,.001); }
+        else { S.osc('sine',N(m+24),t,.12,.03,S.dly,.002); S.osc('sine',N(m+24)*4,t,.03,.012,S.dly,.001); } }
+      else if(kind==='h'){ // a clock: tick, tock
+        const hi=i%2===0;
+        if(vr===0){ S.noise(t,'bandpass',hi?2300:1600,8,.03,.05); S.osc('triangle',N(m+12),t,.05,.012); }
+        else if(vr===1){ S.osc('sine',N(m+(hi?24:19)),t,.05,.03,S.bus,.001); S.noise(t,'highpass',5000,.7,.015,.02); }
+        else { S.noise(t,'bandpass',hi?1200:900,5,.05,.06); S.osc('sine',N(m),t,.08,.02); } }
+      else { // counts: round bubbly pops climbing the scale
+        if(vr===0) S.osc('sine',N(m+19),t,.13,.04,S.dly,.003,1.5);
+        else if(vr===1){ S.osc('triangle',N(m+24),t,.1,.035,S.dly,.003,1.25); S.noise(t,'bandpass',N(m+24)*2,6,.03,.015); }
+        else S.osc('sine',N(m+24)*.7,t,.12,.045,S.dly,.004,1.9); } },
+    // and the moment it lands
+    land(kind,card){ const S=P&&P.S(); if(!S) return; const t=S.c.currentTime, N=Synth.N, ch=P.chord(), vr=(vbase+card)%3;
+      if(kind==='$'){ S.bell(t,ch[0]+36,.03); S.bell(t+.07,ch[2]+36,.028); S.noise(t,'highpass',8000,.6,.5,.025,S.dly); if(vr===2) S.bell(t+.14,ch[0]+48,.02); }
+      else if(kind==='h'){ S.keys(t,ch.map(m=>m+12),1.3,vr===1?.05:.04); }
+      else { [0,1,2].forEach(k=>S.osc('sine',N(ch[k%ch.length]+36+(vr===2?12:0)),t+k*.055,.25,.02,S.dly,.002)); } },
     stop(){ if(!P) return; P.stop(); P=null; Sound.duck&&Sound.duck(false); },
     track:()=>cur
   };
@@ -355,7 +393,7 @@ const GARAGE={bpm:132,sw:.22,ch:[[61,65,68,72],[60,63,67,70],[53,56,60,63,67],[5
 const PayMusic=(function(){
   let P=null, riseT=null;
   return {
-    start(){ if(P) return; P=Player(GARAGE); if(!P.start(1.6)){ P=null; return; } Sound.duck&&Sound.duck(true); P.level(0);
+    start(){ if(P) return; const fast=state.lastPay!=='fast'&&(state.lastPay==='slow'||Math.random()<.5); state.lastPay=fast?'fast':'slow'; P=Player(fast?TRACKS.garage:GARAGE); if(!P.start(1.6)){ P=null; return; } Sound.duck&&Sound.duck(true); P.level(0);
       const S=P.S(), t=S.c.currentTime; S.lp.frequency.setValueAtTime(380,t); S.lp.frequency.exponentialRampToValueAtTime(900,t+2);
       S.noise(t,'bandpass',300,1.2,2.1,.05,S.bus,4000); },
     drop(){ if(!P) return; const S=P.S(), t=S.c.currentTime; P.level(1); S.lp.frequency.cancelScheduledValues(t); S.lp.frequency.setValueAtTime(900,t); S.lp.frequency.exponentialRampToValueAtTime(20000,t+.25);
@@ -374,7 +412,7 @@ const SetupMusic=(function(){ let P=null, muted=false, tries=0;
   $('stepMute').onclick=e=>{ e.stopPropagation(); muted=!muted; $('stepMute').classList.toggle('off',muted); if(muted){ if(P){ P.stop(.8); P=null; Sound.duck&&Sound.duck(false); } } else start(); };
   return { stop(){ if(P){ P.stop(1.5); P=null; Sound.duck&&Sound.duck(false); } } };
 })();
-const MLIST=[['payday','Payday','UK garage · plays on payday',GARAGE],['setup','Setup','Synthwave · first-time setup',SYNTHWAVE]].concat(Object.keys(TRACKS).map(k=>[k,TNAME[k],'Month review',TRACKS[k]]));
+const MLIST=[['payday','Payday','2-step garage · payday',GARAGE],['setup','Setup','Synthwave · first-time setup',SYNTHWAVE]].concat(Object.keys(TRACKS).map(k=>[k,TNAME[k],k==='garage'?'Month review · payday':'Month review',TRACKS[k]]));
 let mPrev=null, mPrevK=null;
 function stopPreview(){ if(mPrev){ mPrev.stop(.4); mPrev=null; Sound.duck&&Sound.duck(false); } mPrevK=null; document.querySelectorAll('#musList .mRow').forEach(r=>r.classList.remove('on')); }
 function renderMusList(){
@@ -490,7 +528,10 @@ function wrGo(i){
   [...el.querySelectorAll('.k,.t,.big,.s,.row,.wrBadges,.wrWeak,.wrWk,.wrStrip,.wrCmp,.wrJars')].forEach((n,k)=>setTimeout(()=>Music.plink(k),180+k*85));
   if(ANIM){ G.fromTo(el.querySelectorAll('.k,.t,.big,.s,.row,.wrBadges,.wrBtn,.wrWk,.wrStrip,.wrCmp,.wrJars,canvas,.wrDays'),{y:34*dir>0?34:-34,opacity:0,scale:.94},{y:0,opacity:1,scale:1,duration:.7,stagger:.08,delay:.15,ease:'back.out(1.8)'}); }
   el.querySelectorAll('[data-n]').forEach(n=>{ const v=+n.dataset.n, f=n.dataset.f, put=q=>n.textContent=f==='$'?money(q):f==='$0'?moneyR(q):f==='n'?String(Math.round(q)):`${q.toFixed(1)}h`;
-    if(ANIM){ const o={v:0}; let last=0; G.to(o,{v,duration:1.4,delay:.3,ease:'power3.out',onUpdate:()=>{ put(o.v); const now=performance.now(); if(now-last>70){ last=now; Music.count(o.v/v); } }}); } else put(v); });
+    // ticks follow the number: a small count gets exactly one tick per step (3 class nights = 3 pops),
+    // a big one gets a handful of ticks that slow down as the number settles
+    const kind=f==='n'?'n':f==='h'?'h':'$', steps=kind==='n'&&v<=12?Math.round(v):kind==='h'?8:10, ci=wr.i;
+    if(ANIM){ const o={v:0}; let done=0; G.to(o,{v,duration:kind==='n'&&v<=12?.5+v*.12:1.4,delay:.3,ease:'power3.out',onUpdate:()=>{ put(o.v); const at=Math.min(steps,Math.floor(o.v/v*steps+(kind==='n'&&v<=12?.5:0)+1e-6)); while(done<at){ if(at-done<=2||done%2===0) Music.count(kind,done,ci); done++; } },onComplete:()=>{ put(v); Music.land(kind,ci); }}); } else put(v); });
   // bars that fill one by one, in the app's liquid
   const bc=el.querySelector('canvas[data-bars]');
   if(bc&&Liquid){ const items=c.bars.map(b=>({level:0,pal:b.ot?6:5,amp:1,bubbles:false})), t0=performance.now();
