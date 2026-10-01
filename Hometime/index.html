@@ -17,12 +17,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script defer src="core.js?v=30"></script>
-<script defer src="scan.js?v=30"></script>
-<script defer src="school.js?v=30"></script>
-<script defer src="extras.js?v=30"></script>
-<script defer src="start.js?v=30"></script>
-<link rel="stylesheet" href="app.css?v=30">
+<script defer src="core.js?v=31"></script>
+<script defer src="scan.js?v=31"></script>
+<script defer src="school.js?v=31"></script>
+<script defer src="extras.js?v=31"></script>
+<script defer src="start.js?v=31"></script>
+<link rel="stylesheet" href="app.css?v=31">
 </head>
 <body class="booting">
 <div id="rotate" role="alert"><div class="rotPhone"><i></i></div><p>Turn your phone upright</p><small>Home Time works in portrait</small></div>
@@ -383,6 +383,11 @@
         </div>
         <p class="note">A list of your days you can open in Excel or Numbers. Importing adds any days that aren't already here.</p>
       </div>
+      <div class="card dangerCard">
+        <p class="cardT">Start fresh</p>
+        <p class="note" style="margin:0 0 12px">Deletes everything on this phone (days, payslips, jars, classes, badges and settings) and takes you back to first-time setup.</p>
+        <button class="btn danger" id="resetBtn" type="button" style="width:100%">Start fresh</button>
+      </div>
       <input type="file" id="importFile" accept=".csv,text/csv" hidden>
       <input type="file" id="bkFile" accept=".json,application/json" hidden>
     </div>
@@ -395,9 +400,14 @@
         <label class="lab full">Volume<input type="range" class="fld" id="sVol" min="0" max="100" step="1"></label>
         <p class="note" style="margin:0">Follows your silent switch and won't stop music you're playing.</p>
       </div>
+      <div class="card">
+        <p class="cardT">Music in the app</p>
+        <div id="musList"></div>
+        <p class="note" style="margin:8px 0 0">Every track is made by the app itself, so there are no music files. The month review picks one of its tracks at random.</p>
+      </div>
     </div>
 
-    <div class="stepTop" id="stepTop" hidden><div class="stepDots" id="stepDots"></div><span id="stepLbl"></span></div>
+    <div class="stepTop" id="stepTop" hidden><div class="stepDots" id="stepDots"></div><span id="stepLbl"></span><button class="stepMute" id="stepMute" type="button" aria-label="Music on or off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button></div>
     <div class="setupNav" id="setupNav" hidden>
       <p class="note" id="setupNote" hidden>Studying part-time? You can add your classes any time in Settings → Classes.</p>
       <button class="btn solid" id="setupNext" type="button">Next</button>
@@ -424,7 +434,7 @@
         <div><i style="background:linear-gradient(135deg,#C9B8FF,#7B5CFF)"></i><span id="nSA">Special</span><em id="pSA">0%</em><b id="vSA">$0</b></div>
         <div><i style="background:linear-gradient(135deg,#A8FFE0,#19D9A0)"></i><span>MediSave</span><em id="pMA">0%</em><b id="vMA">$0</b></div>
       </div>
-      <p class="note" style="margin:0">Each colour is its real share. Tap the ring to give it a wobble.</p>
+      <p class="note" style="margin:0">Each colour is its real share of the ring. Tap it to give it a wobble.</p>
     </div>
     <div class="card cAll" id="cAll">
       <p class="cardT">Your CPF so far</p>
@@ -769,6 +779,7 @@
 
 <div id="wrap" class="wrap" role="dialog" aria-modal="true" aria-label="Your month in review" hidden>
   <canvas id="wrCv"></canvas>
+  <span class="wrTrk" id="wrTrk" hidden></span>
   <div class="wrBars" id="wrBars"></div>
   <button class="wrX" id="wrX" type="button" aria-label="Close">✕</button>
   <div class="wrStage" id="wrStage"></div>

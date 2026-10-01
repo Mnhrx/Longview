@@ -145,6 +145,7 @@ function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ r
 // it picks up the newer data instead. This stops a stale background copy from undoing a clock-out.
 let loadedAt=0;
 function save(){
+  if(window.__reset) return false;
   try{
     const cur=load();
     if(cur&&(cur.savedAt||0)>loadedAt){ adopt(cur); return false; }
@@ -980,7 +981,7 @@ function setupDecorate(cat){
 function setupGo(d){ commitSettings(); const st=setupSteps(), i=Math.max(0,st.indexOf(setCat));
   if(d>0&&i>=st.length-1){ finishSetup(); return; }
   const n=st[Math.max(0,Math.min(st.length-1,i+d))]; state.setup.step=st.indexOf(n); save(); showCat(n); }
-function finishSetup(){ commitSettings(); delete state.setup; state.setupDone=true; save();
+function finishSetup(){ try{ SetupMusic.stop(); }catch(e){} commitSettings(); delete state.setup; state.setupDone=true; save();
   $('stepTop').hidden=true; $('setupNav').hidden=true; setSummaries(); goPage('today');
   setTimeout(()=>toast('You’re all set. Change anything later with the ⚙️ button.',false),900); }
 $('setupNext').onclick=()=>setupGo(1);
@@ -1256,20 +1257,24 @@ const Liquid=(function(){
     vec2 px=gl_FragCoord.xy/uDpr, res=uRes/uDpr;
     float sw=uGeo.x, T=uGeo.y, len=uGeo.z;
     if(uMode==2){
-      // a ring split into coloured segments, same glossy tube as the clock-in ring
+      // one continuous glossy tube round the ring; the account colours flow into each other
       vec2 c=res*.5; float Rr=min(res.x,res.y)*.5-T*2.2; vec2 q=px-c; float rad=max(length(q),.001), dr=rad-Rr; vec2 nq=q/rad;
       float u=fract(atan(q.x,q.y)/6.2831853+1.), aa=1./uDpr;
       vec4 track=vec4(vec3(1.),1.)*(1.-smoothstep(T*.55-aa,T*.55+aa,abs(dr)))*.2;
-      float f=0.; vec2 g=vec2(0.); float bestD=1e9, bu=0.; vec4 bB=vec4(0.);
-      for(int k=0;k<MAXI;k++){ if(k>=uN) break; vec4 Ak=uA[k], Bk=uB[k]; float s0=Ak.x, l=Ak.y; if(l<=.002) continue;
-        float du=fract(u-s0+1.);
-        vec2 p0=c+Rr*vec2(sin(s0*6.2831853),cos(s0*6.2831853)), p1=c+Rr*vec2(sin((s0+l)*6.2831853),cos((s0+l)*6.2831853));
-        if(du<=l){ float tt=T*(1.+Ak.w*.08*sin(du*38.+uT*2.3+float(k)*1.7)); float s2=tt*tt, r2=dr*dr+.4; f+=s2/r2; g+=-2.*s2*dr*nq/(r2*r2); if(bestD>0.){ bestD=0.; bu=du/l; bB=Bk; } }
-        else { float d0=length(px-p0), d1=length(px-p1); if(min(d0,d1)<bestD){ bestD=min(d0,d1); bu=d0<d1?0.:1.; bB=Bk; } }
-        ball(px,p0,T*.98,f,g); ball(px,p1,T*.98,f,g); }
+      float tot=0., amp=0.; vec3 c0=vec3(0.), cl=vec3(0.), clast=vec3(0.); float w=.035;
+      for(int k=0;k<MAXI;k++){ if(k>=uN) break; vec4 Ak=uA[k]; vec3 ck=palAt(int(uB[k].x+.5),.55);
+        if(k==0){ c0=ck; cl=ck; } else cl=mix(cl,ck,smoothstep(Ak.x-w,Ak.x+w,u));
+        if(Ak.y>.001) clast=ck; tot=max(tot,Ak.x+Ak.y); amp=max(amp,Ak.w); }
+      bool full=tot>.995;
+      if(full){ if(u<.5) cl=mix(clast,cl,smoothstep(-w,w,u)); else cl=mix(cl,c0,smoothstep(-w,w,u-1.)); }
+      float f=0.; vec2 g=vec2(0.);
+      if(tot>.002){
+        if(full||u<=tot){ float tt=T*(1.+amp*.07*sin(u*44.+uT*2.3)); float s2=tt*tt, r2=dr*dr+.4; f+=s2/r2; g+=-2.*s2*dr*nq/(r2*r2); }
+        if(!full){ vec2 p0=c+Rr*vec2(0.,1.), p1=c+Rr*vec2(sin(tot*6.2831853),cos(tot*6.2831853)); ball(px,p0,T*.98,f,g); ball(px,p1,T*mix(.98,1.15,smoothstep(.02,.2,tot)),f,g);
+          if(u>tot&&length(px-p1)<length(px-p0)) cl=clast; else if(u>tot) cl=c0; } }
       float edge=max(length(g)/uDpr,1e-4), al=smoothstep(1.-edge,1.+edge,f);
       if(al<=0.){ gl_FragColor=track; return; }
-      vec3 col=palAt(int(bB.x+.5),bu);
+      vec3 col=cl;
       float hh=sqrt(clamp(1.-1./f,0.,1.)); vec2 dh=(1./(f*f))*g/(2.*max(hh,.05)); vec3 n=normalize(vec3(-dh*T*1.05,1.));
       vec3 Lg=normalize(vec3(-.45,.6,.75)); float dif=.5+.5*max(dot(n,Lg),0.);
       float spec=pow(max(dot(reflect(-Lg,n),vec3(0.,0.,1.)),0.),60.)*1.05, spec2=pow(max(dot(reflect(-normalize(vec3(.6,-.5,.6)),n),vec3(0.,0.,1.)),0.),20.)*.22;
@@ -1620,14 +1625,17 @@ $('cPrev').onclick=()=>{ cOff--; renderCpf(true); }; $('cNext').onclick=()=>{ if
 // the CPF rings: one segment per account, sized by its real share of the total
 function makeRing(cv,T){
   if(!Liquid) return null;
-  const keys=['OA','SA','MA'], seg={}; keys.forEach(k=>seg[k]={s:0,l:0,amp:1}); let raf=null;
+  const keys=['OA','SA','MA'], seg={}, prog={p:0}; keys.forEach(k=>seg[k]={s:0,l:0,amp:1}); let raf=null;
   const frame=t=>Liquid.draw(cv,{mode:'ring',items:keys.map(k=>({level:seg[k].s,nh:seg[k].l,amp:seg[k].amp,pal:Liquid.ID[k]})),T:T||Math.max(6,cv.clientWidth*.045),t});
   function loop(){ if(page!=='cpf'||document.hidden){ raf=null; return; } frame(performance.now()/1000); raf=requestAnimationFrame(loop); }
   cv.addEventListener('pointerdown',()=>{ keys.forEach((k,i)=>{ G&&G.killTweensOf(seg[k],'amp'); if(ANIM) G.fromTo(seg[k],{amp:3.2},{amp:1,duration:1.8,delay:i*.08,ease:'power2.out'}); }); Sound.bubble(); haptic(); });
   return {
-    set(v,animate){ const tot=keys.reduce((a,k)=>a+(v[k]||0),0), gap=tot>0?.014:0; let at=0;
-      keys.forEach((k,i)=>{ const share=tot>0?(v[k]||0)/tot:0, L=Math.max(0,share-gap); seg[k].s=at+gap/2; at+=share; G&&G.killTweensOf(seg[k]);
-        if(animate&&ANIM){ seg[k].l=0; G.to(seg[k],{l:L,duration:1.1,delay:.25+i*.35,ease:'power3.inOut'}); G.fromTo(seg[k],{amp:2.4},{amp:1,duration:2,delay:.25+i*.35}); } else seg[k].l=L; }); },
+    set(v,animate){ const tot=keys.reduce((a,k)=>a+(v[k]||0),0); let at=0; const sh={};
+      keys.forEach(k=>{ sh[k]=tot>0?(v[k]||0)/tot:0; seg[k].s=at; at+=sh[k]; });
+      const sweep=p=>keys.forEach(k=>{ seg[k].l=Math.max(0,Math.min(sh[k],p-seg[k].s)); });
+      G&&G.killTweensOf(prog); keys.forEach(k=>G&&G.killTweensOf(seg[k]));
+      if(animate&&ANIM&&tot>0){ prog.p=0; G.to(prog,{p:1,duration:1.8,delay:.25,ease:'power2.inOut',onUpdate:()=>sweep(prog.p)}); keys.forEach(k=>G.fromTo(seg[k],{amp:2.2},{amp:1,duration:2.4,delay:.25})); }
+      else sweep(tot>0?1:0); },
     start(){ if(!raf) raf=requestAnimationFrame(loop); if(RM) frame(0); }
   };
 }
@@ -1689,7 +1697,7 @@ function renderYear(animate){
   yearAnimStart=animate&&ANIM?performance.now():-1e9;
   if(animate&&ANIM) G.from(['#yCard','#yStats .stat'],{y:24,opacity:0,stagger:.05,duration:.5,ease:'power4.out',clearProps:'transform,opacity'});
   yCls=new Set(); if(typeof clsOn==='function'){ for(let t=new Date(y,0,1,12).getTime();t<new Date(y+1,0,1).getTime();t+=86400000) if(clsOn(t).length) yCls.add(isoDate(t)); }
-  if(yCls.size) $('yLegend').innerHTML+='<span><i style="border:2px solid #3FB8FF;box-sizing:border-box"></i>Class night</span>';
+  if(yCls.size) $('yLegend').innerHTML+='<span><i style="border:1.5px solid #3FB8FF;box-sizing:border-box;background:radial-gradient(circle,#FFB020 0 32%,transparent 36%)"></i>Class night</span>';
   yMap=map; yYear=y; yHi=null; $('yTip').hidden=true; kickYear();
 }
 $('yPrev').onclick=()=>{ if(yMode==='month'){ calOff--; renderCal(true); return; } yOff--; renderYear(true); }; $('yNext').onclick=()=>{ if(yMode==='month'){ if(calOff<12){ calOff++; renderCal(true); } return; } if(yOff<0){ yOff++; renderYear(true); } };
@@ -1710,7 +1718,8 @@ function drawYear(y,map){
       // each dot pops in with a small bounce, rippling across the year
       const k=Math.max(0,Math.min(1,(el-(m*31+dd)*5)/420)); if(k<1) allDone=false;
       const pop=k<=0?0:1+2.70158*Math.pow(k-1,3)+1.70158*Math.pow(k-1,2);
-      const rr=rad*Math.max(0,pop); if(rr<=.3) continue;
+      let rr=rad*Math.max(0,pop); if(rr<=.3) continue;
+      const cls=yCls.has(isoDate(ts)), rr0=rr; if(cls) rr=rr*.55;
       let col=null, faint=false;
       if(r){ const t=typeOf(r);
         if(t==='work'){ if(r.otMs) col=Y_COL.ot; else { const f=r.out?Math.min(1,(r.out-r.in)/SHIFT()):.5; col=f<.9?['#FFD27A','#FF8A6B']:Y_COL.work; } }
@@ -1723,7 +1732,7 @@ function drawYear(y,map){
         if(r&&typeOf(r)!=='work'&&isUnpaid(r)){ c.shadowColor='transparent'; c.globalAlpha=.6; c.strokeStyle='#fff'; c.lineWidth=1; c.beginPath(); c.moveTo(-rr*.6,rr*.6); c.lineTo(rr*.6,-rr*.6); c.stroke(); }
       } else { c.globalAlpha=faint==='weekend'?.18:faint==='future'?.35:.28; c.strokeStyle=muted; c.lineWidth=1; c.beginPath(); c.arc(0,0,rr*(faint==='weekend'?.55:.8),0,Math.PI*2); faint==='future'?c.stroke():(c.fillStyle=muted,c.fill()); }
       c.restore();
-      if(yCls.has(isoDate(ts))){ c.save(); c.strokeStyle='#3FB8FF'; c.lineWidth=1.6; c.globalAlpha=.95; c.beginPath(); c.arc(cx,cy,rr+2.2,0,Math.PI*2); c.stroke(); c.restore(); }
+      if(cls){ c.save(); c.strokeStyle='#3FB8FF'; c.lineWidth=1.4; c.globalAlpha=.95; c.beginPath(); c.arc(cx,cy,rr0*.95,0,Math.PI*2); c.stroke(); c.restore(); }
       if(yHi&&yHi.m===m&&yHi.d===dd){ const ph=((performance.now()-yHi.t0)/700)%1; c.save(); c.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()||'#1B1240';
         c.lineWidth=2; c.globalAlpha=.9; c.beginPath(); c.arc(cx,cy,rad+2.5,0,Math.PI*2); c.stroke(); c.globalAlpha=.5*(1-ph); c.beginPath(); c.arc(cx,cy,rad+2.5+ph*7,0,Math.PI*2); c.stroke(); c.restore(); }
     }
@@ -1940,7 +1949,8 @@ function playPayday(pd){
   if(payRun) return;                     // only one celebration at a time
   if(pd==null) pd=recentPayday()||nextPayday();
   lastPdShown=pd; try{ PayMusic.start(); }catch(e){}
-  try{ $('pdReview').hidden=!wrapData(forPeriod(pd)); }catch(e){ $('pdReview').hidden=true; }
+  try{ const rp=forPeriod(pd), ok=!!wrapData(rp), ready=rp.end<=Date.now(); $('pdReview').hidden=!ok; $('pdReview').disabled=!ready;
+    $('pdReview').lastChild.textContent=ready?'Month in review':`Recap ready ${new Date(rp.end).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`; }catch(e){ $('pdReview').hidden=true; }
   const ov=$('payday'), amt=paydayAmount(pd), x=slipForPayday(pd), W=innerWidth, H=innerHeight, d=Math.min(devicePixelRatio||1,2);
   clearTimeout(payAuto); payAuto=null;
   state.celebrated[isoDate(pd)]=true; save(); updatePayPills();
@@ -2174,7 +2184,7 @@ $('pdClose').onclick=()=>{
     world&&world.fogReset(); payRun=null; updatePayPills(); G.ticker.lagSmoothing(500,33);
     if(typeof afterPayday==='function') afterPayday(lastPdShown);
   };
-  if(!ANIM||!G||!ex){ ov.style.display='none'; G&&G.set('#goldBg',{opacity:0}); world&&(world.jump(zone),world.flyIn(zone)); ex&&ex.release();
+  if(!ANIM||!G||!ex||payQuiet){ ov.style.display='none'; G&&G.set('#goldBg',{opacity:0}); world&&(world.jump(zone),world.flyIn(zone)); ex&&ex.release();
     showOrbOnly(); orb.span(1.3); orb.size(1); orb.settle(); orb.gold(0); if(orb.canvas) orb.canvas.style.opacity=''; pageIn(); return; }
   const {gl,U}=ex, diag=Math.hypot(W,H);
   const st={R:diag*.75,cx:W/2,cy:H/2,E:0,big:1,fade:1,orb:0}, gk={k:1};
@@ -2271,7 +2281,7 @@ function showCat(cat,animate=true){
   const swap=()=>{
     menu.hidden=!!cat; cats.forEach(c=>c.hidden=c.dataset.cat!==cat);
     $('sHead').hidden=!!cat; setCat=cat; scrollTo(0,0);
-    if(cat==='data') renderDataCat(); if(cat==='school') renderSchool(); setupDecorate(cat);
+    if(cat==='data') renderDataCat(); if(cat==='school') renderSchool(); setupDecorate(cat); try{ stopPreview(); }catch(e){}
     if(animate&&ANIM){ const el=cat?document.querySelector(`.setCat[data-cat="${cat}"]`):menu;
       G.fromTo(cat?[el.querySelector('.catHead'),...el.querySelectorAll(':scope > .card, :scope > .note, :scope > .warn, :scope > #schoolBody > *, :scope > .setupNav')]:[$('sHead'),...menu.children],{x:cat?40:-40,opacity:0},{x:0,opacity:1,stagger:.035,duration:.42,ease:'power4.out',clearProps:'all'}); }
   };
@@ -2318,12 +2328,24 @@ function renderTplList(){
     delete state.templates[b.dataset.k]; save(); renderTplList(); });
 }
 function esc(v){ return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function ask(title,text,yes,danger){
-  return new Promise(res=>{ $('askTitle').textContent=title; $('askText').textContent=text; $('askYes').textContent=yes||'OK';
+function ask(title,text,yes,danger,no){
+  return new Promise(res=>{ $('askTitle').textContent=title; $('askText').textContent=text; $('askYes').textContent=yes||'OK'; $('askNo').textContent=no||'Cancel';
     $('askYes').className='btn '+(danger?'danger armed':'solid');
     const fin=v=>{ $('askYes').onclick=$('askNo').onclick=null; closeSheet(); res(v); };
     $('askYes').onclick=()=>fin(true); $('askNo').onclick=()=>fin(false); openSheet('askSheet'); });
 }
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+$('resetBtn').onclick=async()=>{
+  if(!await ask('Start fresh?','This deletes everything in Home Time on this phone and takes you back to setup. It can’t be undone.','Continue',true)) return;
+  await wait(380);
+  if(await ask('Back up first?',`Save a backup you can restore later?${state.lastBackup?` Your last one was ${ago(state.lastBackup)}.`:' You haven’t made one yet.'}`,'Back up first',false,'Skip')){ doBackup(); await wait(2500); }
+  await wait(380);
+  if(!await ask('Last check','Delete everything and start again?','Delete everything',true)) return;
+  window.__reset=true;
+  try{ localStorage.removeItem(KEY); localStorage.removeItem('ht-ocr-ready'); }catch(e){}
+  if(ANIM) G.to('.app,.nav',{opacity:0,scale:.96,duration:.5,ease:'power2.in'});
+  setTimeout(()=>location.reload(),550);
+};
 function doBackup(){
   const name=`home-time-backup-${isoDate(Date.now())}.json`;
   const snap=Object.assign({},state,{lastBackup:Date.now()});

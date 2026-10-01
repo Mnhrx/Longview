@@ -681,5 +681,23 @@ body.booting .app,body.booting .nav{opacity:0}
 .allRing{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center}
 .allRing canvas{width:120px;height:120px;display:block;touch-action:manipulation}
 .allRing .ringLeg div{grid-template-columns:auto 1fr auto;font-size:13.5px;padding:7px 0}
+.stepMute{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1px solid var(--line);color:var(--violet)}
+.stepMute svg{width:15px;height:15px}
+.stepMute.off{color:var(--muted);opacity:.6}
+.stepMute.off svg{opacity:.5}
+.mRow{width:100%;display:grid;grid-template-columns:auto 1fr;gap:1px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);text-align:left}
+.mRow:first-child{border-top:0;padding-top:0}
+.mRow b{font-size:15px}
+.mRow small{grid-column:2;color:var(--muted);font-size:12.5px}
+.mPlay{grid-row:1/3;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.85) 0,rgba(255,255,255,0) 26%),radial-gradient(circle at 55% 60%,#FF7A45,#FF4D6D 45%,#7B5CFF 100%);box-shadow:inset -5px -6px 12px rgba(40,10,80,.3),0 8px 16px -8px rgba(123,92,255,.7)}
+.mPlay svg{width:18px;height:18px}
+.mPlay .st{display:none}
+.mRow.on .mPlay .st{display:block}
+.mRow.on .mPlay .pl{display:none}
+.mRow.on .mPlay{animation:mBeat .47s ease-in-out infinite alternate}
+@keyframes mBeat{to{transform:scale(1.1)}}
+.wrTrk{position:absolute;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:5;padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:12.5px;font-weight:800;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.dangerCard{border-color:rgba(255,77,109,.35)}
+#payday .pdX.pdRev:disabled{opacity:.75;background:rgba(255,255,255,.25);color:#fff;box-shadow:none}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion: reduce){.ping::before,.ping::after,.halo,.soFill{animation:none!important}}

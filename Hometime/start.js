@@ -41,7 +41,7 @@ function showPageDirect(pg){
   moveInd(pg,false);
 }
 function goPage(pg){
-  lastInput=Date.now(); try{ RevBlob.hide(); }catch(e){}
+  lastInput=Date.now(); try{ RevBlob.hide(); stopPreview(); }catch(e){}
   if(pg===page||busy) return;
   if(openId) closeSheet();
   const from=page; page=pg; if(from!=='settings') lastPage=from;
