@@ -15,25 +15,48 @@ const money = (v, d = 2) => (v == null || isNaN(v)) ? '—' : '$' + num(v, d);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const ITEM_DEFS = [
-  // name, bike part it belongs to (lights up on the hologram), every km, every months
-  ['Engine oil', 'oil', 3000, 6], ['Oil filter', 'oil', 6000, 12], ['Chain clean & lube', 'chain', 500, 0],
-  ['Chain adjust', 'chain', 1000, 0], ['Brake pads', 'brakes', 5000, 6], ['Front tyre', 'frontTyre', 15000, 0],
-  ['Rear tyre', 'rearTyre', 12000, 0], ['Spark plug', 'spark', 10000, 0], ['Air filter', 'air', 10000, 12],
-  ['Coolant', 'coolant', 20000, 24], ['Brake fluid', 'brakes', 0, 24]
+  // name, part (its picture in Garage), every km, every months, only for: chain / belt / shaft drive, or liquid cooling
+  ['Engine oil', 'oil', 3000, 6], ['Oil filter', 'oil', 6000, 12],
+  ['Chain clean & lube', 'chain', 500, 0, 'chain'], ['Chain adjust', 'chain', 1000, 0, 'chain'],
+  ['Drive belt', 'belt', 20000, 24, 'belt'], ['CVT rollers', 'belt', 15000, 0, 'belt'], ['CVT clean', 'belt', 6000, 0, 'belt'], ['Gear oil', 'final', 6000, 12, 'belt'],
+  ['Final drive oil', 'final', 20000, 24, 'shaft'],
+  ['Brake pads', 'brakes', 5000, 6], ['Front tyre', 'frontTyre', 15000, 0], ['Rear tyre', 'rearTyre', 12000, 0],
+  ['Spark plug', 'spark', 10000, 0], ['Air filter', 'air', 10000, 12], ['Coolant', 'coolant', 20000, 24, 'liquid'], ['Brake fluid', 'brakes', 0, 24]
 ];
-const PARTS = [['frontTyre', 'Front tyre'], ['rearTyre', 'Rear tyre'], ['chain', 'Chain'], ['oil', 'Engine oil'], ['coolant', 'Coolant'], ['brakes', 'Brakes'], ['spark', 'Spark plug'], ['air', 'Air filter'], ['other', 'Other']];
+const fits = (need, b) => !need || need === (b.drive || 'chain') || (need === 'liquid' && b.cooling !== 'air');
+const PARTS = [['frontTyre', 'Front tyre'], ['rearTyre', 'Rear tyre'], ['chain', 'Chain'], ['belt', 'Drive belt'], ['final', 'Final drive'], ['oil', 'Engine oil'], ['coolant', 'Coolant'], ['brakes', 'Brakes'], ['spark', 'Spark plug'], ['air', 'Air filter'], ['other', 'Other']];
+const DRIVES = [['chain', 'Chain', 'Most bikes. A chain and two sprockets.'], ['belt', 'Belt (CVT)', 'Most scooters. Twist and go, no gears.'], ['shaft', 'Shaft', 'Some tourers and cruisers.']];
+const COOLS = [['liquid', 'Liquid-cooled', 'There’s a radiator at the front.'], ['air', 'Air-cooled', 'Fins on the engine, no radiator.']];
+// match the service list to how this bike is built: add what it needs, drop what it doesn't have
+function applyBuild() {
+  for (const [name, part, km, months, need] of ITEM_DEFS) {
+    const has = S.items.find(i => i.name === name), ok = fits(need, S.bike);
+    if (ok && !has) S.items.push({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null });
+    if (!ok && has && need) S.items = S.items.filter(i => i !== has);
+  }
+}
+/* ---------- expressways, for traffic alerts ---------- */
+const ROADS = [['PIE', 'Pan-Island', /\bPIE\b|Pan[- ]Island/i], ['CTE', 'Central', /\bCTE\b|Central Expressway/i], ['ECP', 'East Coast', /\bECP\b|East Coast Parkway/i], ['AYE', 'Ayer Rajah', /\bAYE\b|Ayer Rajah/i],
+  ['TPE', 'Tampines', /\bTPE\b|Tampines Expressway/i], ['SLE', 'Seletar', /\bSLE\b|Seletar Expressway/i], ['BKE', 'Bukit Timah', /\bBKE\b|Bukit Timah Expressway/i], ['KJE', 'Kranji', /\bKJE\b|Kranji Expressway/i],
+  ['KPE', 'Kallang–Paya Lebar', /\bKPE\b|Kallang[- –]Paya Lebar/i], ['MCE', 'Marina Coastal', /\bMCE\b|Marina Coastal/i], ['NSC', 'North–South Corridor', /\bNSC\b|North[- –]South Corridor/i],
+  ['WDL', 'Woodlands Causeway', /Causeway|Woodlands Checkpoint|Woodlands Crossing/i], ['TUAS', 'Tuas Second Link', /Second Link|Tuas Checkpoint|Tuas Crossing|Linkedua/i]];
+const roadCodes = text => ROADS.filter(([, , re]) => re.test(text)).map(([c]) => c);
+// your roads = the ones you picked + any you've ridden at least twice in the last 60 days
+function myRoads() { const n = {}, since = Date.now() - 60 * DAY; S.rides.filter(r => r.start.t > since).forEach(r => (r.roads || []).forEach(c => n[c] = (n[c] || 0) + 1));
+  return [...new Set([...(S.roads || []), ...Object.keys(n).filter(c => n[c] >= 2)])]; }
+const learnedRoads = () => myRoads().filter(c => !(S.roads || []).includes(c));
 const RENEW_DEFS = ['Road tax', 'Insurance', 'COE expiry', 'LTA inspection', 'Helmet replace'];
 const RIDE_COLS = ['#4DF3FF', '#FF8A1F', '#B7FF3D', '#FF4FD8', '#8B7BFF', '#FFE14D'];
 
 function fresh() {
   return {
     v: 3, setupDone: false,
-    bike: { name: '', model: '', plate: '', type: 'naked', cc: '', tank: 13, licence: '2B' },
-    items: ITEM_DEFS.map(([name, part, km, months]) => ({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null })),
+    bike: { name: '', model: '', plate: '', drive: 'chain', cooling: 'liquid', cc: '', tank: 13, reserve: 2.5, licence: '2B' },
+    items: ITEM_DEFS.filter(x => fits(x[4], { drive: 'chain', cooling: 'liquid' })).map(([name, part, km, months]) => ({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null })),
     renewals: RENEW_DEFS.map(name => ({ id: uid(), name, date: '', cost: null })),
     services: [], fuel: [], rides: [], marks: [], odoLog: [], parked: null,
-    intercom: null, seen: [], minMin: 3, minKm: .5,
-    prefs: { sound: true },
+    intercom: null, seen: [], minMin: 3, minKm: .5, fuelLight: null, relay: '', home: null, roads: [],
+    prefs: { sound: false, music: false },
     stats: { exports: 0, wraps: 0 }, badges: {}
   };
 }
@@ -116,14 +139,19 @@ function fuelStats() {
   const cost = S.fuel.reduce((s, x) => s + (+x.cost || 0), 0);
   const spanKm = f.length > 1 ? f[f.length - 1].odo - f[0].odo : 0;
   const last = f[f.length - 1];
-  let range = null, tankFrac = null;
+  let range = null, tankFrac = null, pastE = false, light = false;
   if (kpl && last && S.bike.tank) {
-    const used = Math.max(0, (estOdo() - last.odo) / kpl);
-    const inTank = last.full ? +S.bike.tank : Math.min(+S.bike.tank, +S.bike.tank * .5 + (+last.litres || 0));
-    const left = Math.max(0, inTank - used);
+    const odo = estOdo(), fl = S.fuelLight;
+    let left;
+    // the bike's own fuel light is the truth: once it's on, count down from the reserve instead
+    if (fl && fl.odo >= last.odo) { light = true; left = (+S.bike.reserve || 2.5) - Math.max(0, (odo - fl.odo) / kpl); }
+    else { const inTank = last.full ? +S.bike.tank : Math.min(+S.bike.tank, +S.bike.tank * .5 + (+last.litres || 0)); left = inTank - Math.max(0, (odo - last.odo) / kpl); }
+    if (left < 0) pastE = true;
+    left = Math.max(0, left);
     range = Math.round(left * kpl); tankFrac = clamp(left / S.bike.tank, 0, 1);
   }
-  return { kpl, cost, cpk: spanKm > 0 ? cost / spanKm : null, range, tankFrac, best };
+  const low = range != null && (range < 60 || tankFrac < .15 || light);
+  return { kpl, cost, cpk: spanKm > 0 ? cost / spanKm : null, range, tankFrac, best, low, pastE, light, full: kpl && S.bike.tank ? S.bike.tank * kpl : null };
 }
 function monthRides(y = new Date().getFullYear(), m = new Date().getMonth()) {
   return S.rides.filter(r => { const d = new Date(r.start.t); return d.getFullYear() === y && d.getMonth() === m; });
@@ -140,11 +168,13 @@ async function routeKm(points) {
   try {
     const ctl = new AbortController(); setTimeout(() => ctl.abort(), 7000);
     const coords = points.map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
-    const j = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`, { signal: ctl.signal })).json();
-    if (j.code === 'Ok') return { km: j.routes[0].distance / 1000, src: 'route' };
+    const j = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=simplified&geometries=geojson&steps=true`, { signal: ctl.signal })).json();
+    // keep the road shape (the ride's light trail) and the expressways it used (for traffic alerts)
+    if (j.code === 'Ok') { const rt = j.routes[0], names = rt.legs.flatMap(l => l.steps.map(s => `${s.ref || ''} ${s.name || ''}`));
+      return { km: rt.distance / 1000, src: 'route', path: rt.geometry.coordinates.map(([lo, la]) => [+la.toFixed(5), +lo.toFixed(5)]), roads: roadCodes(names.join(' | ')) }; }
   } catch (e) {}
   let d = 0; for (let i = 1; i < points.length; i++) d += haversine(points[i - 1], points[i]);
-  return { km: d * 1.3, src: 'estimate' };
+  return { km: d * 1.3, src: 'estimate', path: points.map(p => [p.lat, p.lon]) };
 }
 
 /* ---------- Shortcut (Cardo / Siri) events arriving as URL parameters ---------- */
@@ -171,7 +201,7 @@ async function handleURL() {
     const straight = haversine(start, end);
     if (mins < S.minMin || (straight < S.minKm && !marks.length && mins < 15)) { save(); return { msg: 'Parked spot saved', icon: 'park', col: 'sky' }; }
     const r = await routeKm([start, ...marks, end]);
-    const ride = { id: uid(), start, end, km: Math.round(r.km * 10) / 10, src: 'auto', est: r.src, loop: straight < 1 && mins >= 15 && !marks.length, title: '', note: '', mood: '' };
+    const ride = { id: uid(), start, end, km: Math.round(r.km * 10) / 10, src: 'auto', est: r.src, path: r.path, roads: r.roads || [], loop: straight < 1 && mins >= 15 && !marks.length, title: '', note: '', mood: '' };
     S.rides.push(ride); save();
     return { ride };
   }
@@ -231,7 +261,7 @@ function checkBadges() {
 const STATUS_RANK = { unset: -1, ok: 0, soon: 1, over: 2 };
 function partStates() {
   const out = {};
-  PARTS.slice(0, 8).forEach(([k, name]) => {
+  PARTS.slice(0, -1).forEach(([k, name]) => {
     const items = S.items.filter(i => i.part === k).map(i => ({ i, s: itemStatus(i) })).filter(x => x.s.cls !== 'unset');
     if (!items.length) { out[k] = { name: name.toUpperCase(), val: '—', left: 0, status: 'unset' }; return; }
     const w = items.reduce((a, b) => b.s.frac < a.s.frac ? b : a);

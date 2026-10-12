@@ -3,12 +3,13 @@
 const rand = (a, b) => a + Math.random() * (b - a);
 /* ============ SOUND: an original synth score + one distinct sound per action ============ */
 window.Snd = {
-  ctx: null, on: false, onChange: null,
+  ctx: null, on: false, onChange: null, musOn: false,
+  setMusic(v) { this.musOn = v; if (this.ctx) this.mus.gain.setTargetAtTime(v || this.own ? .55 : 0, this.ctx.currentTime, .3); },
   start() {
     if (this.ctx) return; try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
     const c = this.ctx; this.out = c.createGain(); this.out.gain.value = 0; this.out.connect(c.destination);
     this.fx = c.createGain(); this.fx.gain.value = .9; this.fx.connect(this.out);
-    this.mus = c.createGain(); this.mus.gain.value = .55; this.mus.connect(this.out);
+    this.mus = c.createGain(); this.mus.gain.value = this.musOn ? .55 : 0; this.mus.connect(this.out);
     // a long dark hall for the pads
     const len = c.sampleRate * 3.2, ir = c.createBuffer(2, len, c.sampleRate);
     for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
@@ -54,7 +55,7 @@ window.Snd = {
       // riser into each new section
       if (bar % 8 === 7 && st === 0) { const nz = this.noise(spb * 4), f = c.createBiquadFilter(), g = c.createGain(); f.type = 'bandpass'; f.Q.value = 3; f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(5000, t + spb * 4); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.06, t + spb * 3.9); g.gain.linearRampToValueAtTime(0, t + spb * 4); nz.connect(f).connect(g).connect(comp); nz.start(t); }
     };
-    const sched = () => { while (next < c.currentTime + .3) { if (!this.own) play(next, step); next += s16; step++; } setTimeout(sched, 70); };
+    const sched = () => { if (!this.musOn && !this.own) { next = c.currentTime + .1; setTimeout(sched, 500); return; } while (next < c.currentTime + .3) { if (!this.own) play(next, step); next += s16; step++; } setTimeout(sched, 70); };
     sched();
   },
   /* --- your own track: picked from the phone, kept in this browser only --- */
@@ -63,11 +64,11 @@ window.Snd = {
     if (!this.ctx) this.start();
     if (!this.track) { this.track = new Audio(); this.track.loop = true; this.trackNode = this.ctx.createMediaElementSource(this.track); this.trackNode.connect(this.mus); }
     if (this.track.src) URL.revokeObjectURL(this.track.src);
-    this.track.src = URL.createObjectURL(blob); this.own = name || 'MY TRACK'; this.track.play().catch(() => {});
+    this.track.src = URL.createObjectURL(blob); this.own = name || 'MY TRACK'; this.track.play().catch(() => {}); this.mus.gain.setTargetAtTime(.55, this.ctx.currentTime, .3);
     if (this.scoreBus) this.scoreBus.gain.setTargetAtTime(0, this.ctx.currentTime, .3);
     this.onChange && this.onChange();
   },
-  dropTrack() { if (this.track) { this.track.pause(); } this.own = null; if (this.scoreBus) this.scoreBus.gain.setTargetAtTime(1, this.ctx.currentTime, .3); this.onChange && this.onChange(); },
+  dropTrack() { if (this.track) { this.track.pause(); } this.own = null; this.setMusic(this.musOn); if (this.scoreBus) this.scoreBus.gain.setTargetAtTime(1, this.ctx.currentTime, .3); this.onChange && this.onChange(); },
   /* --- effects --- */
   whoosh() { if (!this.ctx) return; const c = this.ctx, t = c.currentTime, n = this.noise(1.3), f = c.createBiquadFilter(), g = c.createGain(); f.type = 'bandpass'; f.Q.value = 1.6; f.frequency.setValueAtTime(260, t); f.frequency.exponentialRampToValueAtTime(3200, t + .55); f.frequency.exponentialRampToValueAtTime(400, t + 1.2); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.24, t + .25); g.gain.exponentialRampToValueAtTime(.001, t + 1.25); n.connect(f).connect(g).connect(this.fx); n.start(t); },
   // ride derez: a glassy shatter, pitched per ride
