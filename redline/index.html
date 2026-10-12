@@ -428,6 +428,74 @@ body.wrapping .nav,body.wrapping .gear{visibility:hidden}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* ride wrap */
+
+/* ===== v5.3: home-screen (standalone) fit, sticky actions, no clipping ===== */
+:root{--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--vh:100vh}
+@supports (height:100dvh){:root{--vh:100dvh}}
+/* a solid strip under the iPhone clock so cards never scroll underneath it */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:var(--st);background:var(--bg);z-index:7;pointer-events:none}
+body.wrapping::before{display:none}
+/* toast and ride banner park fully off-screen (they used to peek out under the notch) */
+.toast{transform:translate(-50%,calc(-100% - 30px - var(--st)));visibility:hidden;transition:transform .45s cubic-bezier(.2,1.4,.4,1),visibility 0s .45s}
+.toast.on{transform:translate(-50%,0);visibility:visible;transition:transform .45s cubic-bezier(.2,1.4,.4,1)}
+.banner{transform:translate(-50%,calc(-100% - 30px - var(--st)));visibility:hidden;transition:transform .45s cubic-bezier(.2,1.3,.4,1),visibility 0s .45s}
+.banner.on{transform:translate(-50%,0);visibility:visible;transition:transform .45s cubic-bezier(.2,1.3,.4,1)}
+/* settings gear sits in the header and scrolls away with it, instead of floating over cards */
+.pad{position:relative}
+.pad>.gear{position:absolute;top:calc(14px + var(--st));right:16px}
+/* sheets: sized to the visible screen (keyboard included), Save bar pinned to the bottom */
+.sheet{max-height:calc(var(--kbh,var(--vh)) - var(--st) - 10px);padding-bottom:0;bottom:var(--kbo,0px)}
+.sheet::after{content:"";display:block;height:calc(20px + var(--sb))}
+.sheet:has(#fm)::after{display:none}
+.sheet #fm>.btns{position:sticky;bottom:0;z-index:3;margin:6px -18px 0;padding:14px 18px calc(14px + var(--sb));background:linear-gradient(180deg,rgba(31,26,36,0),var(--panel) 16px)}
+.sheet #fm>.confirm{margin-top:10px}
+/* setup: panel uses the real screen height, buttons pinned */
+.setup{padding:var(--st) 10px calc(10px + var(--sb))}
+.setup .panel{max-height:calc(var(--kbh,var(--vh)) - var(--st) - var(--sb) - 20px);padding:20px 18px 0;display:flex;flex-direction:column}
+.setup .panel>.btns{position:sticky;bottom:0;z-index:3;margin:auto -18px 0;padding:14px 18px 18px;background:linear-gradient(180deg,rgba(31,26,36,0),var(--panel) 16px);border-radius:0 0 30px 30px}
+.setup .panel>#sform{flex:none}
+.later{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:2px dashed #4A4150;background:none;color:var(--cream);border-radius:18px;padding:14px;font:700 16px var(--disp);margin:-2px 0 14px}
+.later svg{width:18px;height:18px}
+/* forms: two-up fields line up even when one label wraps; iOS date pickers can't push past their column */
+.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end}
+.fld input{min-width:0;max-width:100%;display:block}
+.fld input[type=date]{min-height:55px;line-height:1.2;font-size:17px;padding-right:10px}
+.fld input::-webkit-date-and-time-value{text-align:left;margin:0}
+.fld>span{overflow-wrap:anywhere}
+/* text that used to clip or wrap awkwardly */
+.hi h1{overflow-wrap:anywhere}
+.hi small{overflow-wrap:anywhere}
+.gsum{flex-wrap:wrap;row-gap:10px;gap:8px} .gsum b{flex:1 1 100%;min-width:0;font-size:18px} .gsum .link{white-space:nowrap;background:var(--panel);border-radius:14px;padding:10px 14px;text-decoration:none}
+.alertc .t,.incident>div{min-width:0;flex:1}
+.alertc .t span{overflow-wrap:anywhere}
+.alertc .t b{white-space:nowrap}
+.incident b{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tile .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tile b{white-space:nowrap}
+.choice>span{min-width:0;flex:1}
+.done{width:72px;font-size:12px}
+.mrow .grow{min-width:0}
+.stats{grid-template-columns:repeat(3,minmax(0,1fr))} .stats>div{min-width:0} .stats b{white-space:nowrap;font-size:clamp(22px,7.6vw,30px)}
+.tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .tile{min-width:0}
+/* odometer before the first reading: blank drums you can tap */
+.odo.blank{border:0;background:none;color:inherit;padding:0;cursor:pointer}
+.drums.blank .strip{visibility:hidden}
+.drums.blank .drum::after{content:"–";position:absolute;inset:0;display:grid;place-items:center;font:800 26px var(--inst);color:#5A5060}
+.odohint{font:700 14px var(--disp);color:var(--orange);margin-top:-4px}
+/* checkpoint cams: tap to switch angle, star to make it your default */
+.cam{position:relative;border:0;background:none;padding:0;text-align:left;font:inherit;color:inherit;width:100%;min-width:0}
+.cam .shot{position:relative}
+.cam .dots{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:5px;pointer-events:none}
+.cam .dots i{width:6px;height:6px;border-radius:6px;background:rgba(255,255,255,.45);transition:width .25s,background .25s}
+.cam .dots i.on{width:16px;background:#fff}
+.cam .ang{position:absolute;left:8px;top:8px;background:rgba(10,8,12,.72);color:#fff;font:800 12px var(--disp);padding:4px 8px;border-radius:9px;max-width:calc(100% - 52px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cam .star{position:absolute;right:6px;top:6px;width:34px;height:34px;border-radius:11px;border:0;background:rgba(10,8,12,.72);color:#fff;display:grid;place-items:center;padding:0}
+.cam .star svg{width:18px;height:18px} .cam .star.on{color:var(--lemon)} .cam .star.on svg{fill:var(--lemon)}
+.cam .cn{display:flex;align-items:baseline;gap:6px;min-width:0} .cam .cn b{flex:none}
+.cam>span,.cam .cn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;min-width:0}
+.cam .full{color:var(--sky);text-decoration:none;font:700 14px var(--disp)}
+@media (max-width:360px){.cams{grid-template-columns:1fr}}
+@media (display-mode:standalone){html,body{overscroll-behavior:none}}
 </style>
 </head>
 <body data-place="0">

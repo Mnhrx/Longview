@@ -106,6 +106,7 @@ function itemStatus(it) {
     const left = Math.round((due - Date.now()) / DAY); fr.push(left / (it.months * 30.4)); parts.push(left >= 0 ? `${left} days` : `${-left} days over`);
   }
   if (!fr.length) return { cls: 'unset', label: 'Not set', frac: 0, text: 'Needs an odo reading' };
+  if (it.km && it.lastOdo == null) parts.push('km once odo is added');
   const f = Math.min(...fr);
   return { cls: f < 0 ? 'over' : f < .15 ? 'soon' : 'ok', label: f < 0 ? 'Overdue' : f < .15 ? 'Soon' : 'Good', frac: clamp(f, 0, 1), text: parts.join(' · ') };
 }

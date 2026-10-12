@@ -16,6 +16,7 @@ const IC = {
   fuel: '<path d="M5 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16M4 21h11M5 10h9"/><path d="M14 8h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/>',
   ride: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.3 5.2L3.5 17.4a1.9 1.9 0 0 0 2.7 2.7l5.9-5.9a4 4 0 0 0 5.2-5.3l-2.6 2.6-2.3-.6-.6-2.3z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   odo: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M10.5 10v4M14 10v4M17.5 10v4"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
   pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
@@ -28,6 +29,7 @@ const IC = {
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4.5M16 6h3a3 3 0 0 1-3 4.5M12 13v4M8.5 20.5h7M10 17h4"/>', play: '<path d="M8 5.5v13l10.5-6.5z"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>', save: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4.5 17v3.5h15V17"/>',
   park: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 16.5v-9h3a2.8 2.8 0 0 1 0 5.6h-3"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>', full: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
   cam: '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/>', alert: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5h.01"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', cloud: '<path d="M7 18h10.5a4 4 0 0 0 0-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"/>',
@@ -130,11 +132,46 @@ async function loadWeather(force) {
     LIVE.wx = { t: Date.now(), area: best, text, until: until ? new Date(until).toLocaleTimeString('en-SG', { hour: 'numeric' }).replace(' ', '').toLowerCase() : '' };
   } catch (e) { LIVE.wx = LIVE.wx || { err: true }; }
 }
-const CAMS = [['2701', 'Woodlands', 'Causeway to JB'], ['4703', 'Tuas', 'Second Link']];
+// Each crossing has several LTA cameras. Checkpoint (customs) view is the default; tap to cycle, star to make one your default.
+const CAMSETS = [
+  { k: 'wdl', name: 'Woodlands', at: { lat: 1.4456, lon: 103.7683 }, angles: [['2702', 'Checkpoint', 'Woodlands Checkpoint'], ['2701', 'Causeway', 'Causeway to JB'], ['2704', 'BKE', 'BKE towards checkpoint']] },
+  { k: 'tuas', name: 'Tuas', at: { lat: 1.3476, lon: 103.6367 }, angles: [['4713', 'Checkpoint', 'Tuas Checkpoint'], ['4703', 'Second Link', 'Second Link to JB']] },
+];
+const camView = {}; // which angle each crossing is showing right now (resets to your default on restart)
+function camAngles(set) {
+  const all = LIVE.camAll, known = new Set(set.angles.map(a => a[0]));
+  let list = all ? set.angles.filter(([id]) => all.some(c => c.camera_id === id)) : set.angles.slice();
+  // any other camera LTA has within 3 km of the checkpoint becomes an extra angle
+  if (all) all.filter(c => !known.has(c.camera_id) && haversine(set.at, { lat: c.location.latitude, lon: c.location.longitude }) < 3)
+    .sort((a, b) => haversine(set.at, { lat: a.location.latitude, lon: a.location.longitude }) - haversine(set.at, { lat: b.location.latitude, lon: b.location.longitude }))
+    .forEach(c => list.push([c.camera_id, 'Nearby', `${num(haversine(set.at, { lat: c.location.latitude, lon: c.location.longitude }), 1)} km from checkpoint`]));
+  return list.length ? list : set.angles.slice(0, 1);
+}
+function camDefault(set) { return (S.camPref && S.camPref[set.k]) || set.angles[0][0]; }
+function camCurrent(set) { const list = camAngles(set), id = camView[set.k] || camDefault(set); return list.find(a => a[0] === id) || list[0]; }
 async function loadCams() {
   if (window.PREVIEW) { LIVE.cams = { sample: true }; return; }
-  try { const j = await getJSON('https://api.data.gov.sg/v1/transport/traffic-images'); const all = j.items[0].cameras; LIVE.cams = {}; for (const [id] of CAMS) { const c = all.find(x => x.camera_id === id); if (c) LIVE.cams[id] = { img: c.image, t: c.timestamp }; } }
+  try { const j = await getJSON('https://api.data.gov.sg/v1/transport/traffic-images'); const all = j.items[0].cameras; LIVE.camAll = all; LIVE.cams = {}; for (const c of all) LIVE.cams[c.camera_id] = { img: c.image, t: c.timestamp }; }
   catch (e) { LIVE.cams = { err: true }; }
+}
+function camHTML(set) {
+  const c = LIVE.cams, list = camAngles(set), cur = camCurrent(set), [id, ang, sub] = cur, x = c && c[id], isDef = camDefault(set) === id;
+  return `<div class="cam" data-cam="${set.k}"><div class="shot" role="button" tabindex="0" aria-label="${esc(set.name)} camera, ${esc(ang)}. Tap for another angle">${x && x.img ? `<img src="${x.img}" alt="Live camera at ${esc(sub)}" loading="lazy">` : `<div class="camph"><span class="rec"></span>${ic('cam', 1.8)}<span>${c && c.sample ? 'Live camera in the app' : c && c.err ? 'Camera unavailable' : 'Loading…'}</span></div>`}
+      <span class="ang">${esc(ang)}</span><button type="button" class="star ${isDef ? 'on' : ''}" data-star="${set.k}" aria-label="${isDef ? 'This is your default angle' : 'Make this the default angle'}">${ic('star', 2)}</button>
+      ${list.length > 1 ? `<span class="dots">${list.map(a => `<i class="${a[0] === id ? 'on' : ''}"></i>`).join('')}</span>` : ''}</div>
+    <div class="cn"><b>${esc(set.name)}</b>${x && x.img ? `<a class="full" href="${x.img}" target="_blank" rel="noopener" aria-label="Open full size">${ic('full', 2.2)}</a>` : ''}</div><span>${esc(sub)}${x && x.t ? ' · ' + new Date(x.t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) : ''}</span></div>`;
+}
+function cycleCam(k, el) {
+  const set = CAMSETS.find(x => x.k === k), list = camAngles(set), i = list.indexOf(camCurrent(set)), nx = list[(i + 1) % list.length];
+  camView[k] = nx[0]; haptic();
+  const tmp = document.createElement('div'); tmp.innerHTML = camHTML(set); const fresh = tmp.firstElementChild; el.replaceWith(fresh);
+  if (!RM) $('.shot', fresh).animate([{ transform: 'translateX(18%) scale(.96)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,1.2,.35,1)' });
+}
+function starCam(k, el) {
+  const set = CAMSETS.find(x => x.k === k), cur = camCurrent(set);
+  S.camPref = Object.assign({}, S.camPref, { [k]: cur[0] }); save(); haptic();
+  const tmp = document.createElement('div'); tmp.innerHTML = camHTML(set); el.replaceWith(tmp.firstElementChild);
+  toast(`${set.name} opens on ${cur[1]} now`);
 }
 // incidents near the roads you actually ride (needs your free DataMall relay)
 function myRoadPoints() { const pts = []; for (const r of S.rides) if (r.path) for (let i = 0; i < r.path.length; i += 3) pts.push({ lat: r.path[i][0], lon: r.path[i][1] }); return pts; }
@@ -175,7 +212,7 @@ function homeHTML() {
   const fs = fuelStats(), due = dueItems(), mr = monthRides(), mkm = mr.reduce((s, r) => s + (r.km || 0), 0), nr = nextRenewal();
   const w = wrapMonth();
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
-    <div class="instr">${gaugeBlock('h', fs)}<div class="odo"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></div></div>
+    <div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<div class="odo"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></div>`}</div>
     <div class="alerts" id="alerts">${alertsHTML()}</div>
     <div id="live0"></div>
     ${wrapReady() ? `<button type="button" class="wrapcta" data-act="wrap"><span class="wglow"></span><span class="wt"><small>Ride Wrap</small><b>Your ${new Date(w.y, w.m, 1).toLocaleDateString('en-SG', { month: 'long' })} is ready</b></span><span class="wplay">${ic('play', 2.6)}</span></button>` : ''}`;
@@ -185,6 +222,7 @@ const renWindow = r => /coe/i.test(r.name) ? 90 : 30;
 function alertsHTML() {
   const fs = fuelStats(), due = dueItems(), out = [];
   const partCard = top => `<section class="card c-lemon alertc ${top.s.cls}" data-part="${top.i.part}">${ART.art(top.i.part, top.s.frac, top.s.cls, 68)}<div class="t"><span>${top.s.cls === 'over' ? '<em>OVERDUE</em>' : '<em class="soon">DUE SOON</em>'}${esc(top.i.name)}</span><b>${bigVal(top.s)}</b></div><button type="button" class="sqbtn" data-done="${top.i.id}" aria-label="Mark ${esc(top.i.name)} done today">${ic('check', 3)}</button></section>`;
+  if (estOdo() == null) out.push(`<section class="card c-mint alertc ren" data-act="odo"><span class="renic">${ic('odo', 2.4)}</span><div class="t"><span>Odometer</span><b style="font-size:22px">Add a reading</b></div><span class="minibtn dark">Add</span></section>`);
   if (fs.low) out.push(`<section class="card c-red alertc"><div class="t"><span>${fs.pastE ? 'Past E' : 'Low fuel'}</span><b>${fs.pastE ? 'Fill up now' : `${fs.range}<small>km left</small>`}</b></div><a class="cbtn" href="${isIOS ? 'https://maps.apple.com/?q=petrol%20station' : 'https://www.google.com/maps/search/petrol+station/'}" target="_blank" rel="noopener">${ic('pin')}<span>Find petrol</span></a></section>`);
   const over = due.filter(x => x.s.cls === 'over'); if (over[0]) out.push(partCard(over[0]));
   if (LIVE.inc && LIVE.inc[0]) { const x = LIVE.inc[0]; out.push(`<section class="card c-red incident" data-tab="1"><span class="incic ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${ic(incKind(x.Type) === 'Jam' ? 'odo' : 'alert')}</span><div><span>${incKind(x.Type)} on your road${LIVE.inc.length > 1 ? ` · +${LIVE.inc.length - 1} more` : ''}</span><b>${esc(incText(x.Message))}</b></div></section>`); }
@@ -218,10 +256,8 @@ function ridesHTML() {
 }
 function liveRides() {
   const c = LIVE.cams, all = LIVE.all, mine = myRoads();
-  const cam = ([id, name, sub]) => { const x = c && c[id];
-    return `<a class="cam" ${x && x.img ? `href="${x.img}" target="_blank" rel="noopener"` : ''}><div class="shot">${x && x.img ? `<img src="${x.img}" alt="Live camera at ${name}" loading="lazy">` : `<div class="camph"><span class="rec"></span>${ic('cam', 1.8)}<span>${c && c.sample ? 'Live camera in the app' : c && c.err ? 'Camera unavailable' : 'Loading…'}</span></div>`}</div><b>${name}</b><span>${sub}${x && x.t ? ' · ' + new Date(x.t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) : ''}</span></a>`; };
   return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b>${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>
-    <div class="cams">${CAMS.map(cam).join('')}</div>
+    <div class="cams">${CAMSETS.map(camHTML).join('')}</div>
     ${all ? (all.length ? `<div class="incs">${all.slice(0, 8).map(x => { const m = x.roads.some(r => mine.includes(r)); return `<div class="inc ${m ? 'mine' : ''}"><span class="tag ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${incKind(x.Type)}</span><p>${esc(incText(x.Message))}</p></div>`; }).join('')}</div>` : '<div class="note">Expressways are clear right now.</div>')
       : '<button type="button" class="note link" data-act="relay">Turn on live jams and accidents →</button>'}`;
 }
@@ -231,10 +267,10 @@ function garageHTML() {
   const st = S.items.map(itemStatus), over = st.filter(s => s.cls === 'over').length, soon = st.filter(s => s.cls === 'soon').length;
   const ks = PARTS.filter(([k]) => S.items.some(i => i.part === k)).map(([k, l]) => ({ k, l, ...partInfo(k) })).sort((a, b) => (a.cls === 'unset') - (b.cls === 'unset') || a.f - b.f);
   const hero = ks[0];
-  return `<div class="hi"><div><h1>Garage</h1><small>${esc(buildName())} · ${num(estOdo())} km</small></div></div>
+  return `<div class="hi"><div><h1>Garage</h1><small>${esc(buildName())} · ${estOdo() == null ? 'odometer not added' : num(estOdo()) + ' km'}</small></div></div>
     ${hero ? `<section class="card ghero ${hero.cls}" data-part="${hero.k}">${ART.art(hero.k, hero.f, hero.cls, 150)}<div class="t"><span>${hero.cls === 'over' ? '<em>OVERDUE</em>' : hero.cls === 'soon' ? '<em class="soon">DUE SOON</em>' : '<em class="okk">NEXT UP</em>'}${esc(hero.w ? hero.w.i.name : hero.l)}</span><b>${hero.w ? bigVal(hero.w.s) : 'Not tracked'}</b>${hero.w ? `<button type="button" class="donebig" data-done="${hero.w.i.id}">${ic('check', 3)}<span>Done today</span></button>` : ''}</div></section>` : ''}
     <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div>
-    <div class="tiles">${ks.slice(1).map((p, i) => `<button type="button" class="tile ${p.cls}" data-part="${p.k}" style="--d:${i * 50}ms">${ART.art(p.k, p.f, p.cls, 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : '<small>Not tracked</small>'}</b><span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span></button>`).join('')}</div>`;
+    <div class="tiles">${ks.slice(1).map((p, i) => `<button type="button" class="tile ${p.cls}" data-part="${p.k}" style="--d:${i * 50}ms">${ART.art(p.k, p.f, p.cls, 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : `<small>${estOdo() == null ? 'Needs odometer' : 'Not tracked'}</small>`}</b><span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span></button>`).join('')}</div>`;
 }
 function fuelHTML() {
   const fs = fuelStats(), now = new Date(), list = [...S.fuel].sort((a, b) => b.odo - a.odo);
@@ -256,10 +292,10 @@ function gaugeFrac(fs) { return fs.range != null && fs.full ? clamp(fs.range / f
 function render(animate, dir = 0) {
   document.body.dataset.place = place;
   const pad = document.createElement('div'); pad.className = 'pad'; pad.innerHTML = SCREENS[place]();
-  viewEl.className = 'view v' + place; viewEl.replaceChildren(pad);
+  pad.prepend($('#gear')); viewEl.className = 'view v' + place; viewEl.replaceChildren(pad);
   navTo(place);
   const fs = fuelStats(), f = gaugeFrac(fs);
-  if (place === 0) { if (animate) { setOdo(0, false); setTimeout(() => setOdo(estOdo(), true), 260); keyOn('h', f, fs.full); } else { setOdo(estOdo(), false); gaugeSet('h', f, fs.full); } paintLive(); }
+  if (place === 0) { if (estOdo() == null) { gaugeSet('h', f, fs.full); if (animate) keyOn('h', f, fs.full); } else if (animate) { setOdo(0, false); setTimeout(() => setOdo(estOdo(), true), 260); keyOn('h', f, fs.full); } else { setOdo(estOdo(), false); gaugeSet('h', f, fs.full); } paintLive(); }
   if (place === 3) { if (animate) keyOn('f', f, fs.full); else gaugeSet('f', f, fs.full); }
   if (place === 1) { paintLive(); if (window.MAP) MAP.mount($('#mapcv'), animate); showFocus(); }
   if (animate && !RM) {
@@ -270,7 +306,12 @@ function render(animate, dir = 0) {
   }
 }
 function countTo(el, to, ms) { if (!el) return; const from = 0, t0 = performance.now(); (function step(now) { const k = Math.min(1, (now - t0) / ms); el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); })(t0); }
-function refresh() { syncWorld(); const y = viewEl.scrollTop; render(false); viewEl.scrollTop = y; }
+function adoptOdo() {
+  if (!S.odoPending) return; const r = odoReadings(); if (!r.length) return;
+  const first = r[0].odo; S.items.forEach(i => { if (i.lastOdo == null && i.base) i.lastOdo = first; }); S.odoPending = false; save();
+  setTimeout(() => toast('Odometer added · km countdowns started'), 500);
+}
+function refresh() { adoptOdo(); syncWorld(); const y = viewEl.scrollTop; render(false); viewEl.scrollTop = y; }
 let going = false;
 function go(i) {
   if (i === place) { viewEl.scrollTo({ top: 0, behavior: 'smooth' }); return; }
@@ -300,8 +341,17 @@ function showFocus() {
 function setType(type) { if (type === S.bike.type) return; S.bike.type = type; save(); syncWorld(); if (place === 2) refresh(); }
 
 $('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.act) { haptic(); b.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(90deg) scale(.9)' }, { transform: 'rotate(90deg)' }], { duration: 300, easing: 'cubic-bezier(.2,1.4,.4,1)' }); plusSheet(); return; } go(+b.dataset.i); });
+// keep sheets and setup inside the visible screen when the keyboard is up (iPhone home-screen apps don't resize for it)
+(function fitKeyboard() {
+  const vv = window.visualViewport; if (!vv) return; const root = document.documentElement;
+  const fit = () => { const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop); if (kb > 80) { root.style.setProperty('--kbh', vv.height + 'px'); root.style.setProperty('--kbo', kb + 'px'); } else { root.style.removeProperty('--kbh'); root.style.removeProperty('--kbo'); } };
+  vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
+  document.addEventListener('focusin', e => { if (e.target.matches('input,textarea')) setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300); });
+})();
 $('#gear').addEventListener('click', e => { haptic(); e.currentTarget.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(120deg)' }], { duration: 500, easing: 'cubic-bezier(.2,1.3,.4,1)' }); settingsSheet(); });
 viewEl.addEventListener('click', e => {
+  const st = e.target.closest('[data-star]'); if (st) { e.preventDefault(); starCam(st.dataset.star, st.closest('.cam')); return; }
+  const sh = e.target.closest('.cam .shot'); if (sh) { cycleCam(sh.closest('.cam').dataset.cam, sh.closest('.cam')); return; }
   const b = e.target.closest('[data-act],[data-tab],[data-ride],[data-fuel],[data-ren],[data-rdone],[data-done],[data-edit],[data-add],[data-part],[data-focus]'); if (!b) return; haptic();
   const d = b.dataset;
   if (d.act) ACTIONS[d.act](b); else if (d.tab) go(+d.tab);
@@ -314,7 +364,7 @@ viewEl.addEventListener('click', e => {
 });
 // press feel on anything tappable
 let pressed = null;
-viewEl.addEventListener('pointerdown', e => { const b = e.target.closest('button,.card[data-part],a.cam'); if (!b || RM) return; pressed = b; b._pa = b.animate([{ transform: 'scale(1)' }, { transform: 'scale(.96)' }], { duration: 120, fill: 'forwards', easing: 'ease-out' }); });
+viewEl.addEventListener('pointerdown', e => { const b = e.target.closest('button,.card[data-part],.cam .shot'); if (!b || RM) return; pressed = b; b._pa = b.animate([{ transform: 'scale(1)' }, { transform: 'scale(.96)' }], { duration: 120, fill: 'forwards', easing: 'ease-out' }); });
 addEventListener('pointerup', () => { const b = pressed; pressed = null; if (!b || !b._pa) return; b._pa.cancel(); b.animate([{ transform: 'scale(.96)' }, { transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 340, easing: 'ease-out' }); });
 addEventListener('pointercancel', () => { if (pressed && pressed._pa) pressed._pa.cancel(); pressed = null; });
 function openSheet(title, lede, body, onOpen) {
@@ -426,7 +476,7 @@ function renewalForm(r) {
 }
 const bikeFields = b => [{ k: 'name', l: 'Nickname', v: b.name, req: 1, ph: 'Black Mamba' },
   { type: 'row', f: [{ k: 'model', l: 'Model', v: b.model, ph: 'Yamaha MT-07' }, { k: 'plate', l: 'Plate', v: b.plate, ph: 'FBA1234X' }] },
-  { type: 'row', f: [{ k: 'tank', l: 'Tank size (L)', type: 'number', v: b.tank }, { k: 'reserve', l: 'Reserve when fuel light comes on (L)', type: 'number', v: b.reserve ?? 2.5 }] },
+  { type: 'row', f: [{ k: 'tank', l: 'Tank size (L)', type: 'number', v: b.tank }, { k: 'reserve', l: 'Fuel light reserve (L)', type: 'number', v: b.reserve ?? 2.5 }] },
   { k: 'cc', l: 'Engine (cc)', type: 'number', v: b.cc },
   { k: 'licence', l: 'Licence class', type: 'chips', o: ['2B', '2A', '2'].map(v => ({ v, l: 'Class ' + v })), v: b.licence }];
 function bikeForm() {
@@ -676,7 +726,7 @@ const STEPS = [
   { k: 'Welcome', h: 'Let’s set up your bike', p: 'Redline keeps your bike’s service, fuel, renewals and rides in one place, and can log rides on its own. Setup takes about a minute.', cta: 'Begin', place: 0 },
   { k: 'Step 1 of 6', h: 'How is it built?', p: 'This decides which parts Redline tracks. Not sure? Look at the rear wheel and the front of the engine.', custom: 'build' },
   { k: 'Step 2 of 6', h: 'Name your ride', p: 'You can change these any time in Settings.', place: 2, fields: () => bikeFields(S.bike), save: v => { if (!v.name) { toast('Give your bike a nickname', 'over'); return false; } Object.assign(S.bike, v); } },
-  { k: 'Step 3 of 6', h: 'Odometer and last service', p: 'The starting point for every countdown. Rough is fine.', place: 0, custom: 'service' },
+  { k: 'Step 3 of 6', h: 'Odometer and last service', p: 'The starting point for every countdown. Rough is fine, and you can add it later.', place: 0, custom: 'service' },
   { k: 'Step 4 of 6', h: 'Renewal dates', p: 'Add what you know and skip the rest.', place: 0, fields: () => S.renewals.slice(0, 4).map(r => ({ k: r.id, l: r.name, type: 'date', v: r.date })), save: v => { S.renewals.forEach(r => { if (r.id in v) r.date = v[r.id]; }); }, skip: true },
   { k: 'Step 5 of 6', h: 'Your usual roads', p: 'Jams and accidents on these show up on Home. Skip it and Redline learns them from your rides.', custom: 'roads', skip: true },
   { k: 'Step 6 of 6', h: 'Ride with an intercom?', p: 'If you do, rides can log themselves when it connects and disconnects. Set it up later in Settings.', place: 1, custom: 'intercom' },
@@ -688,7 +738,7 @@ function renderStep() {
   let body = '';
   if (st.fields) body = st.fields().map(F).join('');
   if (st.body) body = st.body();
-  if (st.custom === 'service') body = F({ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', ph: '18420', req: 1 }) + `<button type="button" class="choice ${setupSvc === 'fresh' ? 'on' : ''}" data-c="fresh"><span><b>Just serviced, or start fresh</b><span>Every countdown starts from today</span></span></button>
+  if (st.custom === 'service') body = F({ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', ph: '18420' }) + `<button type="button" class="later" id="odoLater">${ic('clock', 2.2)}<span>Not near the bike? Add it later</span></button><button type="button" class="choice ${setupSvc === 'fresh' ? 'on' : ''}" data-c="fresh"><span><b>Just serviced, or start fresh</b><span>Every countdown starts from today</span></span></button>
     <button type="button" class="choice ${setupSvc === 'known' ? 'on' : ''}" data-c="known"><span><b>I know my last service</b><span>Enter the km and what was done</span></span></button>
     <div id="svcKnown" ${setupSvc === 'known' ? '' : 'hidden'}>${[{ type: 'row', f: [{ k: 'sdate', l: 'Date', type: 'date', v: todayISO() }, { k: 'sodo', l: 'At odometer (km)', type: 'number', v: '' }] }, { k: 'sitems', l: 'What was done', type: 'chips', multi: 1, o: S.items.map(i => ({ v: i.id, l: i.name })), v: S.items.slice(0, 2).map(i => i.id) }].map(F).join('')}</div>`;
   if (st.custom === 'build') { const art = { chain: 'chain', belt: 'belt', shaft: 'final', liquid: 'coolant', air: 'fins' };
@@ -704,6 +754,7 @@ function renderStep() {
     if (st.custom === 'service') { setupSvc = c.dataset.c; $('#svcKnown', panel).hidden = setupSvc !== 'known'; } else S.intercom = c.dataset.c; });
   panel.onpick = null; panel.addEventListener('pick', e => { const f = e.target.closest('[data-k=type]'); if (!f) return; const v = read(panel).type; if (v) { S.bike.type = v; if (window.W) W.setBike(v); } });
   if (st.custom === 'roads') wireFinder(panel);
+  $('#odoLater', panel) && ($('#odoLater', panel).onclick = () => { $('[name=odo]', panel).value = ''; nextStep(); });
   $('#sBack', panel) && ($('#sBack', panel).onclick = () => { step--; renderStep(); });
   $('#sSkip', panel) && ($('#sSkip', panel).onclick = () => { step++; renderStep(); });
   $('#sNext', panel).onclick = nextStep; $('#sform', panel).onsubmit = e => { e.preventDefault(); nextStep(); };
@@ -712,9 +763,11 @@ function nextStep() {
   const st = STEPS[step], v = read($('#sform'));
   if (st.save && st.save(v) === false) return;
   if (st.custom === 'service') {
-    if (v.odo == null || isNaN(v.odo)) { toast('Add your odometer reading', 'over'); return; }
-    S.odoLog = S.odoLog.filter(o => !o.setup); S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, setup: true });
-    if (setupSvc === 'fresh') S.items.forEach(i => { i.lastOdo = v.odo; i.lastDate = todayISO(); i.base = true; });
+    const has = v.odo != null && !isNaN(v.odo);
+    S.odoLog = S.odoLog.filter(o => !o.setup); if (has) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, setup: true });
+    // no reading yet: time-based countdowns start today, km countdowns start the moment a reading arrives
+    S.odoPending = !has;
+    if (setupSvc === 'fresh') S.items.forEach(i => { i.lastOdo = has ? v.odo : null; i.lastDate = todayISO(); i.base = true; });
     else { if (v.sodo == null || isNaN(v.sodo)) { toast('Add the odometer at that service', 'over'); return; } S.services.push({ id: uid(), date: v.sdate || todayISO(), odo: v.sodo, items: v.sitems, cost: null, shop: '', notes: 'Added during setup' }); syncItems(); }
   }
   if (st.custom === 'build') { applyBuild(); syncItems(); }
