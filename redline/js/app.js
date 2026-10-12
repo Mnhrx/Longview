@@ -29,6 +29,8 @@ const IC = {
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4.5M16 6h3a3 3 0 0 1-3 4.5M12 13v4M8.5 20.5h7M10 17h4"/>', play: '<path d="M8 5.5v13l10.5-6.5z"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>', save: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4.5 17v3.5h15V17"/>',
   park: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 16.5v-9h3a2.8 2.8 0 0 1 0 5.6h-3"/>',
+  target: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>', full: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
   cam: '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/>', alert: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5h.01"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -154,24 +156,47 @@ async function loadCams() {
   try { const j = await getJSON('https://api.data.gov.sg/v1/transport/traffic-images'); const all = j.items[0].cameras; LIVE.camAll = all; LIVE.cams = {}; for (const c of all) LIVE.cams[c.camera_id] = { img: c.image, t: c.timestamp }; }
   catch (e) { LIVE.cams = { err: true }; }
 }
+// one cam = a swipe strip of every angle (native scroll-snap, so it feels like iPhone photos)
+function camSlide(set, [id, ang, sub]) {
+  const c = LIVE.cams, x = c && c[id];
+  return `<div class="slide" data-id="${id}">${x && x.img ? `<img src="${x.img}" alt="Live camera, ${esc(sub)}" loading="lazy" draggable="false">` : `<div class="camph ph-${id.slice(-1) % 3}"><span class="rec"></span>${ic('cam', 1.8)}<span>${c && c.sample ? `Live ${esc(ang.toLowerCase())} view in the app` : c && c.err ? 'Camera unavailable' : 'Loading…'}</span></div>`}</div>`;
+}
 function camHTML(set) {
-  const c = LIVE.cams, list = camAngles(set), cur = camCurrent(set), [id, ang, sub] = cur, x = c && c[id], isDef = camDefault(set) === id;
-  return `<div class="cam" data-cam="${set.k}"><div class="shot" role="button" tabindex="0" aria-label="${esc(set.name)} camera, ${esc(ang)}. Tap for another angle">${x && x.img ? `<img src="${x.img}" alt="Live camera at ${esc(sub)}" loading="lazy">` : `<div class="camph"><span class="rec"></span>${ic('cam', 1.8)}<span>${c && c.sample ? 'Live camera in the app' : c && c.err ? 'Camera unavailable' : 'Loading…'}</span></div>`}
-      <span class="ang">${esc(ang)}</span><button type="button" class="star ${isDef ? 'on' : ''}" data-star="${set.k}" aria-label="${isDef ? 'This is your default angle' : 'Make this the default angle'}">${ic('star', 2)}</button>
+  const list = camAngles(set), cur = camCurrent(set), [id, ang, sub] = cur, x = LIVE.cams && LIVE.cams[id], fav = S.camPref && S.camPref[set.k] === id;
+  return `<div class="cam" data-cam="${set.k}"><div class="shot"><div class="swipe" tabindex="0" aria-label="${esc(set.name)} cameras. Swipe for other angles">${list.map(a => camSlide(set, a)).join('')}</div>
+      <span class="ang">${esc(ang)}</span><button type="button" class="star ${fav ? 'on' : ''}" data-star="${set.k}" aria-pressed="${fav}" aria-label="${fav ? 'Remove as default angle' : 'Make this the default angle'}">${ic('star', 2)}</button>
       ${list.length > 1 ? `<span class="dots">${list.map(a => `<i class="${a[0] === id ? 'on' : ''}"></i>`).join('')}</span>` : ''}</div>
-    <div class="cn"><b>${esc(set.name)}</b>${x && x.img ? `<a class="full" href="${x.img}" target="_blank" rel="noopener" aria-label="Open full size">${ic('full', 2.2)}</a>` : ''}</div><span>${esc(sub)}${x && x.t ? ' · ' + new Date(x.t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) : ''}</span></div>`;
+    <div class="cn"><b>${esc(set.name)}</b>${x && x.img ? `<a class="full" href="${x.img}" target="_blank" rel="noopener" aria-label="Open full size">${ic('full', 2.2)}</a>` : ''}</div><span class="csub">${esc(sub)}${x && x.t ? ' · ' + new Date(x.t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) : ''}</span></div>`;
 }
-function cycleCam(k, el) {
-  const set = CAMSETS.find(x => x.k === k), list = camAngles(set), i = list.indexOf(camCurrent(set)), nx = list[(i + 1) % list.length];
-  camView[k] = nx[0]; haptic();
-  const tmp = document.createElement('div'); tmp.innerHTML = camHTML(set); const fresh = tmp.firstElementChild; el.replaceWith(fresh);
-  if (!RM) $('.shot', fresh).animate([{ transform: 'translateX(18%) scale(.96)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,1.2,.35,1)' });
+// sync label, dots, star and caption to whichever angle is in view
+function camSync(el) {
+  const set = CAMSETS.find(x => x.k === el.dataset.cam), [id, ang, sub] = camCurrent(set), list = camAngles(set), x = LIVE.cams && LIVE.cams[id], fav = S.camPref && S.camPref[set.k] === id;
+  $('.ang', el).textContent = ang; $$('.dots i', el).forEach((d, i) => d.classList.toggle('on', list[i] && list[i][0] === id));
+  const st = $('.star', el); st.classList.toggle('on', !!fav); st.setAttribute('aria-pressed', String(!!fav)); st.setAttribute('aria-label', fav ? 'Remove as default angle' : 'Make this the default angle');
+  $('.csub', el).textContent = sub + (x && x.t ? ' · ' + new Date(x.t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }) : '');
+  const f = $('.full', el); if (f && x && x.img) f.href = x.img;
 }
-function starCam(k, el) {
-  const set = CAMSETS.find(x => x.k === k), cur = camCurrent(set);
-  S.camPref = Object.assign({}, S.camPref, { [k]: cur[0] }); save(); haptic();
-  const tmp = document.createElement('div'); tmp.innerHTML = camHTML(set); el.replaceWith(tmp.firstElementChild);
-  toast(`${set.name} opens on ${cur[1]} now`);
+function wireCams(root) {
+  $$('.cam', root).forEach(el => {
+    if (el._wired) return; el._wired = true;
+    const set = CAMSETS.find(x => x.k === el.dataset.cam), sw = $('.swipe', el), list = () => camAngles(set);
+    const jump = (smooth) => { const i = list().indexOf(camCurrent(set)); sw.scrollTo({ left: i * sw.clientWidth, behavior: smooth ? 'smooth' : 'instant' }); };
+    requestAnimationFrame(() => jump(false));
+    let t = 0; sw.addEventListener('scroll', () => { cancelAnimationFrame(t); t = requestAnimationFrame(() => {
+      const i = Math.round(sw.scrollLeft / Math.max(1, sw.clientWidth)), a = list()[i]; if (a && camView[set.k] !== a[0]) { camView[set.k] = a[0]; camSync(el); haptic(); } }); }, { passive: true });
+    // a tap (not a swipe) steps to the next angle
+    let sx = 0; sw.addEventListener('pointerdown', e => sx = e.clientX);
+    sw.addEventListener('click', e => { if (Math.abs(e.clientX - sx) > 8) return; const l = list(), i = l.indexOf(camCurrent(set)); camView[set.k] = l[(i + 1) % l.length][0]; jump(!RM); });
+    $('.star', el).addEventListener('click', e => { e.stopPropagation(); const [id, ang] = camCurrent(set);
+      const on = S.camPref && S.camPref[set.k] === id; S.camPref = Object.assign({}, S.camPref); if (on) delete S.camPref[set.k]; else S.camPref[set.k] = id; save(); camSync(el); haptic();
+      if (!RM) e.currentTarget.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35) rotate(-12deg)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.2,1.4,.4,1)' });
+      toast(on ? `${set.name} back to opening on ${set.angles[0][1]}` : `${set.name} will open on ${ang}`); });
+  });
+}
+// new camera pictures arrive every few minutes: swap the images in place so a swipe in progress isn't reset
+function refreshCamImgs(root) {
+  $$('.cam', root).forEach(el => { const set = CAMSETS.find(x => x.k === el.dataset.cam);
+    $$('.slide', el).forEach(sl => { const x = LIVE.cams && LIVE.cams[sl.dataset.id]; const img = $('img', sl); if (x && x.img) { if (img) { if (img.src !== x.img) img.src = x.img; } else sl.outerHTML = camSlide(set, camAngles(set).find(a => a[0] === sl.dataset.id)); } }); camSync(el); });
 }
 // incidents near the roads you actually ride (needs your free DataMall relay)
 function myRoadPoints() { const pts = []; for (const r of S.rides) if (r.path) for (let i = 0; i < r.path.length; i += 3) pts.push({ lat: r.path[i][0], lon: r.path[i][1] }); return pts; }
@@ -235,7 +260,8 @@ function alertsHTML() {
 function wxIcon(t) { const k = WX_ICON(t); return `<span class="wxi wx-${k}">${ic(k, 2.2)}${k === 'rain' || k === 'storm' ? '<i></i><i></i><i></i>' : ''}</span>`; }
 function liveHome() {
   const w = LIVE.wx, inc = LIVE.inc; let h = '';
-  if (w && !w.err) h += `<section class="wxrow ${wet(w.text) ? 'wet' : ''}">${wxIcon(w.text)}<div class="grow"><b>${esc(w.text.replace(/\s*\((Day|Night)\)/i, ''))}</b><span>${esc(w.area)}${w.until ? ' · till ' + w.until : ''}</span></div><span class="verdict">${wet(w.text) ? 'Rain gear' : 'Good to ride'}</span></section>`;
+  if (w && !w.err) h += `<button type="button" class="wxrow ${wet(w.text) ? 'wet' : ''}" data-act="radar">${wxIcon(w.text)}<div class="grow"><b>${esc(w.text.replace(/\s*\((Day|Night)\)/i, ''))}</b><span>${esc(w.area)}${w.until ? ' · till ' + w.until : ''}</span></div><span class="wxr"><span class="verdict">${wet(w.text) ? 'Rain gear' : 'Good to ride'}</span><span class="rdlink"><i class="sweep"></i>Radar</span></span></button>`;
+  else h += `<button type="button" class="wxrow" data-act="radar"><span class="wxi wx-cloud">${ic('cloud', 2.2)}</span><div class="grow"><b>Rain radar</b><span>The last hour, every 5 minutes</span></div><span class="rdlink"><i class="sweep"></i>Radar</span></button>`;
   return h;
 }
 function abroadKm(r) { if (!r.path || r.path.length < 2 || !window.MAP) return 0; return (r.km || 0) * r.path.filter(([la, lo]) => !MAP.inSG(la, lo)).length / r.path.length; }
@@ -245,23 +271,28 @@ function ridesHTML() {
   return `<div class="hi"><div><h1>Rides</h1></div></div>
     <section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
       <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
-      <div class="mfocus" id="mfocus" hidden></div></section>
+      <div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
     <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div>
     <h2 class="sec">Road check</h2>
-    <div id="live1"></div>
+    <div class="roadchk"><div id="live1a"></div><div class="cams" id="cams"></div><div id="live1"></div></div>
     <h2 class="sec">Journal</h2>
     <section class="list2">${rides.length ? rides.slice(0, 40).map((r, i) => `<button type="button" class="rrow" data-focus="${r.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(r.start.t).getDate()}</b><small>${new Date(r.start.t).toLocaleDateString('en-SG', { month: 'short' })}</small></span>
         <span class="grow"><span class="t">${esc(r.title || 'Ride')}${abroadKm(r) > 1 ? ' <em class="flag">JB</em>' : ''}</span><span class="s">${new Date(r.start.t).toLocaleDateString('en-SG', { weekday: 'short' })} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min${r.mood ? ' · ' + esc(r.mood) : ''}</span></span><span class="km">${num(r.km, 1)}<small>km</small></span></button>`).join('')
       : '<div class="empty">No rides yet. Turn on auto-log in Settings and rides appear here by themselves.</div>'}</section>`;
 }
+function liveRoads() { const mine = myRoads();
+  return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b>${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>`; }
 function liveRides() {
-  const c = LIVE.cams, all = LIVE.all, mine = myRoads();
-  return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b>${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>
-    <div class="cams">${CAMSETS.map(camHTML).join('')}</div>
-    ${all ? (all.length ? `<div class="incs">${all.slice(0, 8).map(x => { const m = x.roads.some(r => mine.includes(r)); return `<div class="inc ${m ? 'mine' : ''}"><span class="tag ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${incKind(x.Type)}</span><p>${esc(incText(x.Message))}</p></div>`; }).join('')}</div>` : '<div class="note">Expressways are clear right now.</div>')
+  const all = LIVE.all, mine = myRoads();
+  return `${all ? (all.length ? `<div class="incs">${all.slice(0, 8).map(x => { const m = x.roads.some(r => mine.includes(r)); return `<div class="inc ${m ? 'mine' : ''}"><span class="tag ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${incKind(x.Type)}</span><p>${esc(incText(x.Message))}</p></div>`; }).join('')}</div>` : '<div class="note">Expressways are clear right now.</div>')
       : '<button type="button" class="note link" data-act="relay">Turn on live jams and accidents →</button>'}`;
 }
-function paintLive() { const a = $('#live0'), b = $('#live1'), al = $('#alerts'); if (a) a.innerHTML = liveHome(); if (b) b.innerHTML = liveRides(); if (al) { const h = alertsHTML(); if (al.dataset.h !== h) { al.innerHTML = h; al.dataset.h = h; } } }
+// the cams are built once per screen and only have their pictures swapped after that, so a swipe is never reset
+function paintLive() {
+  const a = $('#live0'), ra = $('#live1a'), b = $('#live1'), cams = $('#cams'), al = $('#alerts');
+  if (a) a.innerHTML = liveHome(); if (ra) ra.innerHTML = liveRoads(); if (b) b.innerHTML = liveRides();
+  if (cams) { if (!cams.children.length) { cams.innerHTML = CAMSETS.map(camHTML).join(''); wireCams(cams); } else refreshCamImgs(cams); }
+  if (al) { const h = alertsHTML(); if (al.dataset.h !== h) { al.innerHTML = h; al.dataset.h = h; } } }
 function partInfo(k) { const items = S.items.filter(i => i.part === k).map(i => ({ i, s: itemStatus(i) })), w = items.filter(x => x.s.cls !== 'unset').sort((a, b) => a.s.frac - b.s.frac)[0]; return { items, w, cls: w ? w.s.cls : 'unset', f: w ? w.s.frac : 0 }; }
 function garageHTML() {
   const st = S.items.map(itemStatus), over = st.filter(s => s.cls === 'over').length, soon = st.filter(s => s.cls === 'soon').length;
@@ -349,9 +380,10 @@ $('#nav').addEventListener('click', e => { const b = e.target.closest('button');
   document.addEventListener('focusin', e => { if (e.target.matches('input,textarea')) setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300); });
 })();
 $('#gear').addEventListener('click', e => { haptic(); e.currentTarget.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(120deg)' }], { duration: 500, easing: 'cubic-bezier(.2,1.3,.4,1)' }); settingsSheet(); });
+viewEl.addEventListener('mapmoved', e => { const b = $('#mre'); if (b) { b.hidden = !e.detail; if (e.detail && !RM) b.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,1.4,.4,1)' }); } });
 viewEl.addEventListener('click', e => {
-  const st = e.target.closest('[data-star]'); if (st) { e.preventDefault(); starCam(st.dataset.star, st.closest('.cam')); return; }
-  const sh = e.target.closest('.cam .shot'); if (sh) { cycleCam(sh.closest('.cam').dataset.cam, sh.closest('.cam')); return; }
+  if (e.target.closest('#mre')) { haptic(); MAP.recentre(); return; }
+  if (e.target.closest('#mapcv') && MAP.focused) { MAP.replay(); return; }
   const b = e.target.closest('[data-act],[data-tab],[data-ride],[data-fuel],[data-ren],[data-rdone],[data-done],[data-edit],[data-add],[data-part],[data-focus]'); if (!b) return; haptic();
   const d = b.dataset;
   if (d.act) ACTIONS[d.act](b); else if (d.tab) go(+d.tab);
@@ -364,7 +396,7 @@ viewEl.addEventListener('click', e => {
 });
 // press feel on anything tappable
 let pressed = null;
-viewEl.addEventListener('pointerdown', e => { const b = e.target.closest('button,.card[data-part],.cam .shot'); if (!b || RM) return; pressed = b; b._pa = b.animate([{ transform: 'scale(1)' }, { transform: 'scale(.96)' }], { duration: 120, fill: 'forwards', easing: 'ease-out' }); });
+viewEl.addEventListener('pointerdown', e => { const b = e.target.closest('button:not(.star),.card[data-part]'); if (!b || RM) return; pressed = b; b._pa = b.animate([{ transform: 'scale(1)' }, { transform: 'scale(.96)' }], { duration: 120, fill: 'forwards', easing: 'ease-out' }); });
 addEventListener('pointerup', () => { const b = pressed; pressed = null; if (!b || !b._pa) return; b._pa.cancel(); b.animate([{ transform: 'scale(.96)' }, { transform: 'scale(1.03)' }, { transform: 'scale(1)' }], { duration: 340, easing: 'ease-out' }); });
 addEventListener('pointercancel', () => { if (pressed && pressed._pa) pressed._pa.cancel(); pressed = null; });
 function openSheet(title, lede, body, onOpen) {
@@ -594,7 +626,7 @@ function plusSheet() {
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
 const ACTIONS = { fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
-  light: fuelLight, roads: () => trafficSheet(), relay: () => relaySheet() };
+  light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */
 function renewedForm(r) {
