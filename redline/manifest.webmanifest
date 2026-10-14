@@ -1,13 +1,13 @@
 {
   "name": "Redline",
   "short_name": "Redline",
-  "description": "Your motorcycle on the Grid: service countdowns, fuel, renewals and auto-logged rides.",
+  "description": "Your bike's dash: range, service countdowns, renewals and auto-logged rides.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#010409",
-  "theme_color": "#010409",
+  "background_color": "#161219",
+  "theme_color": "#161219",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
