@@ -32,6 +32,7 @@ const IC = {
   target: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>', full: '<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
   cam: '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/>', alert: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5h.01"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -238,10 +239,13 @@ function homeHTML() {
   const fs = fuelStats(), due = dueItems(), mr = monthRides(), mkm = mr.reduce((s, r) => s + (r.km || 0), 0), nr = nextRenewal();
   const w = wrapMonth();
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
-    <div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<div class="odo"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></div>`}</div>
-    <div class="alerts" id="alerts">${alertsHTML()}</div>
+    <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<div class="odo"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></div>`}</div>
+    <div id="rideNow">${rideNowHTML()}</div></div>
+    <div class="hcol b"><div class="alerts" id="alerts">${alertsHTML()}</div>
     <div id="live0"></div>
-    ${wrapReady() ? `<button type="button" class="wrapcta" data-act="wrap"><span class="wglow"></span><span class="wt"><small>Ride Wrap</small><b>Your ${new Date(w.y, w.m, 1).toLocaleDateString('en-SG', { month: 'long' })} is ready</b></span><span class="wplay">${ic('play', 2.6)}</span></button>` : ''}`;
+    <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span></section>
+    <div class="cams" id="cams"></div>
+    ${wrapReady() ? `<button type="button" class="wrapcta" data-act="wrap"><span class="wglow"></span><span class="wt"><small>Ride Wrap</small><b>Your ${new Date(w.y, w.m, 1).toLocaleDateString('en-SG', { month: 'long' })} is ready</b></span><span class="wplay">${ic('play', 2.6)}</span></button>` : ''}</div>`;
 }
 // only what needs you now, most urgent first, never more than three
 const renWindow = r => /coe/i.test(r.name) ? 90 : 30;
@@ -270,16 +274,16 @@ function ridesHTML() {
   const mr = monthRides(), km = mr.reduce((s, r) => s + (r.km || 0), 0), longest = mr.reduce((a, r) => Math.max(a, r.km || 0), 0);
   const rides = [...S.rides].sort((a, b) => b.start.t - a.start.t), abroad = rides.reduce((s, r) => s + abroadKm(r), 0);
   return `<div class="hi"><div><h1>Rides</h1></div></div>
-    <section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
+    <div class="hcol a"><section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
       <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
       <div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
-    <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div>
-    <h2 class="sec">Road check</h2>
+    <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div></div>
+    <div class="hcol b"><h2 class="sec">Road check</h2>
     <div class="roadchk"><div id="live1a"></div><div class="cams" id="cams"></div><div id="live1"></div></div>
     <h2 class="sec">Journal</h2>
     <section class="list2">${rides.length ? rides.slice(0, 40).map((r, i) => `<button type="button" class="rrow" data-focus="${r.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(r.start.t).getDate()}</b><small>${new Date(r.start.t).toLocaleDateString('en-SG', { month: 'short' })}</small></span>
         <span class="grow"><span class="t">${esc(r.title || 'Ride')}${abroadKm(r) > 1 ? ' <em class="flag">JB</em>' : ''}</span><span class="s">${new Date(r.start.t).toLocaleDateString('en-SG', { weekday: 'short' })} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min${r.mood ? ' · ' + esc(r.mood) : ''}</span></span><span class="km">${num(r.km, 1)}<small>km</small></span></button>`).join('')
-      : '<div class="empty">No rides yet. Turn on auto-log in Settings and rides appear here by themselves.</div>'}</section>`;
+      : '<div class="empty">No rides yet. Tap Start ride on Home, or turn on auto-log in Settings.</div>'}</section></div>`;
 }
 function liveRoads() { const mine = myRoads();
   return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b>${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>`; }
@@ -300,24 +304,51 @@ function garageHTML() {
   const ks = PARTS.filter(([k]) => S.items.some(i => i.part === k)).map(([k, l]) => ({ k, l, ...partInfo(k) })).sort((a, b) => (a.cls === 'unset') - (b.cls === 'unset') || a.f - b.f);
   const hero = ks[0];
   return `<div class="hi"><div><h1>Garage</h1><small>${esc(buildName())} · ${estOdo() == null ? 'odometer not added' : num(estOdo()) + ' km'}</small></div></div>
-    ${hero ? `<section class="card ghero ${hero.cls}" data-part="${hero.k}">${ART.art(hero.k, hero.f, hero.cls, 150)}<div class="t"><span>${hero.cls === 'over' ? '<em>OVERDUE</em>' : hero.cls === 'soon' ? '<em class="soon">DUE SOON</em>' : '<em class="okk">NEXT UP</em>'}${esc(hero.w ? hero.w.i.name : hero.l)}</span><b>${hero.w ? bigVal(hero.w.s) : 'Not tracked'}</b>${hero.w ? `<button type="button" class="donebig" data-done="${hero.w.i.id}">${ic('check', 3)}<span>Done today</span></button>` : ''}</div></section>` : ''}
-    <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div>
-    <div class="tiles">${ks.slice(1).map((p, i) => `<button type="button" class="tile ${p.cls}" data-part="${p.k}" style="--d:${i * 50}ms">${ART.art(p.k, p.f, p.cls, 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : `<small>${estOdo() == null ? 'Needs odometer' : 'Not tracked'}</small>`}</b><span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span></button>`).join('')}</div>`;
+    <div class="hcol a">${hero ? `<section class="card ghero ${hero.cls}" data-part="${hero.k}">${ART.art(hero.k, hero.f, hero.cls, 150)}<div class="t"><span>${hero.cls === 'over' ? '<em>OVERDUE</em>' : hero.cls === 'soon' ? '<em class="soon">DUE SOON</em>' : '<em class="okk">NEXT UP</em>'}${esc(hero.w ? hero.w.i.name : hero.l)}</span><b>${hero.w ? bigVal(hero.w.s) : 'Not tracked'}</b>${hero.w ? `<button type="button" class="donebig" data-done="${hero.w.i.id}">${ic('check', 3)}<span>Done today</span></button>` : ''}</div></section>` : ''}
+    <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div></div>
+    <div class="hcol b"><div class="tiles">${ks.slice(1).map((p, i) => `<button type="button" class="tile ${p.cls}" data-part="${p.k}" style="--d:${i * 50}ms">${ART.art(p.k, p.f, p.cls, 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : `<small>${estOdo() == null ? 'Needs odometer' : 'Not tracked'}</small>`}</b><span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span></button>`).join('')}</div></div>`;
 }
 function fuelHTML() {
   const fs = fuelStats(), now = new Date(), list = [...S.fuel].sort((a, b) => b.odo - a.odo);
   const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1); return { d, v: S.fuel.filter(f => { const x = new Date(f.date); return x.getMonth() === d.getMonth() && x.getFullYear() === d.getFullYear(); }).reduce((s, f) => s + (+f.cost || 0), 0) }; });
   const mmax = Math.max(40, ...months.map(x => x.v));
   return `<div class="hi"><div><h1>Fuel</h1><small>${fs.tankFrac != null ? `${num(fs.tankFrac * S.bike.tank, 1)} of ${num(S.bike.tank)} L in the tank` : 'Two full tanks unlock your range'}</small></div></div>
-    <div class="instr">${gaugeBlock('f', fs)}</div>
+    <div class="hcol a"><div class="instr">${gaugeBlock('f', fs)}</div>
     <button type="button" class="bigbtn c-orange" data-act="fuel"><span class="nozzle">${ic('pump', 2.4)}</span><span>Log a fill-up</span></button>
-    <div class="stats"><div><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L</span></div><div><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })}</span></div><div><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km</span></div></div>
-    <section class="card plain"><div class="ch"><b>Spend</b><span>last 6 months</span></div><div class="bars">${months.map(({ d, v }, i) => `<div class="bcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><i style="height:${Math.max(3, v / mmax * 100)}%;--d:${i * 70}ms"></i><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div></section>
+    <div class="stats"><div><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L</span></div><div><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })}</span></div><div><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km</span></div></div></div>
+    <div class="hcol b"><section class="card plain"><div class="ch"><b>Spend</b><span>last 6 months</span></div><div class="bars">${months.map(({ d, v }, i) => `<div class="bcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><i style="height:${Math.max(3, v / mmax * 100)}%;--d:${i * 70}ms"></i><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div></section>
     <h2 class="sec">Fill-ups</h2>
     <section class="list2">${list.length ? list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
-      return `<button type="button" class="rrow" data-fuel="${f.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(f.date).getDate()}</b><small>${new Date(f.date).toLocaleDateString('en-SG', { month: 'short' })}</small></span><span class="grow"><span class="t">${num(f.litres, 1)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="km">${f.cost ? money(f.cost) : ''}</span></button>`; }).join('') : '<div class="empty">Log fills with the odometer reading. Two full tanks unlock range and km/L.</div>'}</section>`;
+      return `<button type="button" class="rrow" data-fuel="${f.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(f.date).getDate()}</b><small>${new Date(f.date).toLocaleDateString('en-SG', { month: 'short' })}</small></span><span class="grow"><span class="t">${num(f.litres, 1)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="km">${f.cost ? money(f.cost) : ''}</span></button>`; }).join('') : '<div class="empty">Log fills with the odometer reading. Two full tanks unlock range and km/L.</div>'}</section></div>`;
 }
 const SCREENS = [homeHTML, ridesHTML, garageHTML, fuelHTML];
+/* ---------- Start ride / End ride: two taps, no setup. Your phone's location now and when you park. ---------- */
+function rideNowHTML() {
+  const live = S.live || (S.openRide && Date.now() - S.openRide.t < 12 * 3600e3 ? { start: S.openRide, auto: true } : null);
+  if (live) { const m = Math.max(0, Math.round((Date.now() - live.start.t) / 6e4));
+    return `<section class="card ridenow on"><span class="rpulse"><i></i>${ic('ride', 2.4)}</span><div class="grow"><span>${live.auto ? 'Riding · logged by your intercom' : 'Riding'}</span><b id="rideMins">${m < 60 ? m + '<small>min</small>' : Math.floor(m / 60) + '<small>h</small> ' + (m % 60) + '<small>min</small>'}</b></div>${live.auto ? '' : `<button type="button" class="rbig end" data-act="endride">${ic('stop', 2.6)}<span>End ride</span></button>`}</section>`; }
+  return `<button type="button" class="ridenow" data-act="startride"><span class="rgo">${ic('play', 2.6)}</span><span class="grow"><b>Start ride</b><span>Tap again when you park. Redline maps the ride.</span></span></button>`;
+}
+function here() {
+  if (window.PREVIEW) { const j = () => (Math.random() - .5) * .08; return Promise.resolve({ lat: 1.35 + j(), lon: 103.85 + j() * 2, t: Date.now() }); }
+  return new Promise((res, rej) => { if (!navigator.geolocation) return rej(new Error('none'));
+    navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude, lon: p.coords.longitude, t: Date.now() }), rej, { enableHighAccuracy: true, timeout: 15000, maximumAge: 20000 }); });
+}
+const LOC_HELP = 'Couldn’t get your location. Allow it for Redline: Settings → Privacy & Security → Location Services → Safari Websites (or Redline).';
+async function startRide(b) {
+  if (b) { b.disabled = true; $('b', b).textContent = 'Finding you…'; }
+  try { const p = await here(); S.live = { start: p }; save(); haptic(); toast('Ride started. Ride safe!'); }
+  catch (e) { toast(LOC_HELP, 'over'); }
+  const box = $('#rideNow'); if (box) { box.innerHTML = rideNowHTML(); if (!RM) box.firstElementChild.animate([{ transform: 'scale(.94)', opacity: .4 }, { transform: 'none', opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.2,1.4,.4,1)' }); }
+}
+async function endRide(b) {
+  if (!S.live) return; if (b) { b.disabled = true; $('span', b).textContent = 'Mapping…'; }
+  let p; try { p = await here(); } catch (e) { toast(LOC_HELP, 'over'); if (b) { b.disabled = false; $('span', b).textContent = 'End ride'; } return; }
+  const st = S.live.start; S.live = null; save();
+  const res = await logRide({ ...st }, p); if (res.ride) res.ride.src = 'tap';
+  showResults([res]);
+}
+setInterval(() => { const el = $('#rideMins'), live = S.live || S.openRide; if (!el || !live) return; const m = Math.max(0, Math.round((Date.now() - (live.start ? live.start.t : live.t)) / 6e4)); el.innerHTML = m < 60 ? m + '<small>min</small>' : Math.floor(m / 60) + '<small>h</small> ' + (m % 60) + '<small>min</small>'; }, 20000);
 
 /* ================= rendering, tab transitions and the gliding nav pill ================= */
 function gaugeFrac(fs) { return fs.range != null && fs.full ? clamp(fs.range / fs.full, 0, 1) : 0; }
@@ -327,7 +358,7 @@ function render(animate, dir = 0) {
   pad.prepend($('#gear')); viewEl.className = 'view v' + place; viewEl.replaceChildren(pad);
   navTo(place);
   const fs = fuelStats(), f = gaugeFrac(fs);
-  if (place === 0) { if (estOdo() == null) { gaugeSet('h', f, fs.full); if (animate) keyOn('h', f, fs.full); } else if (animate) { setOdo(0, false); setTimeout(() => setOdo(estOdo(), true), 260); keyOn('h', f, fs.full); } else { setOdo(estOdo(), false); gaugeSet('h', f, fs.full); } paintLive(); }
+  if (place === 0) { if (window.RADAR) RADAR.mountHome($('#rdh')); if (estOdo() == null) { gaugeSet('h', f, fs.full); if (animate) keyOn('h', f, fs.full); } else if (animate) { setOdo(0, false); setTimeout(() => setOdo(estOdo(), true), 260); keyOn('h', f, fs.full); } else { setOdo(estOdo(), false); gaugeSet('h', f, fs.full); } paintLive(); }
   if (place === 3) { if (animate) keyOn('f', f, fs.full); else gaugeSet('f', f, fs.full); }
   if (place === 1) { paintLive(); if (window.MAP) MAP.mount($('#mapcv'), animate); showFocus(); }
   if (animate && !RM) {
@@ -355,7 +386,7 @@ function go(i) {
 }
 function navTo(i) {
   const nav = $('#nav'); $$('#nav [data-i]').forEach(b => b.setAttribute('aria-current', String(+b.dataset.i === i)));
-  requestAnimationFrame(() => { const b = $(`#nav [data-i="${i}"]`), ind = $('#navInd'); if (!b || !ind) return; ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft}px)`; });
+  requestAnimationFrame(() => { const b = $(`#nav [data-i="${i}"]`), ind = $('#navInd'); if (!b || !ind) return; ind.style.width = b.offsetWidth + 'px'; ind.style.height = b.offsetHeight + 'px'; ind.style.transform = `translate(${b.offsetLeft}px,${b.offsetTop}px)`; });
 }
 addEventListener('resize', () => navTo(place));
 function syncWorld() { if (window.MAP) MAP.setRides(S.rides.map(r => ({ id: r.id, t: r.start.t, path: r.path }))); }
@@ -374,6 +405,14 @@ function setType(type) { if (type === S.bike.type) return; S.bike.type = type; s
 
 $('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.act) { haptic(); b.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(90deg) scale(.9)' }, { transform: 'rotate(90deg)' }], { duration: 300, easing: 'cubic-bezier(.2,1.4,.4,1)' }); plusSheet(); return; } go(+b.dataset.i); });
 // keep sheets and setup inside the visible screen when the keyboard is up (iPhone home-screen apps don't resize for it)
+// layout modes: phone in landscape or any wide screen gets the side rail and two columns
+(function layoutMode() {
+  const wide = matchMedia('(min-width: 900px), (orientation: landscape) and (max-height: 540px) and (min-width: 560px)'), desk = matchMedia('(min-width: 900px) and (min-height: 560px)');
+  const set = first => { document.body.classList.toggle('wide', wide.matches); document.body.classList.toggle('desk', desk.matches); if (first !== true) { if (S.setupDone && !document.body.classList.contains('setting-up')) render(false); navTo(place); } };
+  wide.addEventListener('change', set); desk.addEventListener('change', set); set(true);
+})();
+// no pinch or double-tap zoom on the app itself (the map and radar still pinch)
+['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => { if (!e.target.closest || !e.target.closest('#mapcv')) e.preventDefault(); }, { passive: false }));
 (function fitKeyboard() {
   const vv = window.visualViewport; if (!vv) return; const root = document.documentElement;
   const fit = () => { const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop); if (kb > 80) { root.style.setProperty('--kbh', vv.height + 'px'); root.style.setProperty('--kbo', kb + 'px'); } else { root.style.removeProperty('--kbh'); root.style.removeProperty('--kbo'); } };
@@ -405,7 +444,7 @@ function openSheet(title, lede, body, onOpen) {
   sheetEl.scrollTop = 0; sheetEl.classList.add('on'); shadeEl.classList.add('on'); if (window.W) W.locked = true;
   $('.x', sheetEl).onclick = closeSheet; onOpen && onOpen(sheetEl);
 }
-function closeSheet() { sheetEl.classList.remove('on'); shadeEl.classList.remove('on'); if (window.W) { W.locked = false; W.poke(); } }
+function closeSheet() { sheetEl.classList.remove('on'); shadeEl.classList.remove('on'); setTimeout(() => window.RADAR && RADAR.wake(), 50); if (window.W) { W.locked = false; W.poke(); } }
 shadeEl.addEventListener('click', closeSheet);
 function F(x) {
   if (x.type === 'row') return `<div class="two">${x.f.map(F).join('')}</div>`;
@@ -484,12 +523,29 @@ function rideForm(r) {
   const isNew = !r, dt = r ? todayISO(new Date(r.start.t)) : todayISO();
   form({ title: isNew ? 'Log a ride' : (esc(r.title) || 'Ride'), lede: isNew ? 'For rides the auto-log missed.' : fmtDT(r.start.t) + (r.est === 'estimate' ? ' · distance estimated' : ''),
     fields: [{ k: 'title', l: 'Title', v: r?.title || '', ph: 'Sunday ride to Changi' },
-      { type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: dt }, { k: 'km', l: 'Distance (km)', type: 'number', v: r?.km ?? '', req: 1 }] },
+      ...(isNew ? [{ type: 'row', f: [{ k: 'from', l: 'From', ph: 'Bedok or 460123' }, { k: 'to', l: 'To', ph: 'Woodlands Checkpoint' }] }] : []),
+      { type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: dt }, { k: 'km', l: isNew ? 'Distance (km), or leave blank' : 'Distance (km)', type: 'number', v: r?.km ?? '' }] },
       { k: 'mins', l: 'Duration (min)', type: 'number', v: r ? Math.round((r.end.t - r.start.t) / 6e4) : '' },
       { k: 'mood', l: 'Vibe', type: 'chips', o: MOODS, v: r?.mood || '' }, { k: 'note', l: 'Journal', type: 'textarea', v: r?.note, ph: 'Where you went, what you ate, how it felt' }],
-    onSave: v => { if (isNew) { const t0 = +new Date(v.date + 'T09:00'); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
+    onSave: v => { if (isNew && v.from && v.to && !v.km) { mapManual(v); return; }
+      if (!v.km) { toast(isNew ? 'Add the distance, or where you rode from and to' : 'Add the distance', 'over'); return false; }
+      if (isNew) { const t0 = +new Date(v.date + 'T09:00'); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
       else { Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); if (v.mins != null) r.end.t = r.start.t + v.mins * 6e4; } },
     onDelete: !isNew && (() => S.rides = S.rides.filter(x => x !== r)) });
+}
+// a ride you forgot to log: look up both places on OneMap, then route between them
+async function mapManual(v) {
+  toast('Mapping your ride…');
+  try {
+    const [a, b] = await Promise.all([placePoint(v.from), placePoint(v.to)]), t0 = +new Date(v.date + 'T09:00'), mins = v.mins || 0;
+    const r = await routeKm([a, b]);
+    const ride = { id: uid(), title: v.title || `${v.from} to ${v.to}`, start: { ...a, t: t0 }, end: { ...b, t: t0 + mins * 6e4 }, km: Math.round(r.km * 10) / 10, src: 'manual', est: r.src, path: r.path, roads: r.roads || [], mood: v.mood, note: v.note };
+    S.rides.push(ride); save(); showResults([{ ride }]);
+  } catch (e) { toast(`Couldn’t find ${e && e.place ? '“' + e.place + '”' : 'one of those places'}. Try a postal code.`, 'over'); }
+}
+async function placePoint(q) {
+  if (window.PREVIEW) { let h = 0; for (const c of q) h = (h * 31 + c.charCodeAt(0)) % 9973; return { lat: 1.28 + (h % 100) / 600, lon: 103.68 + (h % 97) / 260 }; }
+  try { return await postalPoint(q); } catch (e) { throw { place: q }; }
 }
 function itemForm(it, part) {
   const isNew = !it; it = it || { id: uid(), name: '', part: part || 'other', km: 0, months: 0 };
@@ -680,7 +736,7 @@ function plusSheet() {
     <div class="plus2"><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
-const ACTIONS = { fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
+const ACTIONS = { startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
   light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */

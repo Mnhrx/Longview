@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Redline">
@@ -561,17 +561,87 @@ button.wxrow{width:100%;border:0;background:none;font:inherit;color:inherit;text
 .gres.ok{box-shadow:inset 0 0 0 2px var(--mint)} .gres.ok b{color:var(--mint)} .gres.bad{box-shadow:inset 0 0 0 2px var(--amber)} .gres.bad b{color:var(--amber)}
 .gres .btn{margin-top:10px;width:100%}
 .gfoot{font:500 14.5px/1.5 var(--disp);color:var(--muted);padding:6px 4px 10px} .gfoot b{color:var(--cream)} .gfoot ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+
+/* ===== v5.6 ===== */
+.dash{container-type:inline-size} .read b{font-size:min(84px,23.5cqw)} .read span{font-size:min(14px,4.2cqw)}
+html,body,.view{touch-action:pan-x pan-y}
+/* bottom bar: sits just above the home indicator, + locked in the middle */
+:root{--navb:max(8px,calc(var(--sb) - 12px))}
+.nav{bottom:var(--navb);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px;padding:0 6px;width:min(488px,calc(100% - 20px));height:68px}
+.nside{display:flex;align-items:center;justify-content:space-around;min-width:0}
+.nav button{min-width:44px;height:50px;padding:0 10px;gap:6px}
+.nav button span{font-size:14px;white-space:nowrap}
+.nav .plus{width:56px;height:56px;border-radius:20px}
+.navind{top:0;height:50px}
+.pad{padding-bottom:calc(96px + var(--navb))}
+@media (max-width:360px){.nav button[aria-current="true"] span{display:none}}
+/* start / end ride */
+.ridenow{display:flex;align-items:center;gap:14px;width:100%;border:0;border-radius:24px;padding:12px 12px 12px 12px;background:var(--panel);color:var(--ink);text-align:left;font:inherit;cursor:pointer}
+.ridenow b{display:block;font:800 19px var(--disp)} .ridenow .grow>span{display:block;font:600 14px var(--disp);color:var(--muted);margin-top:2px}
+.rgo{flex:none;width:52px;height:52px;border-radius:18px;background:var(--sky);color:#061B2E;display:grid;place-items:center} .rgo svg{width:24px;height:24px;margin-left:3px}
+.ridenow.on{background:var(--sky);color:#061B2E;cursor:default} .ridenow.on .grow>span{color:#0B3A5E;margin:0}
+.ridenow.on b{font:800 34px/1 var(--disp);letter-spacing:-.02em;margin-top:3px} .ridenow.on b small{font-size:.45em;margin:0 2px 0 3px}
+.rpulse{position:relative;flex:none;width:52px;height:52px;border-radius:18px;background:#061B2E;color:var(--sky);display:grid;place-items:center} .rpulse svg{width:24px;height:24px;position:relative}
+.rpulse i{position:absolute;inset:0;border-radius:18px;box-shadow:0 0 0 0 rgba(6,27,46,.5);animation:rping 1.8s ease-out infinite}
+@keyframes rping{to{box-shadow:0 0 0 16px rgba(6,27,46,0)}}
+.rbig{flex:none;display:flex;align-items:center;gap:8px;border:0;border-radius:18px;background:#061B2E;color:#fff;padding:14px 16px;font:800 16px var(--disp)} .rbig svg{width:18px;height:18px}
+.instr+#rideNow{width:100%}
+/* radar on Home */
+.rdhome{position:relative;padding:0;overflow:hidden;background:#0F0C12;aspect-ratio:16/9.4;cursor:pointer}
+.rdhome canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.rdhome .rdtime{left:10px;top:10px} .rdhome .rdtime b{font-size:19px}
+.rdexp{position:absolute;right:10px;top:10px;width:36px;height:36px;border-radius:12px;background:rgba(15,12,18,.78);display:grid;place-items:center;color:var(--cream)} .rdexp svg{width:16px;height:16px}
+/* two columns: on a phone they simply stack */
+.hcol{display:contents}
+.pad.enter>.hcol>*{animation:popIn .6s cubic-bezier(.2,1.25,.4,1) both}
+.pad.enter>.hcol.b>*{animation-delay:.12s}
+/* ===== wide: phone on its side, tablets, desktop ===== */
+body.wide .nav{justify-content:stretch;justify-items:stretch;grid-template-columns:1fr!important;left:calc(10px + env(safe-area-inset-left,0px));top:50%;bottom:auto;transform:translateY(-50%);width:76px;height:auto;grid-template-columns:none;grid-template-rows:auto auto auto;padding:8px 0;gap:6px;border-radius:26px}
+body.wide .nside{flex-direction:column;gap:6px}
+body.wide .nav button{width:56px;height:52px;padding:0}
+body.wide .nav button span{display:none!important}
+body.wide .nav .plus{margin:4px auto}
+body.wide .view{left:calc(96px + env(safe-area-inset-left,0px))}
+body.wide .pad{max-width:1180px;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);column-gap:22px;align-items:start;padding-bottom:calc(30px + var(--sb));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+body.wide .pad>.hi{grid-column:1/-1}
+body.wide .hcol{display:flex;flex-direction:column;gap:12px;min-width:0}
+body.wide .hcol.a{position:sticky;top:calc(12px + var(--st))}
+body.wide .v0 .dash{max-width:330px}
+body.wide .mapcard{height:min(420px,70vh)}
+body.wide .sheet{left:50%;top:50%;bottom:auto;width:min(560px,calc(100% - 40px));max-height:calc(var(--kbh,var(--vh)) - 40px);border-radius:28px;transform:translate(-50%,-46%) scale(.96);opacity:0;transition:transform .35s cubic-bezier(.2,1.2,.3,1),opacity .25s,visibility 0s .35s}
+body.wide .sheet.on{transform:translate(-50%,-50%);opacity:1;transition:transform .35s cubic-bezier(.2,1.2,.3,1),opacity .25s}
+body.wide .sheet .grab{display:none}
+body.wide .setup{align-items:center}
+body.wide .story{left:50%;right:auto;width:min(100vw,calc(var(--vh) * 9 / 16));transform:translateX(-50%)}
+body.wide.wrapping .view{filter:blur(10px) brightness(.35)}
+/* phone on its side: tighter */
+@media (max-height:540px){body.wide .v0 .dash,body.wide .v3 .dash{max-width:250px} body.wide .hi h1{font-size:26px} body.wide .pad{padding-top:calc(8px + var(--st))}}
+/* desktop: a labelled sidebar */
+body.desk .nav{width:208px;padding:12px;align-items:stretch;border-radius:28px}
+body.desk .nside{align-items:stretch}
+body.desk .nav button{width:100%;justify-content:flex-start;padding:0 16px;gap:12px}
+body.desk .nav button span{display:inline!important;font-size:16px}
+body.desk .nav .plus{width:100%;height:56px;justify-content:center;margin:6px 0}
+body.desk .nav .plus::after{content:"Log";font:800 16px var(--disp);margin-left:8px}
+body.desk .view{left:236px}
+body.desk .pad{padding-left:24px;padding-right:32px;column-gap:28px;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr)}
+body.desk .v0 .cams{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.desk .tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
 </style>
 </head>
 <body data-place="0">
 <main class="view" id="view"></main>
 <button type="button" class="gear" id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5"/></svg></button>
 <nav class="nav" id="nav" aria-label="Tabs"><i class="navind" id="navInd" aria-hidden="true"></i>
+  <div class="nside">
   <button type="button" data-i="0" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/></svg><span>Home</span></button>
   <button type="button" data-i="1" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg><span>Rides</span></button>
+  </div>
   <button type="button" class="plus" data-act="plus" aria-label="Log something"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <div class="nside">
   <button type="button" data-i="2" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg><span>Garage</span></button>
   <button type="button" data-i="3" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16M4 21h11M5 10h9M14 8h2l3 3v6a1.5 1.5 0 0 1-3 0v-2"/></svg><span>Fuel</span></button>
+  </div>
 </nav>
 <div class="shade" id="shade"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
