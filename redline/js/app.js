@@ -122,7 +122,7 @@ function refPoint() {
   const lastRide = [...S.rides].filter(r => r.end && r.end.lat).sort((a, b) => b.end.t - a.end.t)[0];
   return S.parked || (lastRide && { lat: lastRide.end.lat, lon: lastRide.end.lon }) || S.home || { lat: 1.3521, lon: 103.8198 };
 }
-async function getJSON(u) { const c = new AbortController(); setTimeout(() => c.abort(), 8000); const r = await fetch(u, { signal: c.signal }); if (!r.ok) throw new Error(r.status); return r.json(); }
+async function getJSON(u) { const c = new AbortController(); setTimeout(() => c.abort(), 8000); const r = await fetch(u, { signal: c.signal, cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); }
 async function loadWeather(force) {
   if (window.PREVIEW) { LIVE.wx = { area: 'Tampines', text: 'Partly Cloudy (Night)', until: '11pm' }; return; }
   if (!force && LIVE.wx && Date.now() - LIVE.wx.t < 6e5) return;
@@ -240,7 +240,7 @@ function homeHTML() {
   const w = wrapMonth();
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
     <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<div class="odo"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></div>`}</div>
-    <div id="rideNow">${rideNowHTML()}</div></div>
+    <div id="rideNow">${rideNowHTML()}</div>${alNudgeHTML()}</div>
     <div class="hcol b"><div class="alerts" id="alerts">${alertsHTML()}</div>
     <div id="live0"></div>
     <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span></section>
@@ -323,10 +323,31 @@ function fuelHTML() {
 }
 const SCREENS = [homeHTML, ridesHTML, garageHTML, fuelHTML];
 /* ---------- Start ride / End ride: two taps, no setup. Your phone's location now and when you park. ---------- */
+// the intercom says you're riding: check again, end it here, or clear a test
+function rideMenu() {
+  const o = S.openRide; if (!o) return;
+  openSheet('Riding', `Started ${fmtTime(o.t)} when your intercom connected. It ends by itself when the intercom disconnects.`, `<div class="btns" style="flex-direction:column">
+    <button type="button" class="btn" id="rmCheck">${ic('target', 2.4)} Check again</button>
+    <button type="button" class="btn ghost" id="rmEnd">${ic('stop', 2.4)} End ride here</button>
+    <button type="button" class="btn ghost" id="rmClear">Not a ride, clear it</button></div><div class="gres" id="rmRes" hidden></div>`, sh => {
+    $('#rmCheck', sh).onclick = async e => { const b = e.currentTarget; b.disabled = true; b.lastChild.textContent = ' Checking…'; await pullLog(true);
+      if (!S.openRide) { closeSheet(); return; } const r = $('#rmRes', sh); r.hidden = false; r.className = 'gres bad'; r.innerHTML = '<b>No end yet</b><span>Nothing from your intercom disconnecting so far. It can take a minute to arrive.</span>'; b.disabled = false; b.lastChild.textContent = ' Check again'; };
+    $('#rmEnd', sh).onclick = async e => { const b = e.currentTarget; b.disabled = true; let p; try { p = await here(); } catch (err) { toast(LOC_HELP, 'over'); b.disabled = false; return; }
+      const st = S.openRide; S.openRide = null; save(); closeSheet(); showResults([await logRide({ ...st }, p)]); };
+    $('#rmClear', sh).onclick = () => { S.openRide = null; save(); closeSheet(); refresh(); toast('Cleared'); };
+  });
+}
+// a one-time nudge for riders who picked an intercom but haven't finished auto-log
+function alNudgeHTML() {
+  const a = S.al || {};
+  if (!isIOS || !S.relay || !SHORTCUTS.start || !S.intercom || S.intercom === 'none' || (a.start && a.end) || a.dismiss) return '';
+  const done = (a.added ? 1 : 0) + (a.start ? 1 : 0) + (a.end ? 1 : 0);
+  return `<section class="card alnudge" data-act="autolog"><span class="aln-ic">${ic('head', 2.4)}</span><div class="grow"><b>Make rides log themselves</b><span>${done ? `${done} of 3 done · finish setup` : 'About 2 minutes with your ' + (S.intercom === 'Cardo' ? 'Cardo' : 'intercom')}</span><i class="alprog"><i style="width:${done / 3 * 100}%"></i></i></div><button type="button" class="alx" data-act="aldismiss" aria-label="Hide">${ic('x', 2.6)}</button></section>`;
+}
 function rideNowHTML() {
   const live = S.live || (S.openRide && Date.now() - S.openRide.t < 12 * 3600e3 ? { start: S.openRide, auto: true } : null);
   if (live) { const m = Math.max(0, Math.round((Date.now() - live.start.t) / 6e4));
-    return `<section class="card ridenow on"><span class="rpulse"><i></i>${ic('ride', 2.4)}</span><div class="grow"><span>${live.auto ? 'Riding · logged by your intercom' : 'Riding'}</span><b id="rideMins">${m < 60 ? m + '<small>min</small>' : Math.floor(m / 60) + '<small>h</small> ' + (m % 60) + '<small>min</small>'}</b></div>${live.auto ? '' : `<button type="button" class="rbig end" data-act="endride">${ic('stop', 2.6)}<span>End ride</span></button>`}</section>`; }
+    return `<section class="card ridenow on" ${live.auto ? 'data-act="ridemenu"' : ''}><span class="rpulse"><i></i>${ic('ride', 2.4)}</span><div class="grow"><span>${live.auto ? 'Riding · logged by your intercom' : 'Riding'}</span><b id="rideMins">${m < 60 ? m + '<small>min</small>' : Math.floor(m / 60) + '<small>h</small> ' + (m % 60) + '<small>min</small>'}</b></div>${live.auto ? `<span class="rmore">${ic('chev', 2.6)}</span>` : `<button type="button" class="rbig end" data-act="endride">${ic('stop', 2.6)}<span>End ride</span></button>`}</section>`; }
   return `<button type="button" class="ridenow" data-act="startride"><span class="rgo">${ic('play', 2.6)}</span><span class="grow"><b>Start ride</b><span>Tap again when you park. Redline maps the ride.</span></span></button>`;
 }
 function here() {
@@ -348,6 +369,7 @@ async function endRide(b) {
   const res = await logRide({ ...st }, p); if (res.ride) res.ride.src = 'tap';
   showResults([res]);
 }
+setInterval(() => { if (S.openRide && !document.hidden && S.setupDone) pullLog(true); }, 20000);
 setInterval(() => { const el = $('#rideMins'), live = S.live || S.openRide; if (!el || !live) return; const m = Math.max(0, Math.round((Date.now() - (live.start ? live.start.t : live.t)) / 6e4)); el.innerHTML = m < 60 ? m + '<small>min</small>' : Math.floor(m / 60) + '<small>h</small> ' + (m % 60) + '<small>min</small>'; }, 20000);
 
 /* ================= rendering, tab transitions and the gliding nav pill ================= */
@@ -614,7 +636,7 @@ function backupSheet() {
 }
 // the setup guide follows the Shortcuts app's own wording, one tap per line
 function autoLogSheet() {
-  const dev = S.intercom === 'Cardo' ? 'Cardo' : 'intercom', ready = !!S.relay, code = ready ? riderCode() : '';
+  const dev = S.intercom === 'Cardo' ? 'Cardo' : 'intercom', ready = !!S.relay, code = ready ? riderCode() : '', al = S.al || {};
   const copy = (id, text) => `<div class="cpy"><code id="${id}">${esc(text)}</code><button type="button" class="btn ghost sm" data-copy="${id}">Copy</button></div>`;
   const tok = t => `<span class="tok">${t}</span>`, ui = t => `<b class="ui">${t}</b>`;
   const auto = (when, e) => `<ol class="gsteps">
@@ -634,24 +656,27 @@ function autoLogSheet() {
   openSheet('Auto-log rides', `When your ${dev} connects, a ride starts. When it disconnects, the ride ends and Redline maps it. Nothing opens on your phone.`, `
   <div class="gstat ${ready ? 'ok' : ''}">${ready ? `${ic('check', 3)}<div><b>Relay connected</b><span>Your rider code: <b class="mono">${code}</b></span></div>` : `${ic('alert', 2.4)}<div><b>First, a relay</b><span>Your phone drops each ride there and Redline picks it up when you open it. Have an address from a friend? Paste it. Otherwise it takes about 10 minutes to make your own.</span></div><button type="button" class="btn sm" id="gRelay">Set up</button>`}</div>
   ${ready && SHORTCUTS.start ? `
-  <p class="glede">Two quick parts: add two ready-made shortcuts, then tell your iPhone when to run them.</p>
-  <details class="gsec" open><summary><span class="gn">1</span>Add the two shortcuts</summary>
-    <p class="gnote">Your rider code keeps your rides yours. Tapping a button copies it for you.</p>
+  <p class="glede">Three steps. Each one ticks itself when Redline sees it working.</p>
+  <div class="chk">
+  <details class="gsec ${al.added ? 'gdone' : ''}" ${!al.added ? 'open' : ''}><summary><span class="gn">${al.added ? ic('check', 3.2) : '1'}</span>Add the two shortcuts</summary>
+    <p class="gnote">Your rider code keeps your rides yours. Each button copies it for you, then opens the shortcut.</p>
     <div class="cpy"><code id="ucode">${code}</code><button type="button" class="btn ghost sm" data-copy="ucode">Copy</button></div>
     <div class="scbtns"><button type="button" class="btn" data-sc="start">${ic('play', 2.6)} Add “Redline Start”</button><button type="button" class="btn" data-sc="end">${ic('stop', 2.6)} Add “Redline End”</button></div>
-    <ol class="gsteps"><li>Tap ${ui('Get Shortcut')} if Safari shows it, then ${ui('Add Shortcut')}.</li><li>When it asks for your rider code, paste it (it’s already copied).</li><li>Didn’t ask? Open the shortcut in the Shortcuts app, tap the text <span class="mono">PASTE-CODE-HERE</span>, and paste your code over it.</li></ol></details>
-  <details class="gsec"><summary><span class="gn">2</span>Make two automations</summary><ol class="gsteps">
-      <li>In ${ui('Shortcuts')}, tap ${ui('Automation')} at the bottom, then ${ui('+')} at the top right (or ${ui('New Automation')}).</li>
-      <li>Scroll down and tap ${ui('Bluetooth')}. Tap ${ui('Device')}, choose your ${dev}, then ${ui('Done')}.</li>
-      <li>Tick ${ui('Is Connected')}, choose ${ui('Run Immediately')}, and tap ${ui('Next')}.</li>
-      <li>Pick ${ui('Redline Start')} from your shortcuts (not New Blank Automation). Done.</li>
-      <li>Do it once more with ${ui('Is Disconnected')} and pick ${ui('Redline End')}.</li></ol></details>
-  <details class="gsec"><summary><span class="gn">3</span>Allow it, then test</summary><ol class="gsteps">
-      <li>Turn your ${dev} off and on again near your phone.</li>
-      <li>The first time, iPhone asks to let Shortcuts use your location and connect to the relay. Tap ${ui('Allow')} (or ${ui('Always Allow')}).</li>
-      <li>Come back here and tap ${ui('Check it worked')}.</li></ol>
-    <button type="button" class="btn" id="gCheck">Check it worked</button><div class="gres" id="gRes" hidden></div></details>
-  <details class="gsec"><summary><span class="gn">?</span>Build them yourself instead</summary><p class="gnote">Only if the links don’t work for you. Make two automations from scratch. First, for connecting:</p>${auto('Is Connected', 'start')}<p class="gnote">Then the same for disconnecting, with a different address:</p>${auto('Is Disconnected', 'end')}</details>` : ''}
+    <ol class="gsteps"><li>Tap ${ui('Get Shortcut')} if Safari shows it, then ${ui('Add Shortcut')}.</li><li>When it asks for your rider code, paste it.</li><li>Didn’t ask? Open the shortcut, tap <span class="mono">PASTE-CODE-HERE</span> and paste over it.</li></ol>
+    ${!al.added ? `<button type="button" class="btn ghost" id="gAdded">I’ve added both</button>` : ''}</details>
+  ${[['start', 'Is Connected', 'Redline Start', 'connects'], ['end', 'Is Disconnected', 'Redline End', 'disconnects']].map(([k, when, sc, verb], i) => `
+  <details class="gsec ${al[k] ? 'gdone' : ''}" ${al.added && !al[k] && (k === 'start' || al.start) ? 'open' : ''}><summary><span class="gn">${al[k] ? ic('check', 3.2) : i + 2}</span>When your ${dev} ${verb}</summary>
+    ${al[k] ? `<p class="gnote ok">Working. Last seen ${fmtTime(al[k])}.</p>` : `<ol class="gsteps">
+      <li>Tap ${ui('Open Shortcuts')} below, then ${ui('Automation')} at the bottom → ${ui('+')}.</li>
+      <li>${ui('Bluetooth')} → ${ui('Device')} → your ${dev} → ${ui('Done')}.</li>
+      <li>Tick only ${ui(when)}, choose ${ui('Run Immediately')}, tap ${ui('Next')}.</li>
+      <li>Pick ${ui(sc)} from your shortcuts. Done.</li>
+      <li>Back here: turn your ${dev} ${k === 'start' ? 'on' : 'off'}. This step ticks itself.</li></ol>
+      <a class="btn openapp" href="shortcuts://">${ic('full', 2.2)} Open Shortcuts</a>`}</details>`).join('')}
+  </div>
+  <div class="gres" id="gRes" hidden></div>
+  <button type="button" class="btn ghost" id="gCheck">${al.start && al.end ? 'Check again' : 'Check now'}</button>
+  <details class="gsec"><summary><span class="gn">?</span>Build them yourself instead</summary><p class="gnote">Only if the links don’t work for you. First, for connecting:</p>${auto('Is Connected', 'start')}<p class="gnote">Then for disconnecting:</p>${auto('Is Disconnected', 'end')}</details>` : ''}
   ${ready && !SHORTCUTS.start ? `
   <p class="glede">You make <b>two automations</b> in the Shortcuts app: one for when your ${dev} connects, one for when it disconnects. iPhone runs each one on its own.</p>
   <details class="gsec" open><summary><span class="gn">1</span>When your ${dev} connects</summary>${auto('Is Connected', 'start')}</details>
@@ -680,6 +705,9 @@ function autoLogSheet() {
       <li>Your phone needs mobile data when the ${dev} connects and disconnects, or that half of the ride is missed.</li>
       <li>Rides show up the next time you open Redline. Connections under ${S.minMin} minutes only save where you parked.</li>
       <li>Made the older version with ${ui('Save File')} and ${ui('Open URLs')}? Delete those two automations: swipe left on each in the Automation tab.</li></ul></div>` : ''}`, sh => {
+    if ($('#gAdded', sh)) $('#gAdded', sh).onclick = () => { S.al = Object.assign({}, S.al, { added: Date.now() }); save(); haptic(); autoLogSheet(); };
+    $$('[data-sc]', sh).forEach(b => b.addEventListener('click', () => { S.al = Object.assign({}, S.al, { ['tap_' + b.dataset.sc]: 1 }); if (S.al.tap_start && S.al.tap_end && !S.al.added) S.al.added = Date.now(); save(); }));
+    sh._alRefresh = async () => { const before = JSON.stringify(S.al || {}); await pullLog(true); const a = S.al || {}; if ((a.start || a.end) && !a.added) a.added = Date.now(); if (JSON.stringify(a) !== before && sheetEl.classList.contains('on') && $('.chk', sheetEl)) { save(); const y = sheetEl.scrollTop; autoLogSheet(); sheetEl.scrollTop = y; if (a.start && a.end) { toast('Auto-log is set up. Ride safe!'); celebrate(); } } };
     $$('[data-sc]', sh).forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(code); } catch (e) {} haptic(); toast('Rider code copied. Paste it when Shortcuts asks.'); setTimeout(() => window.open(SHORTCUTS[b.dataset.sc], '_blank'), 350); });
     $$('[data-copy]', sh).forEach(b => b.onclick = async () => { const el = $('#' + b.dataset.copy, sh); try { await navigator.clipboard.writeText(el.textContent); b.textContent = 'Copied'; haptic(); setTimeout(() => b.textContent = 'Copy', 1600); } catch (e) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Selected'; } });
     $$('details.gsec', sh).forEach(d => d.addEventListener('toggle', () => { if (d.open) { $$('details.gsec', sh).forEach(o => o !== d && (o.open = false)); setTimeout(() => d.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); } }));
@@ -693,10 +721,11 @@ async function checkLog(box, btn) {
   const say = (ok, h, p) => { box.className = 'gres ' + (ok ? 'ok' : 'bad'); box.innerHTML = `<b>${h}</b><span>${p}</span>`; btn.disabled = false; btn.textContent = 'Check again'; };
   if (window.PREVIEW) { setTimeout(() => say(true, 'Got it', 'In the real app this shows when your Cardo last connected.'), 700); return; }
   try {
-    const j = await getJSON(`${relayBase()}/?log=pull&k=${riderCode()}`); const items = (j.items || []).filter(x => x.e !== 'test');
+    const j = await getJSON(`${relayBase()}/?log=pull&k=${riderCode()}&_=${Date.now()}`); const items = (j.items || []).filter(x => x.e !== 'test');
     const recent = items.filter(x => Date.now() - x.t < 36e5).sort((a, b) => b.t - a.t)[0];
     const recentDone = S.openRide && Date.now() - S.openRide.t < 36e5 ? { e: 'start', t: S.openRide.t } : null;
     const hit = recent || recentDone;
+    if (hit && (hit.e === 'start' || hit.e === 'end')) { S.al = Object.assign({}, S.al, { [hit.e]: hit.t, added: (S.al && S.al.added) || Date.now() }); save(); }
     if (hit) { const loc = hit.lat && !isNaN(parseFloat(hit.lat)); say(loc || recentDone, hit.e === 'end' ? 'Disconnect received' : 'Connect received', `${fmtTime(hit.t)}${loc || recentDone ? '. Your location came through too. You’re set.' : '. But there was no location: check steps 10 and 11, and that Shortcuts can use your location.'}`); pullLog(true); return; }
     // nothing from the phone yet: prove the relay works by sending a test from here
     await getJSON(`${relayBase()}/?log=add&k=${riderCode()}&e=test`);
@@ -756,7 +785,7 @@ function plusSheet() {
     <div class="plus2"><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
-const ACTIONS = { startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
+const ACTIONS = { ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
   light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */
@@ -871,9 +900,11 @@ async function pullLog(force) {
   if (window.PREVIEW || !S.relay || !S.rider || pulling || (!force && Date.now() - lastPull < 6e4)) return [];
   pulling = true; lastPull = Date.now();
   try {
-    const j = await getJSON(`${relayBase()}/?log=pull&k=${S.rider}`); const items = (j && j.items) || []; if (!items.length) return [];
+    const j = await getJSON(`${relayBase()}/?log=pull&k=${S.rider}&_=${Date.now()}`); const items = (j && j.items) || [];
+    if (S.openRide && Date.now() - S.openRide.t > 12 * 3600e3) { S.openRide = null; save(); toast('An unfinished ride from earlier was cleared'); refresh(); }
+    if (!items.length) return [];
     const res = await applyEvents(items.filter(x => x.e !== 'test'));
-    await getJSON(`${relayBase()}/?log=ack&k=${S.rider}&ids=${encodeURIComponent(items.map(x => x.id).join(','))}`).catch(() => {});
+    await getJSON(`${relayBase()}/?log=ack&k=${S.rider}&_=${Date.now()}&ids=${encodeURIComponent(items.map(x => x.id).join(','))}`).catch(() => {});
     showResults(res); return items;
   } catch (e) { return []; } finally { pulling = false; }
 }
@@ -979,17 +1010,18 @@ function renderStep() {
   if (st.custom === 'roads') body = roadChips(S.roads || []) + `<div class="sep"></div><div class="bl">Or let Redline find them</div>` + routeFinder();
   if (st.custom === 'intercom') body = [['Cardo', 'Cardo', 'Packtalk, Freecom, Spirit'], ['Other', 'Another intercom', 'Sena, Shoei, any Bluetooth'], ['none', 'No intercom', 'Log rides with a tap']].map(([v, b, s]) => `<button type="button" class="choice ${S.intercom === v ? 'on' : ''}" data-c="${v}"><span><b>${b}</b><span>${s}</span></span></button>`).join('');
   panel.innerHTML = `<div class="prog">${STEPS.map((_, i) => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div><div class="k">${st.k}</div><h1>${st.h}</h1><p class="lede">${st.p}</p>
-    <form id="sform">${body}</form><div class="btns">${step > 0 ? '<button type="button" class="btn ghost sm" id="sBack">Back</button>' : ''}${st.skip ? '<button type="button" class="btn ghost sm" id="sSkip">Skip</button>' : ''}<button type="button" class="btn" id="sNext">${step === STEPS.length - 1 ? 'Start riding' : st.cta || 'Continue'}</button></div>`;
+    <form id="sform">${body}</form>${st.custom === 'intercom' && isIOS ? `<button type="button" class="btn alnow" id="sAuto" ${S.intercom && S.intercom !== 'none' ? '' : 'hidden'}>${ic('head', 2.4)} Start riding + set up auto-log</button>` : ''}<div class="btns">${step > 0 ? '<button type="button" class="btn ghost sm" id="sBack">Back</button>' : ''}${st.skip ? '<button type="button" class="btn ghost sm" id="sSkip">Skip</button>' : ''}<button type="button" class="btn ${st.custom === 'intercom' ? 'ghost' : ''}" id="sNext">${step === STEPS.length - 1 ? 'Start riding' : st.cta || 'Continue'}</button></div>`;
   panel.scrollTop = 0; wire(panel);
   $$('.choice', panel).forEach(c => c.onclick = () => { if (c.dataset.g) { $$(`.choice[data-g="${c.dataset.g}"]`, panel).forEach(x => x.classList.remove('on')); c.classList.add('on'); haptic(); S.bike[c.dataset.g] = c.dataset.c; return; }
     $$('.choice', panel).forEach(x => x.classList.remove('on')); c.classList.add('on'); haptic();
-    if (st.custom === 'service') { setupSvc = c.dataset.c; $('#svcKnown', panel).hidden = setupSvc !== 'known'; } else S.intercom = c.dataset.c; });
+    if (st.custom === 'service') { setupSvc = c.dataset.c; $('#svcKnown', panel).hidden = setupSvc !== 'known'; } else { S.intercom = c.dataset.c; if ($('#sAuto', panel)) $('#sAuto', panel).hidden = S.intercom === 'none'; } });
   panel.onpick = null; panel.addEventListener('pick', e => { const f = e.target.closest('[data-k=type]'); if (!f) return; const v = read(panel).type; if (v) { S.bike.type = v; if (window.W) W.setBike(v); } });
   if (st.custom === 'roads') wireFinder(panel);
   $('#odoLater', panel) && ($('#odoLater', panel).onclick = () => { $('[name=odo]', panel).value = ''; nextStep(); });
   $('#sBack', panel) && ($('#sBack', panel).onclick = () => { step--; renderStep(); });
   $('#sSkip', panel) && ($('#sSkip', panel).onclick = () => { step++; renderStep(); });
-  $('#sNext', panel).onclick = nextStep; $('#sform', panel).onsubmit = e => { e.preventDefault(); nextStep(); };
+  $('#sNext', panel).onclick = nextStep;
+  if ($('#sAuto', panel)) $('#sAuto', panel).onclick = () => { nextStep(); setTimeout(() => autoLogSheet(), 1100); }; $('#sform', panel).onsubmit = e => { e.preventDefault(); nextStep(); };
 }
 function nextStep() {
   const st = STEPS[step], v = read($('#sform'));
@@ -1057,7 +1089,7 @@ function seedPreview() {
   // wait for fonts so the big numbers don't jump, but never more than a moment
   Promise.race([document.fonts ? document.fonts.ready : Promise.resolve(), new Promise(r => setTimeout(r, 900))]).then(() => setTimeout(start, 250));
   loadLive();
-  setInterval(() => { if (!document.hidden && S.setupDone) { loadLive(); pullLog(); } }, 6e5);
+  setInterval(() => { if (!document.hidden && S.setupDone) { loadLive(); if (sheetEl._alRefresh && $('.chk', sheetEl)) sheetEl._alRefresh(); else pullLog(); } }, 6e5);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.setupDone) { loadLive(); pullLog(); if (!sheetEl.classList.contains('on')) refresh(); } });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

@@ -212,11 +212,17 @@ async function applyEvents(items) {
   for (const x of items) {
     const sig = 'relay:' + x.id; if (S.seen.includes(sig)) continue; S.seen = [...S.seen.slice(-120), sig];
     const lat = parseFloat(x.lat), lon = parseFloat(x.lon);
-    if (x.e === 'start') { S.openRide = { lat, lon, t: x.t }; save(); continue; }
+    if (x.e === 'start' || x.e === 'end') { S.al = Object.assign({}, S.al, { [x.e]: x.t }); }
+    if (x.e === 'start') {
+      // the end can arrive before its start (the relay's storage isn't instant): pair them up instead of opening a ride that never ends
+      const le = S.lastEnd;
+      if (le && !le.used && le.t > x.t && le.t - x.t < 12 * 3600e3) { le.used = true; out.push(await logRide({ lat, lon, t: x.t }, { lat: le.lat, lon: le.lon, t: le.t })); continue; }
+      S.openRide = { lat, lon, t: x.t }; save(); continue;
+    }
     if (x.e === 'end') {
-      const st = S.openRide; S.openRide = null;
-      if (st && x.t - st.t < 12 * 3600e3) out.push(await logRide(st, { lat, lon, t: x.t }));
-      else if (!isNaN(lat)) { S.parked = { lat, lon, t: x.t }; save(); out.push({ msg: 'Parked spot saved', col: 'sky' }); }
+      const st = S.openRide && S.openRide.t < x.t ? S.openRide : null; if (st) S.openRide = null;
+      if (st && x.t - st.t < 12 * 3600e3) { S.lastEnd = { lat, lon, t: x.t, used: true }; out.push(await logRide(st, { lat, lon, t: x.t })); }
+      else { S.lastEnd = { lat, lon, t: x.t, used: false }; if (!isNaN(lat)) { S.parked = { lat, lon, t: x.t }; save(); out.push({ msg: 'Parked spot saved', col: 'sky' }); } }
       continue;
     }
     if (x.e === 'mark' && !isNaN(lat)) { S.marks.push({ id: uid(), lat, lon, t: x.t, note: x.note || '' }); save(); out.push({ msg: 'Spot marked' + (x.note ? ': ' + x.note : '') }); continue; }
