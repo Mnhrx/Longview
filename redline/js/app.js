@@ -837,6 +837,9 @@ export default {
     return new Response(await r.text(), { headers: head });
   }
 };`;
+// the shared Redline relay (Haiqal's). Everyone uses it unless they set their own or remove it.
+const DEFAULT_RELAY = 'https://redline.lvredline.workers.dev';
+if (!S.relay && !S.relayOff && !window.PREVIEW) S.relay = DEFAULT_RELAY;
 // ---- ride relay: the phone drops events there; the app collects them
 const relayBase = () => (S.relay || '').replace(/\/+$/, '');
 function riderCode() { if (!S.rider) { const a = new Uint8Array(12); crypto.getRandomValues(a); S.rider = [...a].map(x => 'abcdefghjkmnpqrstuvwxyz23456789'[x % 31]).join(''); save(); } return S.rider; }
@@ -863,7 +866,7 @@ function showResults(res) {
 // one small free Cloudflare Worker does two jobs: LTA traffic, and the drop box your rides land in
 function relaySheet() {
   const ui = t => `<b class="ui">${t}</b>`;
-  openSheet('Relay', 'A tiny free server that brings in LTA traffic alerts and catches rides from your phone. One per group is enough: friends can share yours, and each phone gets its own private rider code.', `
+  openSheet('Relay', S.relay === DEFAULT_RELAY ? 'You’re on the shared Redline relay: live LTA traffic and ride logging, nothing to set up. Your rides stay private to your own rider code.' : 'A tiny free server that brings in LTA traffic alerts and catches rides from your phone. One per group is enough: friends can share yours, and each phone gets its own private rider code.', `
   <form id="rf">${F({ k: 'relay', l: 'Relay address', v: S.relay, ph: 'https://redline.yourname.workers.dev' })}<div class="btns">${S.relay ? '<button type="button" class="btn danger" id="roff" style="flex:.6">Remove</button>' : ''}<button class="btn">Save and test</button></div></form>
   <div class="gres" id="rRes" hidden></div>
   <details class="gsec" ${S.relay ? '' : 'open'}><summary><span class="gn">?</span>Make your own (about 10 minutes)</summary><ol class="gsteps">
@@ -883,10 +886,10 @@ function relaySheet() {
       const [rides, traffic] = await Promise.all([ok('/?log=pull&k=testtesttest'), ok('/?path=TrafficIncidents')]);
       const rOk = rides && Array.isArray(rides.items), tOk = traffic && 'value' in traffic;
       if (!rOk && !tOk) { box.className = 'gres bad'; box.innerHTML = '<b>Couldn’t reach it</b><span>Check the address, and that you tapped Deploy after pasting the code.</span>'; return; }
-      S.relay = u; save(); loadLive(true);
+      S.relay = u; S.relayOff = false; save(); loadLive(true);
       box.className = 'gres ok'; box.innerHTML = `<b>Saved</b><span>Rides: ${rOk ? 'ready ✓' : 'needs the RIDES binding (step 5)'}<br>Traffic: ${tOk ? `on ✓ · ${traffic.value.length} incidents right now` : 'off (needs the LTA_KEY secret, step 6)'}</span>`;
       if (rOk) { riderCode(); box.insertAdjacentHTML('beforeend', '<button type="button" class="btn" id="toAuto">Set up auto-log →</button>'); $('#toAuto', sh).onclick = () => autoLogSheet(); } };
-    if ($('#roff', sh)) $('#roff', sh).onclick = () => { S.relay = ''; save(); closeSheet(); LIVE.inc = null; paintLive(); toast('Relay removed'); };
+    if ($('#roff', sh)) $('#roff', sh).onclick = () => { S.relay = ''; S.relayOff = true; save(); closeSheet(); LIVE.inc = null; paintLive(); toast('Relay removed'); };
   });
 }
 function demoSheet() {

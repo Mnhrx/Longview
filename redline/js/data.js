@@ -55,7 +55,7 @@ function fresh() {
     items: ITEM_DEFS.filter(x => fits(x[4], { drive: 'chain', cooling: 'liquid' })).map(([name, part, km, months]) => ({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null })),
     renewals: RENEW_DEFS.map(name => ({ id: uid(), name, date: '', cost: null })),
     services: [], fuel: [], rides: [], marks: [], odoLog: [], parked: null,
-    intercom: null, seen: [], minMin: 3, minKm: .5, fuelLight: null, relay: '', home: null, roads: [], rider: '', openRide: null,
+    intercom: null, seen: [], minMin: 3, minKm: .5, fuelLight: null, relay: window.PREVIEW ? '' : 'https://redline.lvredline.workers.dev', home: null, roads: [], rider: '', openRide: null,
     prefs: { sound: false, music: false },
     stats: { exports: 0, wraps: 0 }, badges: {}
   };
