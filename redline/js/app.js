@@ -633,7 +633,26 @@ function autoLogSheet() {
     </ol>`;
   openSheet('Auto-log rides', `When your ${dev} connects, a ride starts. When it disconnects, the ride ends and Redline maps it. Nothing opens on your phone.`, `
   <div class="gstat ${ready ? 'ok' : ''}">${ready ? `${ic('check', 3)}<div><b>Relay connected</b><span>Your rider code: <b class="mono">${code}</b></span></div>` : `${ic('alert', 2.4)}<div><b>First, a relay</b><span>Your phone drops each ride there and Redline picks it up when you open it. Have an address from a friend? Paste it. Otherwise it takes about 10 minutes to make your own.</span></div><button type="button" class="btn sm" id="gRelay">Set up</button>`}</div>
-  ${ready ? `
+  ${ready && SHORTCUTS.start ? `
+  <p class="glede">Two quick parts: add two ready-made shortcuts, then tell your iPhone when to run them.</p>
+  <details class="gsec" open><summary><span class="gn">1</span>Add the two shortcuts</summary>
+    <p class="gnote">Your rider code keeps your rides yours. Tapping a button copies it for you.</p>
+    <div class="cpy"><code id="ucode">${code}</code><button type="button" class="btn ghost sm" data-copy="ucode">Copy</button></div>
+    <div class="scbtns"><button type="button" class="btn" data-sc="start">${ic('play', 2.6)} Add “Redline Start”</button><button type="button" class="btn" data-sc="end">${ic('stop', 2.6)} Add “Redline End”</button></div>
+    <ol class="gsteps"><li>Tap ${ui('Get Shortcut')} if Safari shows it, then ${ui('Add Shortcut')}.</li><li>When it asks for your rider code, paste it (it’s already copied).</li><li>Didn’t ask? Open the shortcut in the Shortcuts app, tap the text <span class="mono">PASTE-CODE-HERE</span>, and paste your code over it.</li></ol></details>
+  <details class="gsec"><summary><span class="gn">2</span>Make two automations</summary><ol class="gsteps">
+      <li>In ${ui('Shortcuts')}, tap ${ui('Automation')} at the bottom, then ${ui('+')} at the top right (or ${ui('New Automation')}).</li>
+      <li>Scroll down and tap ${ui('Bluetooth')}. Tap ${ui('Device')}, choose your ${dev}, then ${ui('Done')}.</li>
+      <li>Tick ${ui('Is Connected')}, choose ${ui('Run Immediately')}, and tap ${ui('Next')}.</li>
+      <li>Pick ${ui('Redline Start')} from your shortcuts (not New Blank Automation). Done.</li>
+      <li>Do it once more with ${ui('Is Disconnected')} and pick ${ui('Redline End')}.</li></ol></details>
+  <details class="gsec"><summary><span class="gn">3</span>Allow it, then test</summary><ol class="gsteps">
+      <li>Turn your ${dev} off and on again near your phone.</li>
+      <li>The first time, iPhone asks to let Shortcuts use your location and connect to the relay. Tap ${ui('Allow')} (or ${ui('Always Allow')}).</li>
+      <li>Come back here and tap ${ui('Check it worked')}.</li></ol>
+    <button type="button" class="btn" id="gCheck">Check it worked</button><div class="gres" id="gRes" hidden></div></details>
+  <details class="gsec"><summary><span class="gn">?</span>Build them yourself instead</summary><p class="gnote">Only if the links don’t work for you. Make two automations from scratch. First, for connecting:</p>${auto('Is Connected', 'start')}<p class="gnote">Then the same for disconnecting, with a different address:</p>${auto('Is Disconnected', 'end')}</details>` : ''}
+  ${ready && !SHORTCUTS.start ? `
   <p class="glede">You make <b>two automations</b> in the Shortcuts app: one for when your ${dev} connects, one for when it disconnects. iPhone runs each one on its own.</p>
   <details class="gsec" open><summary><span class="gn">1</span>When your ${dev} connects</summary>${auto('Is Connected', 'start')}</details>
   <details class="gsec"><summary><span class="gn">2</span>When it disconnects</summary><p class="gnote">Same steps, with a different choice in step 5 and a different address in step 9.</p>${auto('Is Disconnected', 'end')}</details>
@@ -661,6 +680,7 @@ function autoLogSheet() {
       <li>Your phone needs mobile data when the ${dev} connects and disconnects, or that half of the ride is missed.</li>
       <li>Rides show up the next time you open Redline. Connections under ${S.minMin} minutes only save where you parked.</li>
       <li>Made the older version with ${ui('Save File')} and ${ui('Open URLs')}? Delete those two automations: swipe left on each in the Automation tab.</li></ul></div>` : ''}`, sh => {
+    $$('[data-sc]', sh).forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(code); } catch (e) {} haptic(); toast('Rider code copied. Paste it when Shortcuts asks.'); setTimeout(() => window.open(SHORTCUTS[b.dataset.sc], '_blank'), 350); });
     $$('[data-copy]', sh).forEach(b => b.onclick = async () => { const el = $('#' + b.dataset.copy, sh); try { await navigator.clipboard.writeText(el.textContent); b.textContent = 'Copied'; haptic(); setTimeout(() => b.textContent = 'Copy', 1600); } catch (e) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Selected'; } });
     $$('details.gsec', sh).forEach(d => d.addEventListener('toggle', () => { if (d.open) { $$('details.gsec', sh).forEach(o => o !== d && (o.open = false)); setTimeout(() => d.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); } }));
     if ($('#gRelay', sh)) $('#gRelay', sh).onclick = () => relaySheet();
@@ -839,6 +859,8 @@ export default {
 };`;
 // the shared Redline relay (Haiqal's). Everyone uses it unless they set their own or remove it.
 const DEFAULT_RELAY = 'https://redline.lvredline.workers.dev';
+// iCloud links to the shared shortcuts (made once on Haiqal's iPhone). Empty = show the build-it-yourself guide.
+const SHORTCUTS = { start: 'https://www.icloud.com/shortcuts/afb9c505c54c4b81ba3d5d4c69251b40', end: 'https://www.icloud.com/shortcuts/a0445371b3e74afbb50d15adcd5aaa7e' };
 if (!S.relay && !S.relayOff && !window.PREVIEW) S.relay = DEFAULT_RELAY;
 // ---- ride relay: the phone drops events there; the app collects them
 const relayBase = () => (S.relay || '').replace(/\/+$/, '');
