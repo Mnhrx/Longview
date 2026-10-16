@@ -188,12 +188,43 @@ function wireCams(root) {
       const i = Math.round(sw.scrollLeft / Math.max(1, sw.clientWidth)), a = list()[i]; if (a && camView[set.k] !== a[0]) { camView[set.k] = a[0]; camSync(el); haptic(); } }); }, { passive: true });
     // a tap (not a swipe) steps to the next angle
     let sx = 0; sw.addEventListener('pointerdown', e => sx = e.clientX);
-    sw.addEventListener('click', e => { if (Math.abs(e.clientX - sx) > 8) return; const l = list(), i = l.indexOf(camCurrent(set)); camView[set.k] = l[(i + 1) % l.length][0]; jump(!RM); });
+    sw.addEventListener('click', e => { if (Math.abs(e.clientX - sx) > 8) return; haptic(); camViewer(set.k, () => { jump(false); camSync(el); }); });
     $('.star', el).addEventListener('click', e => { e.stopPropagation(); const [id, ang] = camCurrent(set);
       const on = S.camPref && S.camPref[set.k] === id; S.camPref = Object.assign({}, S.camPref); if (on) delete S.camPref[set.k]; else S.camPref[set.k] = id; save(); camSync(el); haptic();
       if (!RM) e.currentTarget.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.35) rotate(-12deg)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.2,1.4,.4,1)' });
       toast(on ? `${set.name} back to opening on ${set.angles[0][1]}` : `${set.name} will open on ${ang}`); });
   });
+}
+// full-screen camera: pinch or double-tap to zoom, drag to look around, switch angles at the bottom
+function camViewer(k, onClose) {
+  const set = CAMSETS.find(x => x.k === k); let box = $('#lbox');
+  if (!box) { box = document.createElement('div'); box.id = 'lbox'; box.className = 'lbox'; document.body.appendChild(box); }
+  let z = 1, x = 0, y = 0;
+  const paint = () => {
+    const list = camAngles(set), [id, ang, sub] = camCurrent(set), c = LIVE.cams, im = c && c[id];
+    box.innerHTML = `<div class="lb-top"><div class="grow"><b>${esc(set.name)} · ${esc(ang)}</b><span>${esc(sub)}${im && im.t ? ' · ' + fmtTime(im.t) : ''}</span></div><button type="button" class="lb-x" aria-label="Close">${ic('x', 2.6)}</button></div>
+      <div class="lb-stage">${im && im.img ? `<img class="lb-img" src="${im.img}" alt="${esc(sub)}" draggable="false">` : `<div class="lb-img lb-ph">${ic('cam', 1.8)}<span>${c && c.sample ? 'The live photo shows here in the app' : 'Camera unavailable right now'}</span></div>`}</div>
+      <div class="lb-angles">${list.map(a => `<button type="button" class="${a[0] === id ? 'on' : ''}" data-ang="${a[0]}">${esc(a[1])}</button>`).join('')}</div>
+      <p class="lb-hint">Pinch or double-tap to zoom</p>`;
+    z = 1; x = 0; y = 0; apply();
+    $('.lb-x', box).onclick = close; $$('[data-ang]', box).forEach(b => b.onclick = () => { camView[k] = b.dataset.ang; haptic(); paint(); });
+  };
+  const img = () => $('.lb-img', box);
+  const apply = () => { const st = $('.lb-stage', box), im = img(); if (!im || !st) return; const lim = (st.clientWidth * (z - 1)) / 2, limy = (st.clientHeight * (z - 1)) / 2; x = Math.max(-lim, Math.min(lim, x)); y = Math.max(-limy, Math.min(limy, y)); im.style.transform = `translate(${x}px,${y}px) scale(${z})`; };
+  const close = () => { box.classList.remove('on'); setTimeout(() => { box.innerHTML = ''; }, 250); onClose && onClose(); };
+  // gestures
+  const pts = new Map(); let start = null, lastTap = 0;
+  box.onpointerdown = e => { if (!e.target.closest('.lb-stage')) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); const a = [...pts.values()]; start = { z, x, y, d: a.length > 1 ? Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) : 0, cx: a.reduce((s, p) => s + p.x, 0) / a.length, cy: a.reduce((s, p) => s + p.y, 0) / a.length, moved: false }; };
+  box.onpointermove = e => { if (!pts.has(e.pointerId) || !start) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); const a = [...pts.values()], cx = a.reduce((s, p) => s + p.x, 0) / a.length, cy = a.reduce((s, p) => s + p.y, 0) / a.length;
+    if (a.length > 1 && start.d) z = Math.max(1, Math.min(5, start.z * Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) / start.d));
+    x = start.x + (cx - start.cx); y = start.y + (cy - start.cy); if (Math.hypot(cx - start.cx, cy - start.cy) > 6) start.moved = true;
+    if (z === 1 && a.length === 1) { x = 0; const dy = cy - start.cy; y = Math.max(0, dy); const im = img(); if (im) im.style.transform = `translateY(${y}px) scale(${1 - Math.min(.15, y / 2000)})`; box.style.background = `rgba(10,8,12,${.96 - Math.min(.5, y / 600)})`; return; }
+    apply(); };
+  box.onpointerup = box.onpointercancel = e => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
+    if (!pts.size) { box.style.background = ''; if (z === 1 && y > 110) { close(); return; }
+      if (start && !start.moved) { const now = performance.now(); if (now - lastTap < 300) { z = z > 1 ? 1 : 2.6; if (z > 1) { const st = $('.lb-stage', box).getBoundingClientRect(); x = (st.left + st.width / 2 - e.clientX) * 1.6; y = (st.top + st.height / 2 - e.clientY) * 1.6; } else { x = y = 0; } const im = img(); if (im) im.style.transition = 'transform .28s cubic-bezier(.2,1,.3,1)'; apply(); setTimeout(() => { const i2 = img(); if (i2) i2.style.transition = ''; }, 300); lastTap = 0; } else lastTap = now; }
+      if (z === 1) { x = y = 0; apply(); } start = null; } };
+  paint(); requestAnimationFrame(() => box.classList.add('on'));
 }
 // new camera pictures arrive every few minutes: swap the images in place so a swipe in progress isn't reset
 function refreshCamImgs(root) {
@@ -239,11 +270,11 @@ function homeHTML() {
   const fs = fuelStats(), due = dueItems(), mr = monthRides(), mkm = mr.reduce((s, r) => s + (r.km || 0), 0), nr = nextRenewal();
   const w = wrapMonth();
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
-    <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<div class="odo"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></div>`}</div>
+    <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<button type="button" class="odo tapodo" data-act="mydata" aria-label="Odometer readings"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></button>`}${(() => { const oi = odoInfo(); return oi ? `<button type="button" class="odosince" data-act="mydata">${oi.since > 0 ? `<b>+${num(oi.since * oi.c, 1)} km</b> ridden since your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}` : `From your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}`}</button>` : ''; })()}</div>
     <div id="rideNow">${rideNowHTML()}</div>${alNudgeHTML()}</div>
-    <div class="hcol b"><div class="alerts" id="alerts">${alertsHTML()}</div>
+    <div class="hcol b">${tripAskHTML()}<div class="alerts" id="alerts">${alertsHTML()}</div>
     <div id="live0"></div>
-    <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span></section>
+    <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span>${window.RADAR ? RADAR.ATTR : ''}</section>
     <div class="cams" id="cams"></div>
     ${wrapReady() ? `<button type="button" class="wrapcta" data-act="wrap"><span class="wglow"></span><span class="wt"><small>Ride Wrap</small><b>Your ${new Date(w.y, w.m, 1).toLocaleDateString('en-SG', { month: 'long' })} is ready</b></span><span class="wplay">${ic('play', 2.6)}</span></button>` : ''}</div>`;
 }
@@ -252,6 +283,7 @@ const renWindow = r => /coe/i.test(r.name) ? 90 : 30;
 function alertsHTML() {
   const fs = fuelStats(), due = dueItems(), out = [];
   const partCard = top => `<section class="card c-lemon alertc ${top.s.cls}" data-part="${top.i.part}">${ART.art(top.i.part, top.s.frac, top.s.cls, 68)}<div class="t"><span>${top.s.cls === 'over' ? '<em>OVERDUE</em>' : '<em class="soon">DUE SOON</em>'}${esc(top.i.name)}</span><b>${bigVal(top.s)}</b></div><button type="button" class="sqbtn" data-done="${top.i.id}" aria-label="Mark ${esc(top.i.name)} done today">${ic('check', 3)}</button></section>`;
+  if (S.needFull) out.push(`<section class="card c-lemon alertc ren" data-act="fullsvc"><span class="renic">${ic('wrench', 2.4)}</span><div class="t"><span>Last service unknown</span><b style="font-size:21px">Get a full service</b></div><span class="minibtn dark">Log it</span></section>`);
   if (estOdo() == null) out.push(`<section class="card c-mint alertc ren" data-act="odo"><span class="renic">${ic('odo', 2.4)}</span><div class="t"><span>Odometer</span><b style="font-size:22px">Add a reading</b></div><span class="minibtn dark">Add</span></section>`);
   if (fs.low) out.push(`<section class="card c-red alertc"><div class="t"><span>${fs.pastE ? 'Past E' : 'Low fuel'}</span><b>${fs.pastE ? 'Fill up now' : `${fs.range}<small>km left</small>`}</b></div><a class="cbtn" href="${isIOS ? 'https://maps.apple.com/?q=petrol%20station' : 'https://www.google.com/maps/search/petrol+station/'}" target="_blank" rel="noopener">${ic('pin')}<span>Find petrol</span></a></section>`);
   const over = due.filter(x => x.s.cls === 'over'); if (over[0]) out.push(partCard(over[0]));
@@ -305,7 +337,7 @@ function garageHTML() {
   const hero = ks[0];
   return `<div class="hi"><div><h1>Garage</h1><small>${esc(buildName())} · ${estOdo() == null ? 'odometer not added' : num(estOdo()) + ' km'}</small></div></div>
     <div class="hcol a">${hero ? `<section class="card ghero ${hero.cls}" data-part="${hero.k}">${ART.art(hero.k, hero.f, hero.cls, 150)}<div class="t"><span>${hero.cls === 'over' ? '<em>OVERDUE</em>' : hero.cls === 'soon' ? '<em class="soon">DUE SOON</em>' : '<em class="okk">NEXT UP</em>'}${esc(hero.w ? hero.w.i.name : hero.l)}</span><b>${hero.w ? bigVal(hero.w.s) : 'Not tracked'}</b>${hero.w ? `<button type="button" class="donebig" data-done="${hero.w.i.id}">${ic('check', 3)}<span>Done today</span></button>` : ''}</div></section>` : ''}
-    <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div></div>
+    <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div>${kitCardHTML()}</div>
     <div class="hcol b"><div class="tiles">${ks.slice(1).map((p, i) => `<button type="button" class="tile ${p.cls}" data-part="${p.k}" style="--d:${i * 50}ms">${ART.art(p.k, p.f, p.cls, 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : `<small>${estOdo() == null ? 'Needs odometer' : 'Not tracked'}</small>`}</b><span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span></button>`).join('')}</div></div>`;
 }
 function fuelHTML() {
@@ -315,7 +347,7 @@ function fuelHTML() {
   return `<div class="hi"><div><h1>Fuel</h1><small>${fs.tankFrac != null ? `${num(fs.tankFrac * S.bike.tank, 1)} of ${num(S.bike.tank)} L in the tank` : 'Two full tanks unlock your range'}</small></div></div>
     <div class="hcol a"><div class="instr">${gaugeBlock('f', fs)}</div>
     <button type="button" class="bigbtn c-orange" data-act="fuel"><span class="nozzle">${ic('pump', 2.4)}</span><span>Log a fill-up</span></button>
-    <div class="stats"><div><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L</span></div><div><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })}</span></div><div><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km</span></div></div></div>
+    <div class="stats tap"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L ⓘ</span></button><button type="button" data-stat="spend"><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })} ⓘ</span></button><button type="button" data-stat="cpk"><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km ⓘ</span></button></div></div>
     <div class="hcol b"><section class="card plain"><div class="ch"><b>Spend</b><span>last 6 months</span></div><div class="bars">${months.map(({ d, v }, i) => `<div class="bcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><i style="height:${Math.max(3, v / mmax * 100)}%;--d:${i * 70}ms"></i><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div></section>
     <h2 class="sec">Fill-ups</h2>
     <section class="list2">${list.length ? list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
@@ -336,6 +368,40 @@ function rideMenu() {
       const st = S.openRide; S.openRide = null; save(); closeSheet(); showResults([await logRide({ ...st }, p)]); };
     $('#rmClear', sh).onclick = () => { S.openRide = null; save(); closeSheet(); refresh(); toast('Cleared'); };
   });
+}
+/* ---------- essentials kit + a 30-second pre-ride check ---------- */
+const KIT = [
+  ['On the bike', [['plug', 'Tyre plug kit'], ['pump', 'Mini pump or CO2'], ['tools', 'Basic tools (hex keys, spanners)'], ['lock', 'Disc lock or chain lock'], ['rain', 'Rain suit'], ['mount', 'Phone mount and charger'], ['lube', 'Chain lube or cleaner', 'chain']]],
+  ['On you', [['helmet', 'Helmet in good shape'], ['gloves', 'Gloves'], ['jacket', 'Riding jacket'], ['plugs', 'Earplugs'], ['firstaid', 'Small first-aid kit']]],
+  ['JB trips', [['passport', 'Passport (6+ months valid)'], ['tng', 'Touch ’n Go card, topped up'], ['cash', 'Some ringgit'], ['roam', 'Mobile data roaming or a SIM']]],
+];
+const PRE = [['Tyres', 'Pressure looks right, no nails or cuts'], ['Controls', 'Brakes, clutch and throttle move smoothly'], ['Lights', 'Headlight, brake light, indicators, horn'], ['Oil', 'Level in the window, no drips under the bike'], ['Chain', 'Not loose or dry'], ['Stands', 'Side stand springs back up']];
+function kitItems() { return KIT.flatMap(([, l]) => l).filter(x => !x[2] || x[2] === S.bike.drive); }
+function kitCardHTML() {
+  const have = (S.kit && S.kit.have) || {}, list = kitItems().filter(x => !/passport|tng|cash|roam/.test(x[0])), got = list.filter(x => have[x[0]]).length, miss = list.length - got;
+  const last = S.kit && S.kit.check;
+  return `<section class="card kitcard"><button type="button" class="kitmain" data-act="kit"><span class="kic">${ic('wrench', 2.4)}</span><span class="grow"><b>Essentials</b><span>${got ? (miss ? `${got} of ${list.length} ready · ${miss} missing` : 'All set') : 'What to carry on every ride'}</span></span>${ic('chev')}</button>
+    <button type="button" class="kitpre" data-act="preride">${ic('check', 3)}<span>30-second pre-ride check${last ? ` · last ${fmtDs(last)}` : ''}</span></button></section>`;
+}
+function kitSheet() {
+  S.kit = S.kit || { have: {} }; const have = S.kit.have;
+  openSheet('Essentials', 'Tick what you have. Redline just keeps count, no nagging.', KIT.map(([g, l]) => `<div class="bl">${g}</div><div class="kitlist">${l.filter(x => !x[2] || x[2] === S.bike.drive).map(([k, t]) => `<button type="button" class="kitrow ${have[k] ? 'on' : ''}" data-k="${k}"><i>${ic('check', 3.4)}</i><span>${t}</span></button>`).join('')}</div>`).join(''), sh => {
+    $$('.kitrow', sh).forEach(b => b.onclick = () => { const k = b.dataset.k; have[k] = !have[k]; b.classList.toggle('on', !!have[k]); save(); haptic(); if (have[k] && !RM) b.animate([{ transform: 'scale(.96)' }, { transform: 'scale(1.02)' }, { transform: 'none' }], { duration: 260 }); refresh(); });
+  });
+}
+function preRide() {
+  openSheet('Pre-ride check', 'Tap each one as you check it. Based on the T-CLOCS checklist riders are taught.', `<div class="kitlist">${PRE.map(([t, d], i) => `<button type="button" class="kitrow pre" data-i="${i}"><i>${ic('check', 3.4)}</i><span><b>${t}</b><small>${d}</small></span></button>`).join('')}</div><div class="gres ok" id="preOk" hidden><b>All good. Ride safe!</b></div>`, sh => {
+    const done = new Set();
+    $$('.kitrow', sh).forEach(b => b.onclick = () => { const i = b.dataset.i; done.has(i) ? done.delete(i) : done.add(i); b.classList.toggle('on', done.has(i)); haptic();
+      if (done.size === PRE.length) { S.kit = Object.assign({ have: {} }, S.kit, { check: todayISO() }); save(); $('#preOk', sh).hidden = false; celebrate(); setTimeout(() => { closeSheet(); refresh(); toast('Pre-ride check done. Ride safe!'); }, 900); } });
+  });
+}
+// OwnTracks spotted a trip without the intercom: one tap to say if it was on the bike
+function tripAskHTML() {
+  const q = (S.tripQ || []).filter(t => !t.auto); if (!q.length) return '';
+  const t = q[q.length - 1], mins = Math.round((t.end.t - t.start.t) / 6e4);
+  return `<section class="card tripask"><div class="grow"><span>Trip spotted${q.length > 1 ? ` · +${q.length - 1} more` : ''}</span><b>${fmtDs(todayISO(new Date(t.start.t)))} ${fmtTime(t.start.t)} · ${num(t.km, 1)} km · ${mins} min</b><em>Was this on the bike?</em></div>
+    <div class="tabtns"><button type="button" class="minibtn dark" data-trip="${t.k}" data-yes="1">Yes</button><button type="button" class="minibtn" data-trip="${t.k}" data-yes="">No</button></div></section>`;
 }
 // a one-time nudge for riders who picked an intercom but haven't finished auto-log
 function alNudgeHTML() {
@@ -420,7 +486,7 @@ function focusRide(id) {
 function showFocus() {
   const box = $('#mfocus'); if (!box) return; const r = window.MAP && S.rides.find(x => x.id === MAP.focused);
   box.hidden = !r; if (!r) return;
-  box.innerHTML = `<div class="grow"><span>${fmtDs(todayISO(new Date(r.start.t)))} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min</span><b>${esc(r.title || 'Ride')}</b></div><b class="k">${num(r.km, 1)}<small>km</small></b><button type="button" class="rbtn" data-ride="${r.id}" aria-label="Edit ride">${ic('list')}</button>`;
+  box.innerHTML = `<div class="grow"><span>${fmtDs(todayISO(new Date(r.start.t)))} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min</span><b>${esc(r.title || 'Ride')}</b></div><b class="k">${num(r.km, 1)}<small>km</small></b>${r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="rbtn alt" data-route="${r.id}" aria-label="Which way did you go?">${ic('ride')}</button>` : ''}<button type="button" class="rbtn" data-ride="${r.id}" aria-label="Edit ride">${ic('list')}</button>`;
   box.animate([{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,1.3,.4,1)' });
 }
 function setType(type) { if (type === S.bike.type) return; S.bike.type = type; save(); syncWorld(); if (place === 2) refresh(); }
@@ -445,6 +511,9 @@ $('#gear').addEventListener('click', e => { haptic(); e.currentTarget.animate([{
 viewEl.addEventListener('mapmoved', e => { const b = $('#mre'); if (b) { b.hidden = !e.detail; if (e.detail && !RM) b.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,1.4,.4,1)' }); } });
 viewEl.addEventListener('click', e => {
   if (e.target.closest('#mre')) { haptic(); MAP.recentre(); return; }
+  const trb = e.target.closest('[data-trip]'); if (trb) { haptic(); trb.disabled = true; answerTrip(trb.dataset.trip, !!trb.dataset.yes).then(r => { if (r) showResults([r]); else { toast('Got it, not a bike trip'); refresh(); } }); return; }
+  const rtb = e.target.closest('[data-route]'); if (rtb) { haptic(); routePicker(S.rides.find(x => x.id === rtb.dataset.route)); return; }
+  const stb = e.target.closest('[data-stat]'); if (stb) { haptic(); statSheet(stb.dataset.stat); return; }
   if (e.target.closest('#mapcv') && MAP.focused) { MAP.replay(); return; }
   const b = e.target.closest('[data-act],[data-tab],[data-ride],[data-fuel],[data-ren],[data-rdone],[data-done],[data-edit],[data-add],[data-part],[data-focus]'); if (!b) return; haptic();
   const d = b.dataset;
@@ -463,7 +532,7 @@ addEventListener('pointerup', () => { const b = pressed; pressed = null; if (!b 
 addEventListener('pointercancel', () => { if (pressed && pressed._pa) pressed._pa.cancel(); pressed = null; });
 function openSheet(title, lede, body, onOpen) {
   sheetEl.innerHTML = `<div class="grab"></div><div class="sh-head"><div class="grow"><h2>${title}</h2>${lede ? `<p>${lede}</p>` : ''}</div><button type="button" class="x" aria-label="Close">${ic('x')}</button></div>${body}`;
-  sheetEl.scrollTop = 0; sheetEl.classList.add('on'); shadeEl.classList.add('on'); if (window.W) W.locked = true;
+  sheetEl.scrollTop = 0; sheetEl._ok = false; sheetEl.classList.add('on'); shadeEl.classList.add('on'); if (window.W) W.locked = true;
   $('.x', sheetEl).onclick = closeSheet; onOpen && onOpen(sheetEl);
 }
 function closeSheet() { sheetEl.classList.remove('on'); shadeEl.classList.remove('on'); setTimeout(() => window.RADAR && RADAR.wake(), 50); if (window.W) { W.locked = false; W.poke(); } }
@@ -489,16 +558,24 @@ function read(root) {
   $$('[data-type=toggle]', root).forEach(f => v[f.dataset.k] = $('.sw', f).classList.contains('on'));
   return v;
 }
-function form({ title, lede, fields, cta = 'Save', onSave, onDelete }) {
-  openSheet(title, lede, `<form id="fm">${fields.map(F).join('')}<div class="btns">${onDelete ? '<button type="button" class="btn danger" id="del" style="flex:.5">Delete</button>' : ''}<button class="btn">${cta}</button></div>
+function form({ title, lede, fields, cta = 'Save', onSave, onDelete, check, extra = '', onOpen }) {
+  openSheet(title, lede, `<form id="fm">${extra}${fields.map(F).join('')}<div class="warnbox" id="wb" hidden></div><div class="btns">${onDelete ? '<button type="button" class="btn danger" id="del" style="flex:.5">Delete</button>' : ''}<button class="btn">${cta}</button></div>
     <div class="confirm" id="cf" hidden><span>Delete this for good? This can’t be undone.</span><div class="btns"><button type="button" class="btn ghost" id="cfNo">Keep it</button><button type="button" class="btn danger solid" id="cfYes">Delete</button></div></div></form>`, sh => {
     wire(sh);
     $('#fm', sh).onsubmit = e => {
       e.preventDefault(); const v = read(e.target);
       for (const x of fields.flatMap(x => x.type === 'row' ? x.f : [x])) if (x.req && (v[x.k] == null || v[x.k] === '' || (typeof v[x.k] === 'number' && isNaN(v[x.k])))) { toast(`Add ${x.l.toLowerCase()}`, 'over'); return; }
+      // looks like a typo? say so once, with Fix or Save anyway
+      const warn = check && !sh._ok ? check(v) : null;
+      if (warn) { const wb = $('#wb', sh); wb.hidden = false; wb.innerHTML = `<b>${ic('alert', 2.4)} Double-check this</b><span>${warn}</span><div class="wbb"><button type="button" class="btn ghost sm" id="wbFix">Fix it</button><button type="button" class="btn sm" id="wbOk">Save anyway</button></div>`;
+        if (!RM) wb.animate([{ transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'none' }], { duration: 300 }); haptic(); wb.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        $('#wbFix', sh).onclick = () => { wb.hidden = true; const f = $('input[name]', sh); f && f.focus(); };
+        $('#wbOk', sh).onclick = () => { sh._ok = true; $('#fm', sh).requestSubmit(); }; return; }
+      sh._ok = false;
       if (onSave(v) === false) return;
       save(); closeSheet(); refresh(); celebrate();
     };
+    onOpen && onOpen(sh);
     if (onDelete) { $('#del', sh).onclick = () => { $('#cf', sh).hidden = false; $('#cf', sh).scrollIntoView({ block: 'nearest' }); };
       $('#cfNo', sh).onclick = () => $('#cf', sh).hidden = true; $('#cfYes', sh).onclick = () => { onDelete(); save(); closeSheet(); refresh(); toast('Deleted'); }; }
   });
@@ -506,6 +583,51 @@ function form({ title, lede, fields, cta = 'Save', onSave, onDelete }) {
 function celebrate() { const ups = checkBadges(); if (ups.length) { const { b, tier } = ups[ups.length - 1]; setTimeout(() => toast(`${['', 'Bronze', 'Silver', 'Gold'][tier]} badge · ${b[1]}`), 600); } }
 /* ================= actions ================= */
 const odoGuess = () => estOdo() ?? '';
+/* ---------- photo scanning: odometer, pump display, receipts (read by AI on your relay) ---------- */
+const scanBtn = (kind, label) => `<div class="scanrow"><button type="button" class="scanbtn" data-scan="${kind}">${ic('cam', 2.2)}<span>${label}</span></button><input type="file" accept="image/*" capture="environment" hidden data-scanin="${kind}"></div><div class="scanres" hidden></div>`;
+async function shrink(file) {
+  const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
+  const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return new Promise(r => c.toBlob(r, 'image/jpeg', .85));
+}
+async function readPhoto(kind, file) {
+  if (window.PREVIEW) { await new Promise(r => setTimeout(r, 1200)); const o = (estOdo() || 18000) + 312;
+    return { odo: { odo: o }, pump: { litres: 12.41, cost: 34.62, price: 2.79, station: 'Shell', date: todayISO() }, service: { cost: 168, date: todayISO(), shop: 'Ah Huat Motor', odo: o, work: ['engine oil', 'oil filter', 'chain adjust'] } }[kind]; }
+  if (!S.relay) throw new Error('Scanning needs the relay. Settings → Relay.');
+  const blob = await shrink(file), c = new AbortController(); setTimeout(() => c.abort(), 30000);
+  const r = await fetch(`${relayBase()}/?ocr=${kind}&k=${riderCode()}`, { method: 'POST', body: blob, signal: c.signal, cache: 'no-store' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.error && /binding named AI/.test(j.error) ? 'Photo reading isn’t switched on in the relay yet.' : 'Couldn’t read that photo. Try again closer, without glare.');
+  return j.data;
+}
+const WORK = [[/engine oil|oil change|\boil\b/i, /engine oil/i], [/oil filter/i, /oil filter/i], [/chain.*(lube|clean)|lube/i, /chain clean/i], [/chain.*adjust|adjust.*chain|slack/i, /chain adjust/i], [/brake pad/i, /brake pads/i], [/front tyre|front tire/i, /front tyre/i], [/rear tyre|rear tire|back tyre/i, /rear tyre/i], [/spark/i, /spark/i], [/air filter/i, /air filter/i], [/coolant|radiator/i, /coolant/i], [/brake fluid/i, /brake fluid/i], [/belt/i, /belt/i], [/gear oil/i, /gear oil/i]];
+// fill a form from what the photo says; the rider always checks before saving
+function wireScan(sh, kind) {
+  const b = $(`[data-scan="${kind}"]`, sh), inp = $(`[data-scanin="${kind}"]`, sh), res = $('.scanres', sh); if (!b) return;
+  b.onclick = () => { haptic(); if (window.PREVIEW) inp.onchange({ target: { files: [new Blob()] } }); else inp.click(); };
+  inp.onchange = async e => { const file = e.target.files && e.target.files[0]; if (!file) return;
+    b.disabled = true; b.classList.add('busy'); $('span', b).textContent = 'Reading the photo…'; res.hidden = true;
+    try { const d = await readPhoto(kind, file) || {}; const set = (name, v) => { const el = $(`[name="${name}"]`, sh); if (el && v != null && v !== '' && !(typeof v === 'number' && isNaN(v))) { el.value = v; el.classList.add('filled'); setTimeout(() => el.classList.remove('filled'), 1600); return 1; } return 0; };
+      let n = 0, notes = [];
+      if (kind === 'odo') n += set('odo', d.odo != null ? Math.round(+d.odo) : null);
+      if (kind === 'pump') { n += set('litres', d.litres != null ? +d.litres : null); n += set('cost', d.cost != null ? +d.cost : (d.litres && d.price ? +(d.litres * d.price).toFixed(2) : null)); if (d.date && /^\d{4}-\d\d-\d\d$/.test(d.date)) n += set('date', d.date);
+        if (d.station) { const chip = $$('[data-k=station] .chipbtn', sh).find(c => c.dataset.v.toLowerCase() === String(d.station).toLowerCase()); if (chip) { chip.click(); n++; } } }
+      if (kind === 'service') { n += set('cost', d.cost != null ? +d.cost : null); n += set('shop', d.shop); if (d.date && /^\d{4}-\d\d-\d\d$/.test(d.date)) n += set('date', d.date); if (d.odo) n += set('odo', Math.round(+d.odo));
+        const work = (d.work || []).join(' | '); if (work) { WORK.forEach(([re, nameRe]) => { if (!re.test(work)) return; const it = S.items.find(i => nameRe.test(i.name)); const chip = it && $(`[data-k=items] .chipbtn[data-v="${it.id}"]`, sh); if (chip && chip.getAttribute('aria-pressed') !== 'true') { chip.setAttribute('aria-pressed', 'true'); n++; } }); notes.push('Work: ' + esc(work)); } }
+      res.hidden = false; res.className = 'scanres ' + (n ? 'ok' : 'bad'); res.innerHTML = n ? `<b>${ic('check', 3)} Filled in ${n} field${n > 1 ? 's' : ''}</b><span>Check they’re right before saving.${notes.length ? '<br>' + notes.join('<br>') : ''}</span>` : `<b>Couldn’t find the numbers</b><span>Try again closer, straight on, without glare. Or type them in.</span>`; haptic();
+    } catch (err) { res.hidden = false; res.className = 'scanres bad'; res.innerHTML = `<b>Couldn’t read it</b><span>${esc(err.message || 'Try again.')}</span>`; }
+    b.disabled = false; b.classList.remove('busy'); $('span', b).textContent = b.dataset.l; inp.value = ''; };
+  b.dataset.l = $('span', b).textContent;
+}
+// the reading just before a date (ignoring the entry being edited), to judge an odometer number
+function odoBefore(date, skipId) { const t = +new Date(date + 'T12:00'); const r = odoReadings().filter(x => x.id !== skipId && x.t <= t); return r.length ? r[r.length - 1] : null; }
+function odoCheck(odo, date, skipId) {
+  if (odo == null || isNaN(odo)) return null; const prev = odoBefore(date || todayISO(), skipId); if (!prev) return null;
+  const days = Math.max(1, (+new Date((date || todayISO()) + 'T12:00') - prev.t) / 864e5), diff = odo - prev.odo;
+  if (diff < -5) return `That’s ${num(-diff)} km <b>lower</b> than your last reading (${num(prev.odo)} km on ${fmtDs(todayISO(new Date(prev.t)))}). Odometers only go up. A typo?`;
+  if (diff > Math.max(1500, days * 600)) return `That’s ${num(diff)} km more than ${num(prev.odo)} km, ${Math.round(days)} day${days >= 2 ? 's' : ''} ago. That’s a lot of riding. A typo?`;
+  return null;
+}
 const STATIONS = ['Shell', 'Esso', 'SPC', 'Caltex', 'Sinopec', 'Malaysia'].map(s => ({ v: s, l: s }));
 const MOODS = ['Chill', 'Spirited', 'Rainy', 'Night', 'Touring', 'Jammed'].map(v => ({ v, l: v }));
 function fuelForm(e) {
@@ -513,33 +635,42 @@ function fuelForm(e) {
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: e?.date || todayISO(), req: 1 }, { k: 'odo', l: 'Odometer (km)', type: 'number', v: e?.odo ?? odoGuess(), req: 1 }] },
       { type: 'row', f: [{ k: 'litres', l: 'Litres', type: 'number', v: e?.litres, req: 1 }, { k: 'cost', l: 'Cost ($)', type: 'number', v: e?.cost }] },
       { k: 'station', l: 'Station', type: 'chips', o: STATIONS, v: e?.station || '' }, { k: 'full', l: 'Filled to a full tank', type: 'toggle', v: e ? e.full : true }],
+    extra: e ? '' : scanBtn('pump', 'Scan the pump or receipt'), onOpen: sh => wireScan(sh, 'pump'),
+    check: v => { const o = odoCheck(v.odo, v.date, e && e.id); if (o) return o; const tank = +S.bike.tank || 0;
+      if (tank && v.litres > tank * 1.15) return `${num(v.litres, 1)} L is more than your ${num(tank)} L tank holds. A typo, or is the tank size in Settings wrong?`;
+      if (v.cost && v.litres) { const pl = v.cost / v.litres; if (pl < 2.3 || pl > 4.5) return `That works out to $${num(pl, 2)} a litre. Pump prices are usually $2.50–$4. Check the litres and cost.`; } return null; },
     onSave: v => { if (e) { Object.assign(e, v); return; }
       // after the fuel light: learn this bike's real reserve from how much went in
       const fl = S.fuelLight, k = fuelStats().kpl;
       if (fl && v.full && k && v.litres && v.odo >= fl.odo) { const est = (+S.bike.tank - v.litres) + (v.odo - fl.odo) / k; if (est > .3 && est < S.bike.tank * .5) S.bike.reserve = Math.round(((+S.bike.reserve || 2.5) * 2 + est) / 3 * 10) / 10; }
       const oldF = gaugeFrac(fuelStats()), wasOn = fuelStats().low;
       if (v.full) S.fuelLight = null;
-      S.fuel.push({ id: uid(), ...v }); toast('Fill-up logged'); setTimeout(() => refillSweep(oldF, wasOn), 420); },
+      S.fuel.push({ id: uid(), ...v, ts: Date.now() }); toast('Fill-up logged'); setTimeout(() => refillSweep(oldF, wasOn), 420); },
     onDelete: e && (() => S.fuel = S.fuel.filter(x => x !== e)) });
 }
-function serviceForm(e) {
+function serviceForm(e, preset) {
   form({ title: e ? 'Edit service' : 'Log a service', lede: 'Pick what was done. Those countdowns restart from this odometer reading.',
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: e?.date || todayISO(), req: 1 }, { k: 'odo', l: 'Odometer (km)', type: 'number', v: e?.odo ?? odoGuess(), req: 1 }] },
-      { k: 'items', l: 'What was done', type: 'chips', multi: 1, o: S.items.map(i => ({ v: i.id, l: i.name })), v: e?.items || [] },
+      { k: 'items', l: 'What was done', type: 'chips', multi: 1, o: S.items.map(i => ({ v: i.id, l: i.name })), v: e?.items || preset || [] },
       { type: 'row', f: [{ k: 'cost', l: 'Cost ($)', type: 'number', v: e?.cost }, { k: 'shop', l: 'Workshop or DIY', v: e?.shop, ph: 'DIY' }] },
       { k: 'notes', l: 'Parts and notes', type: 'textarea', v: e?.notes, ph: 'Motul 7100 10W40, new chain…' }],
+    extra: e ? '' : scanBtn('service', 'Scan the invoice'), onOpen: sh => wireScan(sh, 'service'),
+    check: v => odoCheck(v.odo, v.date, e && e.id),
     onSave: v => { if (!v.items.length && !v.notes) { toast('Pick at least one item', 'over'); return false; }
-      if (e) Object.assign(e, v); else { S.services.push({ id: uid(), ...v }); toast('Service logged · countdowns reset'); } syncItems(); },
+      if (e) Object.assign(e, v); else { S.services.push({ id: uid(), ...v, ts: Date.now() }); if (S.needFull && v.items.length >= Math.min(4, S.items.length)) { S.needFull = null; toast('Full service logged · every countdown starts fresh'); } else toast('Service logged · countdowns reset'); } syncItems(); },
     onDelete: e && (() => { S.services = S.services.filter(x => x !== e); syncItems(); }) });
 }
 function syncItems() {
+  S.items = S.items.filter(i => !(i.once && S.services.some(s => s.items.includes(i.id))));
   S.items.forEach(it => { const last = S.services.filter(s => s.items.includes(it.id)).sort((a, b) => b.odo - a.odo)[0];
     if (last && (it.lastOdo == null || last.odo >= it.lastOdo || !it.base)) { it.lastOdo = last.odo; it.lastDate = last.date; } else if (!last && !it.base) { it.lastOdo = null; it.lastDate = null; } });
 }
 function odoForm() {
   form({ title: 'Odometer check', lede: 'A real reading recalibrates tracked distance and every countdown.',
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: todayISO(), req: 1 }, { k: 'odo', l: 'Reading (km)', type: 'number', v: odoGuess(), req: 1 }] }],
-    onSave: v => { S.odoLog.push({ id: uid(), ...v }); toast('Odometer updated'); } });
+    extra: scanBtn('odo', 'Scan the odometer'), onOpen: sh => wireScan(sh, 'odo'),
+    check: v => odoCheck(v.odo, v.date),
+    onSave: v => { S.odoLog.push({ id: uid(), ...v, ts: Date.now() }); toast('Odometer updated'); } });
 }
 function rideForm(r) {
   const isNew = !r, dt = r ? todayISO(new Date(r.start.t)) : todayISO();
@@ -547,19 +678,50 @@ function rideForm(r) {
     fields: [{ k: 'title', l: 'Title', v: r?.title || '', ph: 'Sunday ride to Changi' },
       ...(isNew ? [{ type: 'row', f: [{ k: 'from', l: 'From', ph: 'Bedok or 460123' }, { k: 'to', l: 'To', ph: 'Woodlands Checkpoint' }] }] : []),
       { type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: dt }, { k: 'km', l: isNew ? 'Distance (km), or leave blank' : 'Distance (km)', type: 'number', v: r?.km ?? '' }] },
-      { k: 'mins', l: 'Duration (min)', type: 'number', v: r ? Math.round((r.end.t - r.start.t) / 6e4) : '' },
+      { type: 'row', f: [{ k: 'time', l: 'Started at', type: 'time', v: r && r.start.t ? new Date(r.start.t).toTimeString().slice(0, 5) : '09:00' }, { k: 'mins', l: 'Duration (min)', type: 'number', v: r ? Math.round((r.end.t - r.start.t) / 6e4) : '' }] },
       { k: 'mood', l: 'Vibe', type: 'chips', o: MOODS, v: r?.mood || '' }, { k: 'note', l: 'Journal', type: 'textarea', v: r?.note, ph: 'Where you went, what you ate, how it felt' }],
+    check: v => { if (v.km > 700) return `${num(v.km)} km in one ride is a lot for Singapore and JB. A typo?`; if (v.km && v.mins && v.km / (v.mins / 60) > 150) return `${num(v.km, 1)} km in ${v.mins} min is ${Math.round(v.km / (v.mins / 60))} km/h on average. Check the distance and time.`; return null; },
     onSave: v => { if (isNew && v.from && v.to && !v.km) { mapManual(v); return; }
       if (!v.km) { toast(isNew ? 'Add the distance, or where you rode from and to' : 'Add the distance', 'over'); return false; }
-      if (isNew) { const t0 = +new Date(v.date + 'T09:00'); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
-      else { Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); if (v.mins != null) r.end.t = r.start.t + v.mins * 6e4; } },
+      if (isNew) { const t0 = +new Date(v.date + 'T' + (v.time || '09:00')); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
+      else { const t0 = v.date ? +new Date(v.date + 'T' + (v.time || '09:00')) : r.start.t, dur = v.mins != null ? v.mins * 6e4 : r.end.t - r.start.t, kmChanged = v.km !== r.km;
+        Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); r.start.t = t0; r.end.t = t0 + dur; if (kmChanged) r.est = 'manual'; } },
+    extra: !isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : '',
+    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); },
     onDelete: !isNew && (() => S.rides = S.rides.filter(x => x !== r)) });
+}
+/* ---------- "Which way did you go?": pick the road you actually took; Redline remembers it for next time ---------- */
+const ALTC = ['#5AB8FF', '#FFD84D', '#45E0A2'];
+async function routePicker(r) {
+  if (!r) return;
+  if (r.est === 'tracked') { toast('This ride already uses your real GPS trail'); return; }
+  openSheet('Which way did you go?', 'Redline only knows where you started and stopped, so it guessed the quickest road. Tap the one you took. Next time you ride between these places, it picks it for you.',
+    `<div class="rpick"><canvas id="rpc"></canvas><div class="rdload" id="rpl"><i></i><i></i><i></i></div></div><div class="alist" id="alist"></div>`, async sh => {
+    let alts = r.alts;
+    if (!alts || !alts.length) { const res = await routeKm([r.start, r.end], true); alts = res.alts || [res]; if (res.src === 'route') r.alts = alts.map(a => ({ km: a.km, mins: a.mins, path: a.path, roads: a.roads })); }
+    const l = $('#rpl', sh); l && l.remove();
+    let sel = r.alts ? Math.min(r.pick || 0, alts.length - 1) : 0;
+    const cv = $('#rpc', sh), g = cv.getContext('2d'), DPR = Math.min(devicePixelRatio || 1, 2), W = cv.clientWidth, H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR;
+    let b = null; alts.forEach(a => a.path.forEach(([la, lo]) => { b = b ? [Math.min(b[0], lo), Math.min(b[1], la), Math.max(b[2], lo), Math.max(b[3], la)] : [lo, la, lo, la]; }));
+    const pad = .012; const cam = MAP.fit([b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad], 14, W, H);
+    const P = (la, lo) => [(lo - cam.x) * MAP.K * cam.z + W / 2, (cam.y - la) * cam.z + H / 2];
+    let t0 = performance.now();
+    const draw = now => { const k = Math.min(1, (now - t0) / 700); g.setTransform(DPR, 0, 0, DPR, 0, 0); MAP.land(g, W, H, cam); g.lineCap = 'round'; g.lineJoin = 'round';
+      alts.forEach((a, i) => { if (i === sel) return; g.beginPath(); a.path.forEach(([la, lo], j) => { const [x, y] = P(la, lo); j ? g.lineTo(x, y) : g.moveTo(x, y); }); g.strokeStyle = ALTC[i % 3] + '66'; g.lineWidth = 4; g.stroke(); });
+      const a = alts[sel], n = Math.max(2, Math.ceil(a.path.length * k)); g.beginPath(); a.path.slice(0, n).forEach(([la, lo], j) => { const [x, y] = P(la, lo); j ? g.lineTo(x, y) : g.moveTo(x, y); });
+      g.strokeStyle = ALTC[sel % 3]; g.lineWidth = 6; g.shadowColor = ALTC[sel % 3]; g.shadowBlur = 12; g.stroke(); g.shadowBlur = 0;
+      for (const q of [a.path[0], a.path[a.path.length - 1]]) { const [x, y] = P(q[0], q[1]); g.fillStyle = '#FFF8F0'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); }
+      if (k < 1 && cv.isConnected) requestAnimationFrame(draw); };
+    const list = () => { $('#alist', sh).innerHTML = alts.map((a, i) => `<button type="button" class="aopt ${i === sel ? 'on' : ''}" data-i="${i}"><i style="background:${ALTC[i % 3]}"></i><span class="grow"><b>${a.roads && a.roads.length ? 'Via ' + a.roads.slice(0, 3).map(x => x === 'WDL' ? 'Causeway' : x === 'TUAS' ? '2nd Link' : x).join(', ') : i ? 'Another way' : 'Quickest way'}</b><span>${num(a.km, 1)} km${a.mins ? ' · about ' + a.mins + ' min' : ''}</span></span>${i === sel ? `<em>${ic('check', 3)}</em>` : ''}</button>`).join('') + (alts.length < 2 ? '<p class="gnote">Only one sensible road between these two places. If it’s still wrong, edit the ride’s distance.</p>' : '');
+      $$('.aopt', sh).forEach(btn => btn.onclick = () => { sel = +btn.dataset.i; const a = alts[sel]; applyRoute(r, a, 'picked'); r.pick = sel; rememberRoute(r, a); save(); syncWorld(); haptic(); list(); t0 = performance.now(); requestAnimationFrame(draw); toast('Route updated. Redline will remember this one'); refresh(); showFocus && showFocus(); }); };
+    list(); requestAnimationFrame(draw);
+  });
 }
 // a ride you forgot to log: look up both places on OneMap, then route between them
 async function mapManual(v) {
   toast('Mapping your ride…');
   try {
-    const [a, b] = await Promise.all([placePoint(v.from), placePoint(v.to)]), t0 = +new Date(v.date + 'T09:00'), mins = v.mins || 0;
+    const [a, b] = await Promise.all([placePoint(v.from), placePoint(v.to)]), t0 = +new Date(v.date + 'T' + (v.time || '09:00')), mins = v.mins || 0;
     const r = await routeKm([a, b]);
     const ride = { id: uid(), title: v.title || `${v.from} to ${v.to}`, start: { ...a, t: t0 }, end: { ...b, t: t0 + mins * 6e4 }, km: Math.round(r.km * 10) / 10, src: 'manual', est: r.src, path: r.path, roads: r.roads || [], mood: v.mood, note: v.note };
     S.rides.push(ride); save(); showResults([{ ride }]);
@@ -597,6 +759,55 @@ function bikeForm() {
     onSave: v => { const changed = (v.drive || 'chain') !== (S.bike.drive || 'chain') || (v.cooling || 'liquid') !== (S.bike.cooling || 'liquid');
       Object.assign(S.bike, v); if (changed) { applyBuild(); syncItems(); setTimeout(() => toast('Service list updated for how your bike is built'), 500); } } });
 }
+/* ---------- My data: every number Redline uses, each one fixable ---------- */
+const SRC = { fuel: 'Fill-up', service: 'Service', odo: 'Odometer check', setup: 'Entered in setup' };
+function myDataSheet(tab = 'odo') {
+  const tabs = [['odo', 'Odometer'], ['fuel', 'Fill-ups'], ['service', 'Services'], ['ride', 'Rides']];
+  const body = () => {
+    if (tab === 'odo') { const r = odoReadings().reverse(), la = r[0];
+      const oi = odoInfo();
+      return r.length ? `${oi ? `<div class="calc odoc"><span>${num(oi.la.odo)} km</span><span>reading ${fmtDs(todayISO(new Date(oi.la.t)))}${oi.la.exact ? ', ' + fmtTime(oi.la.t) : ''}</span><b>+ ${num(oi.since, 1)} km</b><span>from ${oi.rides.length} ride${oi.rides.length === 1 ? '' : 's'} since${oi.c !== 1 ? ` × ${num(oi.c, 2)} (matched to your real odometer)` : ''}</span><b>= ${num(oi.odo)} km now</b></div>` : ''}
+        ${oi && oi.rides.length ? `<div class="bl">Rides counted</div><div class="list">${oi.rides.map(x => `<button type="button" class="li" data-src="ride" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${esc(x.title || 'Ride')} · ${num(x.km, 1)} km</span><span class="s">${fmtDT(x.end.t)}</span></span>${ic('chev')}</button>`).join('')}</div>` : ''}
+        <div class="bl">Readings</div><p class="gnote">Redline uses the <b>most recent</b> reading, plus rides since then. Tap any reading to fix or delete it.</p><div class="list">${r.map((x, i) => { const nx = r[i + 1], bad = nx && x.odo < nx.odo - 5;
+        return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}">${statusDot(bad ? 'over' : i ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(x.odo)} km</span><span class="s">${fmtD(todayISO(new Date(x.t)))} · ${SRC[x.src]}${bad ? ' · lower than the one before' : ''}${i === 0 ? ' · in use' : ''}</span></span>${ic('chev')}</button>`; }).join('')}</div><button type="button" class="btn ghost" id="mdAdd">+ Add a reading</button>` : `<div class="empty">No odometer readings yet.</div><button type="button" class="btn" id="mdAdd">Add a reading</button>`; }
+    if (tab === 'fuel') { const l = [...S.fuel].sort((a, b) => (b.date > a.date ? 1 : -1) || b.odo - a.odo);
+      return l.length ? `<div class="list">${l.map(f => `<button type="button" class="li" data-src="fuel" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L · ${num(f.odo)} km</span><span class="s">${fmtD(f.date)}${f.station ? ' · ' + esc(f.station) : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? money(f.cost) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No fill-ups yet.</div>'; }
+    if (tab === 'service') { const l = [...S.services].sort((a, b) => (b.date > a.date ? 1 : -1));
+      return l.length ? `<div class="list">${l.map(x => `<button type="button" class="li" data-src="service" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${esc(x.items.map(id => (S.items.find(i => i.id === id) || {}).name).filter(Boolean).join(', ') || 'Service')}</span><span class="s">${fmtD(x.date)} · ${num(x.odo)} km${x.shop ? ' · ' + esc(x.shop) : ''}</span></span><span class="r">${x.cost ? money(x.cost, 0) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No services yet.</div>'; }
+    const l = [...S.rides].sort((a, b) => b.start.t - a.start.t);
+    return l.length ? `<div class="list">${l.slice(0, 80).map(r => `<button type="button" class="li" data-src="ride" data-id="${r.id}">${statusDot(r.est === 'estimate' ? 'soon' : 'ok')}<span class="grow"><span class="t">${esc(r.title || 'Ride')} · ${num(r.km, 1)} km</span><span class="s">${fmtDT(r.start.t)} · ${Math.round((r.end.t - r.start.t) / 6e4)} min${r.est === 'estimate' ? ' · distance estimated' : ''}</span></span>${ic('chev')}</button>`).join('')}</div>` : '<div class="empty">No rides yet.</div>';
+  };
+  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div>`, sh => {
+    const wireB = () => { $$('#mdBody .li', sh).forEach(b => b.onclick = () => { const id = b.dataset.id, src = b.dataset.src;
+        if (src === 'fuel') fuelForm(S.fuel.find(x => x.id === id)); else if (src === 'service') serviceForm(S.services.find(x => x.id === id)); else if (src === 'ride') rideForm(S.rides.find(x => x.id === id)); else odoEditForm(S.odoLog.find(x => x.id === id)); });
+      const a = $('#mdAdd', sh); if (a) a.onclick = () => odoForm(); };
+    $$('[data-tab2]', sh).forEach(b => b.onclick = () => { tab = b.dataset.tab2; $$('[data-tab2]', sh).forEach(x => x.classList.toggle('on', x === b)); $('#mdBody', sh).innerHTML = body(); wireB(); haptic(); });
+    wireB();
+  });
+}
+function odoEditForm(o) {
+  if (!o) return;
+  form({ title: o.setup ? 'Setup reading' : 'Odometer check', lede: 'Fix the number or the date, or delete it if it was wrong.',
+    fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: o.date, req: 1 }, { k: 'odo', l: 'Reading (km)', type: 'number', v: o.odo, req: 1 }] }],
+    check: v => odoCheck(v.odo, v.date, o.id),
+    onSave: v => { Object.assign(o, v); toast('Reading updated'); },
+    onDelete: () => { S.odoLog = S.odoLog.filter(x => x !== o); } });
+}
+// where a number comes from, with the entries behind it
+function statSheet(kind) {
+  const fs = fuelStats(), f = [...S.fuel].sort((a, b) => a.odo - b.odo), full = f.filter(x => x.full);
+  let h = '', lede = '';
+  if (kind === 'kpl') { const a = full[full.length - 2], b = full[full.length - 1];
+    lede = fs.kpl ? `${num(fs.kpl, 1)} km/L comes from the distance between full tanks, divided by the litres you put in.` : 'Log two full tanks and this works itself out.';
+    if (a && b) { const used = f.filter(x => x.odo > a.odo && x.odo <= b.odo); h = `<div class="calc"><span>${num(b.odo)} − ${num(a.odo)} km</span><b>${num(b.odo - a.odo)} km</b><span>÷ ${num(used.reduce((s, x) => s + (+x.litres || 0), 0), 2)} L</span></div>`; }
+    h += `<div class="list">${full.slice(-4).reverse().map(x => `<button type="button" class="li" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${fmtD(x.date)} · ${num(x.odo)} km</span><span class="s">${num(x.litres, 2)} L · full tank</span></span>${ic('chev')}</button>`).join('')}</div>`; }
+  if (kind === 'spend' || kind === 'cpk') { const n = new Date(), m = f.filter(x => { const d = new Date(x.date); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
+    lede = kind === 'spend' ? 'Every fill-up this month, added up.' : 'All fuel spend divided by the kilometres between your first and latest fill-up.';
+    const l = kind === 'spend' ? m : f.slice(-6);
+    h = `<div class="list">${l.reverse().map(x => `<button type="button" class="li" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${fmtD(x.date)} · ${num(x.litres, 2)} L</span><span class="s">${num(x.odo)} km${x.station ? ' · ' + esc(x.station) : ''}</span></span><span class="r">${x.cost ? money(x.cost) : '—'}</span></button>`).join('') || '<div class="empty">Nothing yet.</div>'}</div>`; }
+  openSheet({ kpl: 'Fuel economy', spend: 'This month', cpk: 'Cost per km' }[kind], lede, h + `<p class="gnote">Spot a wrong one? Tap it to fix it. Everything else is in Settings → My data.</p>`,
+    sh => $$('.li', sh).forEach(b => b.onclick = () => fuelForm(S.fuel.find(x => x.id === b.dataset.id))));
+}
 function historySheet() {
   const sv = [...S.services].sort((a, b) => b.odo - a.odo); const spent = sv.reduce((s, x) => s + (+x.cost || 0), 0);
   openSheet('Service history', `${sv.length} services · ${money(spent, 0)} spent`, sv.length ? `<div class="list">${sv.map(s => `<button type="button" class="li" data-id="${s.id}">${statusDot('ok')}<span class="grow"><span class="t">${esc(s.items.map(id => (S.items.find(i => i.id === id) || {}).name).filter(Boolean).join(', ') || 'Service')}</span><span class="s">${fmtD(s.date)} · ${num(s.odo)} km${s.shop ? ' · ' + esc(s.shop) : ''}</span></span><span class="r">${s.cost ? money(s.cost, 0) : ''}</span></button>`).join('')}</div>` : '<div class="empty">Every service you log lands here, with parts and cost.</div>',
@@ -633,6 +844,26 @@ function backupSheet() {
     $('#impIn', sh).onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (d.v !== 3 || !d.bike) throw 0; S = Object.assign(fresh(), d); save(); closeSheet(); if (window.W) W.setBike(S.bike.type, true); refresh(); toast('Backup restored'); } catch (err) { toast('That file isn’t a Redline backup', 'over'); } }; r.readAsText(f); };
     const w = $('#wipe', sh); w.onclick = () => { if (!w.dataset.sure) { w.dataset.sure = 1; w.textContent = 'Tap again to wipe everything'; return; } localStorage.removeItem(KEY); location.reload(); };
   });
+}
+// optional: OwnTracks, a free GPS app that tracks in the background and sends points to the relay, so rides show the real road
+function otLink() {
+  const cfg = { _type: 'configuration', mode: 3, url: `${relayBase()}/?ot=1&k=${riderCode()}`, monitoring: 1, tid: 'RL', deviceId: 'redline', auth: false, cmd: false, extendedData: false, locatorDisplacement: 150, locatorInterval: 60, ignoreInaccurateLocations: 200 };
+  return 'owntracks:///config?inline=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
+}
+function otBlock() {
+  const a = S.al || {}, on = a.pt && Date.now() - a.pt < 7 * 864e5;
+  return `<details class="gsec ${on ? 'gdone' : ''}"><summary><span class="gn">${on ? ic('check', 3.2) : '+'}</span>Optional: real routes with OwnTracks</summary>
+    <p class="gnote">${on ? `Working. Last point ${fmtTime(a.pt)}${new Date(a.pt).toDateString() === new Date().toDateString() ? '' : ', ' + fmtDs(todayISO(new Date(a.pt)))}. Rides now follow the roads you really took.` : 'iPhone won’t let Shortcuts track you during a ride. OwnTracks, a free app, can: it sends your location every few hundred metres in the background, and Redline draws the road you actually took instead of guessing.'}</p>
+    ${on ? '' : `<ol class="gsteps">
+      <li>Install <b>OwnTracks</b> (free). <a class="inl" href="${isIOS ? 'https://apps.apple.com/app/id692424691' : 'https://play.google.com/store/apps/details?id=org.owntracks.android'}" target="_blank" rel="noopener">Open the store →</a></li>
+      <li>Come back and tap ${ui('Set up OwnTracks')} below. It fills in every setting for you (your relay and rider code).</li>
+      <li>When OwnTracks asks for location, choose ${ui('Allow While Using')} then ${ui('Change to Always Allow')}. It can’t track with the app closed otherwise.</li>
+      <li>Ride as normal. This step ticks itself when the first point arrives.</li></ol>
+      ${isIOS ? '' : `<p class="gnote"><b>On Android:</b> also go to your phone’s Settings → Apps → OwnTracks → Battery and choose <b>Unrestricted</b>, or the phone may stop it to save battery.</p>`}
+      <details class="tipbox"><summary>${ic('alert', 2.2)} The button didn’t open OwnTracks?</summary><ul><li>Open OwnTracks → Settings (or Preferences) → Connection. Set Mode to <b>HTTP</b>.</li><li>Paste this as the URL / Host:<div class="cpy"><code id="otu">${esc(relayBase() + '/?ot=1&k=' + riderCode())}</code><button type="button" class="btn ghost sm" data-copy="otu">Copy</button></div></li><li>Set monitoring to <b>Significant</b> (or Move for sharper trails).</li></ul></details>`}
+    <p class="gnote">${(S.al && S.al.pt) ? '' : 'No intercom? OwnTracks alone works too: Redline spots your trips and asks once “on the bike?”. After you confirm a route twice, it logs it without asking.'}</p>
+    <a class="btn ${on ? 'ghost' : ''} openapp" href="${otLink()}">${ic('target', 2.2)} ${on ? 'Set up OwnTracks again' : 'Set up OwnTracks'}</a>
+    <p class="gnote">Battery: it uses iPhone’s low-power “significant change” tracking. For sharper trails, switch OwnTracks to <b>Move</b> mode (the icon at its top left), which uses more battery. Your points go only to the relay and are deleted once Redline collects them.</p></details>`;
 }
 // the setup guide follows the Shortcuts app's own wording, one tap per line
 function autoLogSheet() {
@@ -674,6 +905,7 @@ function autoLogSheet() {
       <li>Back here: turn your ${dev} ${k === 'start' ? 'on' : 'off'}. This step ticks itself.</li></ol>
       <a class="btn openapp" href="shortcuts://">${ic('full', 2.2)} Open Shortcuts</a>`}</details>`).join('')}
   </div>
+  ${otBlock()}
   <div class="gres" id="gRes" hidden></div>
   <button type="button" class="btn ghost" id="gCheck">${al.start && al.end ? 'Check again' : 'Check now'}</button>
   <details class="gsec"><summary><span class="gn">?</span>Build them yourself instead</summary><p class="gnote">Only if the links don’t work for you. First, for connecting:</p>${auto('Is Connected', 'start')}<p class="gnote">Then for disconnecting:</p>${auto('Is Disconnected', 'end')}</details>` : ''}
@@ -738,7 +970,7 @@ const fmtTime = t => new Date(t).toLocaleTimeString('en-SG', { hour: 'numeric', 
 /* ================= parts: big animated art, "Done today" services it in front of you ================= */
 function doneToday(it, btn) {
   const odo = estOdo(); if (odo == null) { toast('Add an odometer reading first', 'over'); return; }
-  S.services.push({ id: uid(), date: todayISO(), odo, items: [it.id], cost: null, shop: '', notes: '' }); syncItems(); save();
+  S.services.push({ id: uid(), date: todayISO(), odo, items: [it.id], cost: null, shop: '', notes: '', ts: Date.now() }); syncItems(); save();
   const scope = btn && (btn.closest('.card') || btn.closest('.sheet') || btn.closest('.tile'));
   ART.renew(scope && scope.querySelector('svg.art'));
   if (btn) { btn.classList.add('ok'); btn.animate([{ transform: 'scale(.8)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 450, easing: 'ease-out' }); }
@@ -757,9 +989,23 @@ function wireParts(sh) {
   $$('[data-edit]', sh).forEach(b => b.onclick = () => itemForm(S.items.find(x => x.id === b.dataset.edit)));
   $$('[data-add]', sh).forEach(b => b.onclick = () => itemForm(null, b.dataset.add));
 }
+// "How do I check this?" for people who don't know when a part was last done
+const TIPS = {
+  frontTyre: ['Look for the small bumps (wear bars) in the tread grooves. When the tread is level with them, replace the tyre.', 'Check for cracks on the sidewall, nails, or a flat-looking centre.', 'Tyres older than about 5 years go hard even with tread left. The date is a 4-digit code on the sidewall, like 2321 = week 23 of 2021.'],
+  rearTyre: ['Look for the small bumps (wear bars) in the tread grooves. When the tread is level with them, replace the tyre.', 'The rear wears faster and squarer in the middle. A flat strip down the centre means it’s due soon.', 'Tyres older than about 5 years go hard even with tread left. The date is a 4-digit code on the sidewall.'],
+  chain: ['With the bike on its side stand, push the chain up halfway between the sprockets. 2 to 3 cm of movement is right; more means it needs adjusting.', 'A dry, rusty or noisy chain needs cleaning and lube (about every 500 to 800 km, sooner after rain).', 'Pull the chain away from the back of the rear sprocket. If you can see a big gap, the chain and sprockets are worn.'],
+  belt: ['Scooter belts are inside the engine casing, so you can’t see them easily. Go by km: most need replacing around 15,000 to 25,000 km.', 'Signs it’s worn: slipping, a slow pull-away, or a squeal when you open the throttle.'],
+  final: ['Shaft drives need their gear oil changed by km (often every 20,000 km or so). Check your manual or ask your workshop.', 'Look for oil leaks around the rear hub.'],
+  oil: ['With the bike upright on level ground, check the oil window (or dipstick). The level should sit between the two lines.', 'Fresh oil is golden brown. Black, thin or gritty oil means it’s due.', 'Not sure when it was last changed? Treat it as due. Oil is the cheapest way to look after the engine.'],
+  coolant: ['With the engine cold, look at the coolant overflow bottle. The level should be between the LOW and FULL marks.', 'Never open the radiator cap when the engine is hot.'],
+  brakes: ['Look at the brake pads through the calliper. Less than about 2 mm of pad material left means replace them.', 'Squealing, grinding, or a lever that pulls further than usual are signs to check.', 'Brake fluid should be clear to light amber in the little window. Dark brown means it’s due.'],
+  spark: ['Plugs are under the tank on most bikes, so this is usually a workshop job. Go by km.', 'Signs it’s due: hard starting, misfiring, or poor fuel economy.'],
+  air: ['The air filter sits in the airbox. A dirty one looks dark and clogged.', 'Singapore riding is dusty. Check it more often if you ride a lot in traffic or near construction.'],
+  other: ['Anything else you want reminders for: a battery check, a wash, a new visor. Add it below.'],
+};
 function partSheet(k) {
   const label = (PARTS.find(p => p[0] === k) || [k, k])[1], p = partInfo(k);
-  openSheet(label, '', `<div class="part-hero ${p.cls}">${ART.art(k, p.f, p.cls, 190)}<div class="pv"><b>${p.w ? bigVal(p.w.s) : '—'}</b><span>${p.w ? esc(p.w.i.name) : 'Not tracked yet'}</span></div></div>${partBlock(k, label)}`, sh => {
+  openSheet(label, '', `<div class="part-hero ${p.cls}">${ART.art(k, p.f, p.cls, 190)}<div class="pv"><b>${p.w ? bigVal(p.w.s) : '—'}</b><span>${p.w ? esc(p.w.i.name) : 'Not tracked yet'}</span></div></div>${TIPS[k] ? `<details class="tipbox"><summary>${ic('alert', 2.2)} How do I check this?</summary><ul>${TIPS[k].map(t => `<li>${t}</li>`).join('')}</ul></details>` : ''}${partBlock(k, label)}`, sh => {
     wireParts(sh); const a = $('.part-hero svg', sh); if (a && !RM) a.animate([{ transform: 'scale(.4) rotate(-20deg)', opacity: 0 }, { transform: 'scale(1.08) rotate(4deg)', opacity: 1, offset: .7 }, { transform: 'none' }], { duration: 650, easing: 'cubic-bezier(.2,1,.3,1)' });
   });
 }
@@ -770,7 +1016,7 @@ function fuelLight() {
   if (fs.light) { S.fuelLight = null; save(); refresh(); toast('Fuel light cleared'); return; }
   form({ title: 'Fuel light on?', lede: `Range resets to your reserve (${num(S.bike.reserve || 2.5, 1)} L) and counts down from here.`,
     fields: [{ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', req: 1 }], cta: 'Fuel light’s on',
-    onSave: v => { S.fuelLight = { odo: v.odo, date: todayISO() }; if (v.odo > (estOdo() || 0)) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo }); toast('Counting down from reserve');
+    onSave: v => { S.fuelLight = { odo: v.odo, date: todayISO() }; if (v.odo > (estOdo() || 0)) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, ts: Date.now() }); toast('Counting down from reserve');
       setTimeout(() => { const l = $('#hLamp') || $('#fLamp'); if (l) l.animate([{ transform: 'translateX(-50%) scale(1)' }, { transform: 'translateX(-50%) scale(1.6)' }, { transform: 'translateX(-50%) scale(1)' }], { duration: 500, easing: 'ease-out' }); }, 300); } });
 }
 // after a fill-up: the needle climbs from where it was, and the fuel lamp clicks off
@@ -785,7 +1031,7 @@ function plusSheet() {
     <div class="plus2"><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
-const ACTIONS = { ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
+const ACTIONS = { fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
   light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */
@@ -830,6 +1076,7 @@ function settingsSheet() {
     ['autolog', 'head', 'Auto-log rides', S.relay ? (S.intercom && S.intercom !== 'none' ? `${S.intercom} · set up in Shortcuts` : 'Set up in Shortcuts') : 'Needs a relay first'],
     ['relay', 'link', 'Relay', S.relay ? S.relay.replace(/^https:\/\//, '') : 'Not connected'],
     ['roads', 'alert', 'Traffic', `${myRoads().length ? myRoads().map(r => r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r).join(', ') : 'Pick your roads'} · ${S.relay ? 'alerts on' : 'alerts off'}`],
+    ['mydata', 'list', 'My data', 'Fix any reading, fill-up, service or ride'],
     ['badges', 'trophy', 'Badges', `${earned} of ${BADGES.length} earned`],
     ['sound', 'spk', 'Sound', [S.prefs.sound ? 'Tap sounds on' : 'Tap sounds off', S.prefs.music ? 'music on' : ''].filter(Boolean).join(' · ')],
     ['backup', 'save', 'Backup', S.stats.exports ? `${S.stats.exports} backups made` : 'Not backed up yet'],
@@ -849,31 +1096,80 @@ function soundSheet() {
   });
 }
 const WORKER = `// Redline relay: traffic from LTA DataMall + a drop box for your rides
+// Rides use a D1 database bound as DB (instant). Falls back to KV bound as RIDES.
 export default {
   async fetch(req, env) {
     const q = new URL(req.url).searchParams;
-    const head = { 'content-type': 'application/json', 'access-control-allow-origin': '*' };
+    const head = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
     const out = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: head });
+    if (req.method === 'OPTIONS') return new Response(null, { headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST', 'access-control-allow-headers': 'content-type' } });
 
-    // Rides: your Shortcut drops start/end events here, Redline collects them when you open it
+    // Photo reading: odometer, pump display or receipt (needs a Workers AI binding named AI)
+    if (q.has('ocr')) {
+      if (!env.AI) return out({ error: 'Add a Workers AI binding named AI' }, 500);
+      if (!/^[a-z0-9]{8,40}$/.test(q.get('k') || '')) return out({ error: 'Bad rider code' }, 400);
+      const bytes = new Uint8Array(await req.arrayBuffer());
+      if (!bytes.length || bytes.length > 4000000) return out({ error: 'Photo missing or too big' }, 413);
+      const ask = {
+        odo: 'This photo shows a motorcycle dashboard. Read the ODOMETER: the total distance, often labelled ODO, usually 4 to 6 digits. Ignore the trip meter (TRIP A/B), the clock, the speed and the fuel. Reply only with JSON like {"odo": 18453}. Use null if you cannot read it.',
+        pump: 'This photo shows a petrol pump display or a fuel receipt from Singapore. Reply only with JSON like {"litres": 12.34, "cost": 35.20, "price": 2.85, "station": "Shell", "date": "2026-10-15"}. litres is the volume pumped, cost the total in dollars, price the dollars per litre, station one of Shell, Esso, SPC, Caltex, Sinopec or null, date as YYYY-MM-DD or null. Use null for anything you cannot read.',
+        service: 'This photo shows a motorcycle workshop invoice or receipt. Reply only with JSON like {"cost": 180.00, "date": "2026-10-15", "shop": "Ah Huat Motor", "odo": 18453, "work": ["engine oil", "oil filter"]}. work is a list of the jobs done, in plain words. Use null for anything you cannot read.'
+      }[q.get('ocr')];
+      if (!ask) return out({ error: 'Bad kind' }, 400);
+      const MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
+      const run = () => env.AI.run(MODEL, { messages: [{ role: 'system', content: 'You read numbers and text from photos. Reply with JSON only.' }, { role: 'user', content: ask }], image: [...bytes], max_tokens: 256 });
+      let r;
+      try { r = await run(); }
+      catch (e) { if (!/agree/i.test(String(e && e.message || e))) return out({ error: String(e && e.message || e) }, 500); await env.AI.run(MODEL, { prompt: 'agree' }); r = await run(); }
+      const text = String(r && r.response || ''), m = text.match(/\\{[\\s\\S]*\\}/);
+      let data = null; try { data = m ? JSON.parse(m[0]) : null; } catch (e) {}
+      return out({ ok: !!data, data, raw: text.slice(0, 300) });
+    }
+
+    // Rides: your Shortcut drops start/end events here, Redline collects them when you open it.
+    // Storage: a D1 database bound as DB (instant), or KV bound as RIDES (can lag up to a minute).
+    const okCode = k => /^[a-z0-9]{8,40}$/.test(k || '');
+    const store = async (k, ev) => {
+      const id = k + ':' + ev.t + ':' + Math.random().toString(36).slice(2, 6);
+      if (env.DB) {
+        await env.DB.prepare('CREATE TABLE IF NOT EXISTS ev (id TEXT PRIMARY KEY, k TEXT, t INTEGER, body TEXT)').run();
+        await env.DB.prepare('INSERT INTO ev (id, k, t, body) VALUES (?, ?, ?, ?)').bind(id, k, Date.now(), JSON.stringify(ev)).run();
+        if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM ev WHERE t < ?').bind(Date.now() - 2592000000).run();
+      } else await env.RIDES.put(id, JSON.stringify(ev), { expirationTtl: 2592000 });
+    };
+
+    // OwnTracks (optional background GPS app) posts its location points here
+    if (q.has('ot')) {
+      const k = q.get('k') || ''; if (!okCode(k) || (!env.DB && !env.RIDES)) return new Response('[]', { headers: head });
+      let m = null; try { m = await req.json(); } catch (e) {}
+      if (m && m._type === 'location' && typeof m.lat === 'number') await store(k, { e: 'pt', lat: String(m.lat), lon: String(m.lon), t: (m.tst || Math.floor(Date.now() / 1000)) * 1000, acc: m.acc || 0, vel: m.vel || 0 });
+      return new Response('[]', { headers: head });
+    }
+
     if (q.has('log')) {
-      if (!env.RIDES) return out({ error: 'Add a KV binding named RIDES' }, 500);
       const k = q.get('k') || '';
-      if (!/^[a-z0-9]{8,40}$/.test(k)) return out({ error: 'Bad rider code' }, 400);
+      if (!okCode(k)) return out({ error: 'Bad rider code' }, 400);
+      if (!env.DB && !env.RIDES) return out({ error: 'Add a D1 binding named DB' }, 500);
       const mode = q.get('log');
       if (mode === 'pull') {
+        if (env.DB) {
+          await env.DB.prepare('CREATE TABLE IF NOT EXISTS ev (id TEXT PRIMARY KEY, k TEXT, t INTEGER, body TEXT)').run();
+          const r = await env.DB.prepare('SELECT id, body FROM ev WHERE k = ? ORDER BY t LIMIT 1000').bind(k).all();
+          return out({ items: r.results.map(x => ({ id: x.id, ...JSON.parse(x.body) })), store: 'd1' });
+        }
         const list = await env.RIDES.list({ prefix: k + ':' });
         const items = await Promise.all(list.keys.map(async x => ({ id: x.name, ...JSON.parse(await env.RIDES.get(x.name) || '{}') })));
-        return out({ items });
+        return out({ items, store: 'kv' });
       }
       if (mode === 'ack') {
         const ids = (q.get('ids') || '').split(',').filter(id => id.startsWith(k + ':'));
-        await Promise.all(ids.map(id => env.RIDES.delete(id)));
+        if (env.DB) { if (ids.length) await env.DB.batch(ids.map(id => env.DB.prepare('DELETE FROM ev WHERE id = ?').bind(id))); }
+        else await Promise.all(ids.map(id => env.RIDES.delete(id)));
         return out({ deleted: ids.length });
       }
       const ev = { e: q.get('e') || 'test', t: Date.now() };
       for (const f of ['lat', 'lon', 'note', 'fuel']) if (q.has(f)) ev[f] = q.get(f).slice(0, 200);
-      await env.RIDES.put(k + ':' + ev.t + ':' + Math.random().toString(36).slice(2, 6), JSON.stringify(ev), { expirationTtl: 2592000 });
+      await store(k, ev);
       return out({ ok: true, saved: ev.e });
     }
 
@@ -903,8 +1199,10 @@ async function pullLog(force) {
     const j = await getJSON(`${relayBase()}/?log=pull&k=${S.rider}&_=${Date.now()}`); const items = (j && j.items) || [];
     if (S.openRide && Date.now() - S.openRide.t > 12 * 3600e3) { S.openRide = null; save(); toast('An unfinished ride from earlier was cleared'); refresh(); }
     if (!items.length) return [];
-    const res = await applyEvents(items.filter(x => x.e !== 'test'));
-    await getJSON(`${relayBase()}/?log=ack&k=${S.rider}&_=${Date.now()}&ids=${encodeURIComponent(items.map(x => x.id).join(','))}`).catch(() => {});
+    const q0 = (S.tripQ || []).length, res = await applyEvents(items.filter(x => x.e !== 'test'));
+    for (let i = 0; i < items.length; i += 60) await getJSON(`${relayBase()}/?log=ack&k=${S.rider}&_=${Date.now()}&ids=${encodeURIComponent(items.slice(i, i + 60).map(x => x.id).join(','))}`).catch(() => {});
+    for (const t of (S.tripQ || []).filter(t => t.auto)) { const r2 = await answerTrip(t.k, true); if (r2) res.push(r2); }
+    if (!res.length && (S.tripQ || []).length !== q0) refresh();
     showResults(res); return items;
   } catch (e) { return []; } finally { pulling = false; }
 }
@@ -927,8 +1225,8 @@ function relaySheet() {
     <li>Go to ${ui('Workers &amp; Pages')} → ${ui('Create')} → start from the ${ui('Hello World')} worker. Name it <span class="mono">redline</span> and tap ${ui('Deploy')}.</li>
     <li>Tap ${ui('Edit code')}, select everything, and replace it with this. Then tap ${ui('Deploy')}.
       <pre class="code" id="wcode">${esc(WORKER)}</pre><button type="button" class="btn ghost sm" id="copyW">Copy code</button></li>
-    <li><b>For rides:</b> go to ${ui('Storage &amp; Databases')} → ${ui('KV')} → ${ui('Create instance')}, name it <span class="mono">redline-rides</span>, tap ${ui('Create')}.</li>
-    <li>Back in your worker, open ${ui('Bindings')} (under ${ui('Settings')} on some accounts) → ${ui('Add binding')} → ${ui('KV namespace')}. Variable name <b class="mono">RIDES</b>, pick <span class="mono">redline-rides</span>, then ${ui('Add binding')}.</li>
+    <li><b>For rides:</b> go to ${ui('Storage &amp; databases')} → ${ui('D1 SQL database')} → ${ui('Create')}, name it <span class="mono">redline-rides</span>, tap ${ui('Create')}.</li>
+    <li>Back in your worker, open ${ui('Bindings')} (under ${ui('Settings')} on some accounts) → ${ui('Add binding')} → ${ui('D1 database')}. Variable name <b class="mono">DB</b>, pick <span class="mono">redline-rides</span>, then ${ui('Add binding')}.</li>
     <li><b>For traffic (optional):</b> sign up for LTA DataMall (free); your AccountKey arrives by email. In the worker: ${ui('Settings')} → ${ui('Variables and Secrets')} → ${ui('Add')}, type ${ui('Secret')}, name <b class="mono">LTA_KEY</b>, paste the key, ${ui('Deploy')}.</li>
     <li>Copy the worker’s address (it ends in <span class="mono">.workers.dev</span>), paste it at the top and tap ${ui('Save and test')}.</li></ol></details>`, sh => {
     $('#copyW', sh).onclick = async e => { try { await navigator.clipboard.writeText(WORKER); e.target.textContent = 'Copied'; } catch (err) { const r = document.createRange(); r.selectNodeContents($('#wcode', sh)); getSelection().removeAllRanges(); getSelection().addRange(r); e.target.textContent = 'Selected, copy it'; } };
@@ -940,7 +1238,7 @@ function relaySheet() {
       const rOk = rides && Array.isArray(rides.items), tOk = traffic && 'value' in traffic;
       if (!rOk && !tOk) { box.className = 'gres bad'; box.innerHTML = '<b>Couldn’t reach it</b><span>Check the address, and that you tapped Deploy after pasting the code.</span>'; return; }
       S.relay = u; S.relayOff = false; save(); loadLive(true);
-      box.className = 'gres ok'; box.innerHTML = `<b>Saved</b><span>Rides: ${rOk ? 'ready ✓' : 'needs the RIDES binding (step 5)'}<br>Traffic: ${tOk ? `on ✓ · ${traffic.value.length} incidents right now` : 'off (needs the LTA_KEY secret, step 6)'}</span>`;
+      box.className = 'gres ok'; box.innerHTML = `<b>Saved</b><span>Rides: ${rOk ? (rides.store === 'kv' ? 'ready ✓ (KV: up to a minute behind. Add the DB binding for instant)' : 'ready ✓ instant') : 'needs the DB binding (step 5)'}<br>Traffic: ${tOk ? `on ✓ · ${traffic.value.length} incidents right now` : 'off (needs the LTA_KEY secret, step 6)'}</span>`;
       if (rOk) { riderCode(); box.insertAdjacentHTML('beforeend', '<button type="button" class="btn" id="toAuto">Set up auto-log →</button>'); $('#toAuto', sh).onclick = () => autoLogSheet(); } };
     if ($('#roff', sh)) $('#roff', sh).onclick = () => { S.relay = ''; S.relayOff = true; save(); closeSheet(); LIVE.inc = null; paintLive(); toast('Relay removed'); };
   });
@@ -956,7 +1254,7 @@ function demoSheet() {
     $('#dSetup', sh).onclick = () => { closeSheet(); S = fresh(); save(); startSetup(); };
   });
 }
-const MORE = { relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
+const MORE = { mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
 
 function applyLite() {}
 /* ================= audio: off by default ================= */
@@ -984,7 +1282,7 @@ async function processURL() {
 }
 
 /* ================= guided setup ================= */
-let step = 0, setupSvc = 'fresh';
+let step = 0, setupSvc = 'unsure';
 const STEPS = [
   { k: 'Welcome', h: 'Let’s set up your bike', p: 'Redline keeps your bike’s service, fuel, renewals and rides in one place, and can log rides on its own. Setup takes about a minute.', cta: 'Begin', place: 0 },
   { k: 'Step 1 of 6', h: 'How is it built?', p: 'This decides which parts Redline tracks. Not sure? Look at the rear wheel and the front of the engine.', custom: 'build' },
@@ -1001,9 +1299,14 @@ function renderStep() {
   let body = '';
   if (st.fields) body = st.fields().map(F).join('');
   if (st.body) body = st.body();
-  if (st.custom === 'service') body = F({ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', ph: '18420' }) + `<button type="button" class="later" id="odoLater">${ic('clock', 2.2)}<span>Not near the bike? Add it later</span></button><button type="button" class="choice ${setupSvc === 'fresh' ? 'on' : ''}" data-c="fresh"><span><b>Just serviced, or start fresh</b><span>Every countdown starts from today</span></span></button>
-    <button type="button" class="choice ${setupSvc === 'known' ? 'on' : ''}" data-c="known"><span><b>I know my last service</b><span>Enter the km and what was done</span></span></button>
-    <div id="svcKnown" ${setupSvc === 'known' ? '' : 'hidden'}>${[{ type: 'row', f: [{ k: 'sdate', l: 'Date', type: 'date', v: todayISO() }, { k: 'sodo', l: 'At odometer (km)', type: 'number', v: '' }] }, { k: 'sitems', l: 'What was done', type: 'chips', multi: 1, o: S.items.map(i => ({ v: i.id, l: i.name })), v: S.items.slice(0, 2).map(i => i.id) }].map(F).join('')}</div>`;
+  if (st.custom === 'service') { const ch = (c, t, sub) => `<button type="button" class="choice ${setupSvc === c ? 'on' : ''}" data-c="${c}"><span><b>${t}</b><span>${sub}</span></span></button>`;
+    body = F({ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', ph: '18420' }) + `<button type="button" class="later" id="odoLater">${ic('clock', 2.2)}<span>Not near the bike? Add it later</span></button>
+    <div class="bl">When was it last serviced?</div>
+    ${ch('new', 'Bought it new', 'First service at 1,000 km, then the normal schedule')}
+    ${ch('known', 'I know roughly when', 'Pick the date. Assumes a full service')}
+    ${ch('unsure', 'Not sure', 'Redline reminds you to get one, then starts fresh from there')}
+    ${ch('fresh', 'Just serviced', 'Every countdown starts from today')}
+    <div id="svcKnown" ${setupSvc === 'known' ? '' : 'hidden'}>${[{ type: 'row', f: [{ k: 'sdate', l: 'Date (roughly)', type: 'date', v: todayISO(new Date(Date.now() - 60 * 864e5)) }, { k: 'sodo', l: 'At odometer, if known', type: 'number', v: '' }] }, { k: 'sitems', l: 'What was done (a full service is everything)', type: 'chips', multi: 1, o: S.items.map(i => ({ v: i.id, l: i.name })), v: S.items.map(i => i.id) }].map(F).join('')}</div>`; }
   if (st.custom === 'build') { const art = { chain: 'chain', belt: 'belt', shaft: 'final', liquid: 'coolant', air: 'fins' };
     const grp = (g, list, cur) => `<div class="bgroup"><div class="bl">${g === 'drive' ? 'Rear wheel driven by' : 'Engine cooling'}</div>${list.map(([v, b, sub]) => `<button type="button" class="choice build ${cur === v ? 'on' : ''}" data-g="${g}" data-c="${v}">${ART.art(art[v], 1, 'ok', 58)}<span><b>${b}</b><span>${sub}</span></span></button>`).join('')}</div>`;
     body = grp('drive', DRIVES, S.bike.drive || 'chain') + grp('cooling', COOLS, S.bike.cooling || 'liquid'); }
@@ -1028,11 +1331,19 @@ function nextStep() {
   if (st.save && st.save(v) === false) return;
   if (st.custom === 'service') {
     const has = v.odo != null && !isNaN(v.odo);
-    S.odoLog = S.odoLog.filter(o => !o.setup); if (has) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, setup: true });
+    S.odoLog = S.odoLog.filter(o => !o.setup); if (has) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, setup: true, ts: Date.now() });
     // no reading yet: time-based countdowns start today, km countdowns start the moment a reading arrives
     S.odoPending = !has;
-    if (setupSvc === 'fresh') S.items.forEach(i => { i.lastOdo = has ? v.odo : null; i.lastDate = todayISO(); i.base = true; });
-    else { if (v.sodo == null || isNaN(v.sodo)) { toast('Add the odometer at that service', 'over'); return; } S.services.push({ id: uid(), date: v.sdate || todayISO(), odo: v.sodo, items: v.sitems, cost: null, shop: '', notes: 'Added during setup' }); syncItems(); }
+    S.needFull = null; S.items = S.items.filter(i => !i.once);
+    if (setupSvc === 'fresh' || setupSvc === 'new') S.items.forEach(i => { i.lastOdo = has ? v.odo : null; i.lastDate = todayISO(); i.base = true; });
+    if (setupSvc === 'new') S.items.unshift({ id: uid(), name: 'First service (running-in)', part: 'oil', km: 1000, months: 1, lastOdo: 0, lastDate: todayISO(), base: true, once: true });
+    if (setupSvc === 'unsure') { S.needFull = todayISO(); S.items.forEach(i => { i.lastOdo = null; i.lastDate = null; i.base = false; }); }
+    if (setupSvc === 'known') { if (!v.sitems || !v.sitems.length) { toast('Pick what was done, or choose Not sure', 'over'); return; }
+      // odometer at that service unknown: estimate it from today's reading at about 25 km a day, so km countdowns still work
+      const days = Math.max(0, (Date.now() - +new Date((v.sdate || todayISO()) + 'T12:00')) / 864e5);
+      const so = v.sodo != null && !isNaN(v.sodo) ? v.sodo : has ? Math.max(0, Math.round(v.odo - days * 25)) : null;
+      S.services.push({ id: uid(), date: v.sdate || todayISO(), odo: so, items: v.sitems, cost: null, shop: '', notes: 'Added during setup' });
+      S.items.forEach(i => { if (v.sitems.includes(i.id)) { i.lastDate = v.sdate || todayISO(); i.lastOdo = so; i.base = so == null; } }); if (so != null) syncItems(); }
   }
   if (st.custom === 'build') { applyBuild(); syncItems(); }
   if (st.custom === 'roads') S.roads = v.roads || [];
@@ -1049,7 +1360,7 @@ function seedPreview() {
   Object.assign(S.bike, { name: 'Black Mamba', model: 'Honda CB650R', plate: 'FBK1234X', type: 'naked', tank: 15, licence: '2' });
   S.odoLog.push({ id: uid(), date: D(40), odo: 17400 });
   S.services.push({ id: uid(), date: D(40), odo: 17400, items: S.items.map(i => i.id), cost: 280, shop: 'Ah Huat Motor', notes: 'Full service' });
-  S.services.push({ id: uid(), date: D(14), odo: 17980, items: [S.items[2].id], cost: 0, shop: 'DIY', notes: '' });
+  S.services.push({ id: uid(), date: D(14), odo: 18150, items: [S.items[2].id], cost: 0, shop: 'DIY', notes: '' });
   [[D(30), 17650, 13.4, 38.2], [D(19), 18010, 12.1, 34.9], [D(3), 18390, 12.8, 37.1]].forEach(([date, odo, litres, cost]) => S.fuel.push({ id: uid(), date, odo, litres, cost, full: true, station: 'Shell' }));
   // sample rides with rough road shapes (the real app gets exact roads from routing)
   const HOME = [1.3526, 103.9447];
