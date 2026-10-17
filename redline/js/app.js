@@ -261,7 +261,7 @@ function bigVal(s) { const m = s.text.split(' · ')[0].match(/([\d,]+)\s*(km|day
 function gaugeBlock(id, fs) {
   return `<div class="dash ${fs.low ? 'low' : ''}" id="${id}Dash">${gaugeSVG(id)}
       <div class="lamp ${fs.light || fs.low ? 'on' : fs.tankFrac != null && fs.tankFrac < .25 ? 'dim' : 'off'}" id="${id}Lamp">${ic('pump')}</div>
-      <div class="read"><b id="${id}Read">${fs.range == null ? '—' : fs.range}</b><span>${fs.pastE ? 'PAST E · FILL UP' : fs.range == null ? 'LOG 2 FULL TANKS' : 'KM RANGE'}</span></div></div>
+      <div class="read"><b id="${id}Read">${fs.range == null ? '—' : fs.range}</b><span>${fs.pastE ? 'PAST E · FILL UP' : fs.range == null ? 'LOG A FULL TANK' : fs.est ? 'KM RANGE · EST' : 'KM RANGE'}</span></div></div>
     ${fs.range != null ? `<button type="button" class="lightbtn ${fs.light ? 'on' : ''}" data-act="light">${ic('pump')}<span>${fs.light ? 'Fuel light on · undo' : 'Fuel light on?'}</span></button>` : ''}`;
 }
 function wrapMonth() { const n = new Date(), d = new Date(n.getFullYear(), n.getMonth() - 1, 1); return { y: d.getFullYear(), m: d.getMonth(), key: `${d.getFullYear()}-${d.getMonth()}` }; }
@@ -272,7 +272,7 @@ function homeHTML() {
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
     <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<button type="button" class="odo tapodo" data-act="mydata" aria-label="Odometer readings"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></button>`}${(() => { const oi = odoInfo(); return oi ? `<button type="button" class="odosince" data-act="mydata">${oi.since > 0 ? `<b>+${num(oi.since * oi.c, 1)} km</b> ridden since your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}` : `From your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}`}</button>` : ''; })()}</div>
     <div id="rideNow">${rideNowHTML()}</div>${alNudgeHTML()}</div>
-    <div class="hcol b">${tripAskHTML()}<div class="alerts" id="alerts">${alertsHTML()}</div>
+    <div class="hcol b">${scanQHTML()}${tripAskHTML()}<div class="alerts" id="alerts">${alertsHTML()}</div>
     <div id="live0"></div>
     <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span>${window.RADAR ? RADAR.ATTR : ''}</section>
     <div class="cams" id="cams"></div>
@@ -342,16 +342,16 @@ function garageHTML() {
 }
 function fuelHTML() {
   const fs = fuelStats(), now = new Date(), list = [...S.fuel].sort((a, b) => b.odo - a.odo);
-  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1); return { d, v: S.fuel.filter(f => { const x = new Date(f.date); return x.getMonth() === d.getMonth() && x.getFullYear() === d.getFullYear(); }).reduce((s, f) => s + (+f.cost || 0), 0) }; });
+  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1); return { d, v: S.fuel.filter(f => { const x = new Date(f.date); return x.getMonth() === d.getMonth() && x.getFullYear() === d.getFullYear(); }).reduce((s, f) => s + fuelSgd(f), 0) }; });
   const mmax = Math.max(40, ...months.map(x => x.v));
-  return `<div class="hi"><div><h1>Fuel</h1><small>${fs.tankFrac != null ? `${num(fs.tankFrac * S.bike.tank, 1)} of ${num(S.bike.tank)} L in the tank` : 'Two full tanks unlock your range'}</small></div></div>
+  return `<div class="hi"><div><h1>Fuel</h1><small>${fs.tankFrac != null ? `${num(fs.tankFrac * S.bike.tank, 1)} of ${num(S.bike.tank)} L in the tank` : 'Log a full tank to start the gauge'}</small></div></div>
     <div class="hcol a"><div class="instr">${gaugeBlock('f', fs)}</div>
     <button type="button" class="bigbtn c-orange" data-act="fuel"><span class="nozzle">${ic('pump', 2.4)}</span><span>Log a fill-up</span></button>
     <div class="stats tap"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L ⓘ</span></button><button type="button" data-stat="spend"><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })} ⓘ</span></button><button type="button" data-stat="cpk"><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km ⓘ</span></button></div></div>
     <div class="hcol b"><section class="card plain"><div class="ch"><b>Spend</b><span>last 6 months</span></div><div class="bars">${months.map(({ d, v }, i) => `<div class="bcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><i style="height:${Math.max(3, v / mmax * 100)}%;--d:${i * 70}ms"></i><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div></section>
     <h2 class="sec">Fill-ups</h2>
     <section class="list2">${list.length ? list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
-      return `<button type="button" class="rrow" data-fuel="${f.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(f.date).getDate()}</b><small>${new Date(f.date).toLocaleDateString('en-SG', { month: 'short' })}</small></span><span class="grow"><span class="t">${num(f.litres, 1)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="km">${f.cost ? money(f.cost) : ''}</span></button>`; }).join('') : '<div class="empty">Log fills with the odometer reading. Two full tanks unlock range and km/L.</div>'}</section></div>`;
+      return `<button type="button" class="rrow" data-fuel="${f.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(f.date).getDate()}</b><small>${new Date(f.date).toLocaleDateString('en-SG', { month: 'short' })}</small></span><span class="grow"><span class="t">${num(f.litres, 1)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="km">${f.cost ? costTxt(f) : ''}</span></button>`; }).join('') : '<div class="empty">Log fills with the odometer reading. Two full tanks unlock range and km/L.</div>'}</section></div>`;
 }
 const SCREENS = [homeHTML, ridesHTML, garageHTML, fuelHTML];
 /* ---------- Start ride / End ride: two taps, no setup. Your phone's location now and when you park. ---------- */
@@ -397,6 +397,25 @@ function preRide() {
   });
 }
 // OwnTracks spotted a trip without the intercom: one tap to say if it was on the bike
+// photos sent with the "Redline Scan" shortcut, waiting for one tap
+function scanQHTML() {
+  const q = S.scanQ || []; if (!q.length) return ''; const x = q[q.length - 1], d = x.data || {};
+  const what = d.kind === 'odo' ? `Odometer ${num(+d.odo)} km` : d.kind === 'service' ? `Service${d.cost ? ' · ' + money(+d.cost) : ''}${d.shop ? ' · ' + esc(d.shop) : ''}` : `${d.litres ? num(+d.litres, 2) + ' L' : 'Fill-up'}${d.cost ? ' · ' + (d.currency === 'MYR' ? 'RM ' + num(+d.cost, 2) : money(+d.cost)) : ''}${STATION_OF(d.station) ? ' · ' + STATION_OF(d.station) : ''}`;
+  const canSave = (d.kind === 'odo' && d.odo) || ((d.kind === 'pump' || d.kind === 'receipt') && d.litres && (estOdo() != null || d.odo));
+  return `<section class="card scanq"><span class="aln-ic">${ic('cam', 2.4)}</span><div class="grow"><span>From your photo · ${fmtTime(x.t)}${q.length > 1 ? ` · +${q.length - 1} more` : ''}</span><b>${what}</b></div>
+    <div class="tabtns">${canSave ? `<button type="button" class="minibtn dark" data-act="scansave" data-i="${x.t}">Save</button>` : ''}<button type="button" class="minibtn" data-act="scancheck" data-i="${x.t}">${canSave ? 'Check' : 'Open'}</button></div><button type="button" class="alx" data-act="scanx" data-i="${x.t}" aria-label="Dismiss">${ic('x', 2.6)}</button></section>`;
+}
+function saveScan(t, quick) {
+  const x = (S.scanQ || []).find(y => String(y.t) === String(t)); if (!x) return; const d = x.data || {};
+  S.scanQ = S.scanQ.filter(y => y !== x); save();
+  if (!quick) { openScan(d); return; }
+  const date = todayISO(new Date(x.t));
+  if (d.kind === 'odo') { S.odoLog.push({ id: uid(), date, odo: Math.round(+d.odo), ts: x.t }); toast('Odometer saved'); }
+  else { const rm = d.currency === 'MYR' || STATION_OF(d.station) === 'Malaysia', r = (S.fx && S.fx.rate) || .3;
+    S.fuel.push({ id: uid(), date, ts: x.t, odo: d.odo ? Math.round(+d.odo) : estOdo(), litres: +d.litres, cost: d.cost != null ? +d.cost : null, cur: rm ? 'MYR' : 'SGD', fx: rm ? r : undefined, costSgd: rm && d.cost ? +(d.cost * r).toFixed(2) : null, station: STATION_OF(d.station), full: true });
+    toast('Fill-up saved as a full tank. Tap it in Fuel to change'); }
+  save(); refresh(); celebrate();
+}
 function tripAskHTML() {
   const q = (S.tripQ || []).filter(t => !t.auto); if (!q.length) return '';
   const t = q[q.length - 1], mins = Math.round((t.end.t - t.start.t) / 6e4);
@@ -584,40 +603,68 @@ function celebrate() { const ups = checkBadges(); if (ups.length) { const { b, t
 /* ================= actions ================= */
 const odoGuess = () => estOdo() ?? '';
 /* ---------- photo scanning: odometer, pump display, receipts (read by AI on your relay) ---------- */
-const scanBtn = (kind, label) => `<div class="scanrow"><button type="button" class="scanbtn" data-scan="${kind}">${ic('cam', 2.2)}<span>${label}</span></button><input type="file" accept="image/*" capture="environment" hidden data-scanin="${kind}"></div><div class="scanres" hidden></div>`;
-async function shrink(file) {
+const scanBtn = (kind, label) => `<div class="scanrow"><button type="button" class="scanbtn" data-scan="${kind}">${ic('cam', 2.2)}<span>${label}</span></button><input type="file" accept="image/*" hidden data-scanin="${kind}"></div><div class="scanres" hidden></div>`;
+// shrink the photo on the phone and turn it into text (base64), so the relay doesn't have to
+async function photoData(file) {
   const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
-  const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return new Promise(r => c.toBlob(r, 'image/jpeg', .85));
+  const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return c.toDataURL('image/jpeg', .88);
 }
 async function readPhoto(kind, file) {
   if (window.PREVIEW) { await new Promise(r => setTimeout(r, 1200)); const o = (estOdo() || 18000) + 312;
-    return { odo: { odo: o }, pump: { litres: 12.41, cost: 34.62, price: 2.79, station: 'Shell', date: todayISO() }, service: { cost: 168, date: todayISO(), shop: 'Ah Huat Motor', odo: o, work: ['engine oil', 'oil filter', 'chain adjust'] } }[kind]; }
+    const d = { odo: { kind: 'odo', odo: o }, pump: { kind: 'pump', litres: 12.41, cost: 34.62, price: 2.79, currency: 'SGD', station: 'Shell', date: todayISO() }, service: { kind: 'service', cost: 168, date: todayISO(), shop: 'Ah Huat Motor', odo: o, work: ['engine oil', 'oil filter', 'chain adjust'] } };
+    return { data: d[kind] || d.pump, raw: '' }; }
   if (!S.relay) throw new Error('Scanning needs the relay. Settings → Relay.');
-  const blob = await shrink(file), c = new AbortController(); setTimeout(() => c.abort(), 30000);
-  const r = await fetch(`${relayBase()}/?ocr=${kind}&k=${riderCode()}`, { method: 'POST', body: blob, signal: c.signal, cache: 'no-store' });
+  const body = await photoData(file), c = new AbortController(); setTimeout(() => c.abort(), 45000);
+  const r = await fetch(`${relayBase()}/?ocr=${kind}&k=${riderCode()}`, { method: 'POST', body, headers: { 'content-type': 'text/plain' }, signal: c.signal, cache: 'no-store' });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.ok) throw new Error(j.error && /binding named AI/.test(j.error) ? 'Photo reading isn’t switched on in the relay yet.' : 'Couldn’t read that photo. Try again closer, without glare.');
-  return j.data;
+  if (j.error && /binding named AI/.test(j.error)) throw new Error('Photo reading isn’t switched on in the relay yet (the AI binding).');
+  if (!r.ok) throw Object.assign(new Error('The relay couldn’t read it' + (j.error ? ': ' + j.error : '.')), { raw: j.raw });
+  return { data: j.data, raw: j.raw || '' };
 }
+const STATION_OF = s => { s = String(s || ''); if (/petronas|petron|bhp|malaysia|caltex m/i.test(s)) return 'Malaysia'; const m = ['Shell', 'Esso', 'SPC', 'Caltex', 'Sinopec'].find(x => new RegExp(x, 'i').test(s)); return m || ''; };
 const WORK = [[/engine oil|oil change|\boil\b/i, /engine oil/i], [/oil filter/i, /oil filter/i], [/chain.*(lube|clean)|lube/i, /chain clean/i], [/chain.*adjust|adjust.*chain|slack/i, /chain adjust/i], [/brake pad/i, /brake pads/i], [/front tyre|front tire/i, /front tyre/i], [/rear tyre|rear tire|back tyre/i, /rear tyre/i], [/spark/i, /spark/i], [/air filter/i, /air filter/i], [/coolant|radiator/i, /coolant/i], [/brake fluid/i, /brake fluid/i], [/belt/i, /belt/i], [/gear oil/i, /gear oil/i]];
 // fill a form from what the photo says; the rider always checks before saving
+function fillFromScan(sh, kind, d) {
+  d = d || {}; let n = 0; const notes = [];
+  const set = (name, v) => { const el = $(`[name="${name}"]`, sh); if (el && v != null && v !== '' && !(typeof v === 'number' && isNaN(v))) { el.value = v; el.classList.add('filled'); setTimeout(() => el.classList.remove('filled'), 1600); n++; } };
+  const chip = (k, v) => { const b = $$(`[data-k=${k}] .chipbtn`, sh).find(c => c.dataset.v.toLowerCase() === String(v).toLowerCase()); if (b && b.getAttribute('aria-pressed') !== 'true') { b.click(); n++; } };
+  const okDate = x => x && /^\d{4}-\d\d-\d\d$/.test(x) && x <= todayISO();
+  if (kind === 'odo') set('odo', d.odo != null ? Math.round(+d.odo) : null);
+  if (kind === 'pump') { set('litres', d.litres != null ? +d.litres : null); set('cost', d.cost != null ? +d.cost : (d.litres && d.price ? +(d.litres * d.price).toFixed(2) : null)); if (okDate(d.date)) set('date', d.date);
+    const st = STATION_OF(d.station); if (st) chip('station', st); if (d.currency === 'MYR' || st === 'Malaysia') chip('cur', 'MYR'); }
+  if (kind === 'service') { set('cost', d.cost != null ? +d.cost : null); set('shop', d.shop); if (okDate(d.date)) set('date', d.date); if (d.odo) set('odo', Math.round(+d.odo));
+    const work = (d.work || []).join(' | '); if (work) { WORK.forEach(([re, nameRe]) => { if (!re.test(work)) return; const it = S.items.find(i => nameRe.test(i.name)); const c = it && $(`[data-k=items] .chipbtn[data-v="${it.id}"]`, sh); if (c && c.getAttribute('aria-pressed') !== 'true') { c.setAttribute('aria-pressed', 'true'); n++; } }); notes.push('Work: ' + esc(work)); } }
+  return { n, notes };
+}
+function scanResult(res, n, notes, raw) {
+  res.hidden = false; res.className = 'scanres ' + (n ? 'ok' : 'bad');
+  res.innerHTML = n ? `<b>${ic('check', 3)} Filled in ${n} field${n > 1 ? 's' : ''}</b><span>Check they’re right before saving.${notes.length ? '<br>' + notes.join('<br>') : ''}</span>`
+    : `<b>Couldn’t find the numbers</b><span>Try again closer and straight on, without glare, or type them in.${raw ? `<br><small class="saw">What the AI saw: ${esc(raw.slice(0, 220))}</small>` : ''}</span>`;
+}
 function wireScan(sh, kind) {
   const b = $(`[data-scan="${kind}"]`, sh), inp = $(`[data-scanin="${kind}"]`, sh), res = $('.scanres', sh); if (!b) return;
   b.onclick = () => { haptic(); if (window.PREVIEW) inp.onchange({ target: { files: [new Blob()] } }); else inp.click(); };
   inp.onchange = async e => { const file = e.target.files && e.target.files[0]; if (!file) return;
     b.disabled = true; b.classList.add('busy'); $('span', b).textContent = 'Reading the photo…'; res.hidden = true;
-    try { const d = await readPhoto(kind, file) || {}; const set = (name, v) => { const el = $(`[name="${name}"]`, sh); if (el && v != null && v !== '' && !(typeof v === 'number' && isNaN(v))) { el.value = v; el.classList.add('filled'); setTimeout(() => el.classList.remove('filled'), 1600); return 1; } return 0; };
-      let n = 0, notes = [];
-      if (kind === 'odo') n += set('odo', d.odo != null ? Math.round(+d.odo) : null);
-      if (kind === 'pump') { n += set('litres', d.litres != null ? +d.litres : null); n += set('cost', d.cost != null ? +d.cost : (d.litres && d.price ? +(d.litres * d.price).toFixed(2) : null)); if (d.date && /^\d{4}-\d\d-\d\d$/.test(d.date)) n += set('date', d.date);
-        if (d.station) { const chip = $$('[data-k=station] .chipbtn', sh).find(c => c.dataset.v.toLowerCase() === String(d.station).toLowerCase()); if (chip) { chip.click(); n++; } } }
-      if (kind === 'service') { n += set('cost', d.cost != null ? +d.cost : null); n += set('shop', d.shop); if (d.date && /^\d{4}-\d\d-\d\d$/.test(d.date)) n += set('date', d.date); if (d.odo) n += set('odo', Math.round(+d.odo));
-        const work = (d.work || []).join(' | '); if (work) { WORK.forEach(([re, nameRe]) => { if (!re.test(work)) return; const it = S.items.find(i => nameRe.test(i.name)); const chip = it && $(`[data-k=items] .chipbtn[data-v="${it.id}"]`, sh); if (chip && chip.getAttribute('aria-pressed') !== 'true') { chip.setAttribute('aria-pressed', 'true'); n++; } }); notes.push('Work: ' + esc(work)); } }
-      res.hidden = false; res.className = 'scanres ' + (n ? 'ok' : 'bad'); res.innerHTML = n ? `<b>${ic('check', 3)} Filled in ${n} field${n > 1 ? 's' : ''}</b><span>Check they’re right before saving.${notes.length ? '<br>' + notes.join('<br>') : ''}</span>` : `<b>Couldn’t find the numbers</b><span>Try again closer, straight on, without glare. Or type them in.</span>`; haptic();
-    } catch (err) { res.hidden = false; res.className = 'scanres bad'; res.innerHTML = `<b>Couldn’t read it</b><span>${esc(err.message || 'Try again.')}</span>`; }
+    try { const { data, raw } = await readPhoto(kind, file); const { n, notes } = fillFromScan(sh, kind, data); scanResult(res, n, notes, raw); haptic(); }
+    catch (err) { res.hidden = false; res.className = 'scanres bad'; res.innerHTML = `<b>Couldn’t read it</b><span>${esc(err.message || 'Try again.')}${err.raw ? `<br><small class="saw">What the AI saw: ${esc(err.raw.slice(0, 220))}</small>` : ''}</span>`; }
     b.disabled = false; b.classList.remove('busy'); $('span', b).textContent = b.dataset.l; inp.value = ''; };
   b.dataset.l = $('span', b).textContent;
+}
+// one "Scan a photo" from the + menu: works out what it is and opens the right form, filled in
+async function scanAny() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  const go2 = async file => { toast('Reading the photo…');
+    try { const { data, raw } = await readPhoto('auto', file); if (!data || !data.kind) { toast('Couldn’t tell what that photo is. Try the scan button inside the form.', 'over'); return; } openScan(data); }
+    catch (err) { toast(err.message || 'Couldn’t read it', 'over'); } };
+  if (window.PREVIEW) { go2(new Blob()); return; }
+  inp.onchange = () => inp.files[0] && go2(inp.files[0]); inp.click();
+}
+function openScan(d) {
+  const kind = d.kind === 'receipt' ? 'pump' : d.kind;
+  if (kind === 'odo') odoForm(); else if (kind === 'service') serviceForm(); else fuelForm();
+  setTimeout(() => { const r = fillFromScan(sheetEl, kind, d), res = $('.scanres', sheetEl); if (res) scanResult(res, r.n, r.notes, ''); }, 80);
 }
 // the reading just before a date (ignoring the entry being edited), to judge an odometer number
 function odoBefore(date, skipId) { const t = +new Date(date + 'T12:00'); const r = odoReadings().filter(x => x.id !== skipId && x.t <= t); return r.length ? r[r.length - 1] : null; }
@@ -628,18 +675,40 @@ function odoCheck(odo, date, skipId) {
   if (diff > Math.max(1500, days * 600)) return `That’s ${num(diff)} km more than ${num(prev.odo)} km, ${Math.round(days)} day${days >= 2 ? 's' : ''} ago. That’s a lot of riding. A typo?`;
   return null;
 }
+// a fill-up's cost as paid: RM shows the ringgit plus roughly what it was in S$
+const costTxt = f => !f.cost ? '' : f.cur === 'MYR' ? `RM ${num(+f.cost, 2)}<small class="fx">≈ ${money(fuelSgd(f))}</small>` : money(+f.cost);
+// today's ringgit → S$ rate (free, no key). Falls back to the last one we saw, or 0.30
+async function getFx() {
+  if (S.fx && S.fx.date === todayISO() && S.fx.src !== 'manual') return S.fx.rate;
+  if (window.PREVIEW) return (S.fx && S.fx.rate) || .3;
+  try { const j = await getJSON('https://api.frankfurter.app/latest?from=MYR&to=SGD'); const r = j && j.rates && j.rates.SGD; if (r > .1 && r < 1) { S.fx = { rate: +r.toFixed(4), date: todayISO(), src: 'ecb' }; save(); return S.fx.rate; } } catch (e) {}
+  try { const j = await getJSON('https://open.er-api.com/v6/latest/MYR'); const r = j && j.rates && j.rates.SGD; if (r > .1 && r < 1) { S.fx = { rate: +r.toFixed(4), date: todayISO(), src: 'er' }; save(); return S.fx.rate; } } catch (e) {}
+  return (S.fx && S.fx.rate) || .3;
+}
+// fill-up form: show the rate only for RM, switch to RM by itself for Malaysian stations
+function wireCur(sh) {
+  const fxF = $('[name=fx]', sh) && $('[name=fx]', sh).closest('.fld'), curF = $('[data-k=cur]', sh); if (!fxF || !curF) return;
+  const show = () => { const rm = read(curF.parentElement).cur === 'MYR'; fxF.hidden = !rm; const cl = $('[name=cost]', sh); if (cl) cl.closest('.fld').querySelector('span').textContent = rm ? 'Cost (RM)' : 'Cost ($)'; };
+  sh.addEventListener('pick', e => { const st = e.target.closest('[data-k=station]'); if (st && read(sh).station === 'Malaysia') { const b = $('[data-k=cur] .chipbtn[data-v="MYR"]', sh); if (b && b.getAttribute('aria-pressed') !== 'true') b.click(); } show(); });
+  show(); getFx().then(r => { const i = $('[name=fx]', sh); if (i && !i.dataset.touched) i.value = r; });
+  $('[name=fx]', sh).addEventListener('input', e => e.target.dataset.touched = 1);
+}
 const STATIONS = ['Shell', 'Esso', 'SPC', 'Caltex', 'Sinopec', 'Malaysia'].map(s => ({ v: s, l: s }));
 const MOODS = ['Chill', 'Spirited', 'Rainy', 'Night', 'Touring', 'Jammed'].map(v => ({ v, l: v }));
 function fuelForm(e) {
   form({ title: e ? 'Edit fill-up' : 'Fill-up', lede: 'The odometer reading powers km/L, range and every service countdown.',
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: e?.date || todayISO(), req: 1 }, { k: 'odo', l: 'Odometer (km)', type: 'number', v: e?.odo ?? odoGuess(), req: 1 }] },
       { type: 'row', f: [{ k: 'litres', l: 'Litres', type: 'number', v: e?.litres, req: 1 }, { k: 'cost', l: 'Cost ($)', type: 'number', v: e?.cost }] },
+      { k: 'cur', l: 'Paid in', type: 'chips', o: [{ v: 'SGD', l: 'S$' }, { v: 'MYR', l: 'RM (JB)' }], v: e?.cur || (S.lastCur === 'MYR' && !e ? 'SGD' : 'SGD') },
+      { k: 'fx', l: '1 RM = S$ (today’s rate, edit if needed)', type: 'number', v: e?.fx || (S.fx && S.fx.rate) || .3 },
       { k: 'station', l: 'Station', type: 'chips', o: STATIONS, v: e?.station || '' }, { k: 'full', l: 'Filled to a full tank', type: 'toggle', v: e ? e.full : true }],
-    extra: e ? '' : scanBtn('pump', 'Scan the pump or receipt'), onOpen: sh => wireScan(sh, 'pump'),
+    extra: e ? '' : scanBtn('pump', 'Scan the pump or receipt'), onOpen: sh => { wireScan(sh, 'pump'); wireCur(sh); },
     check: v => { const o = odoCheck(v.odo, v.date, e && e.id); if (o) return o; const tank = +S.bike.tank || 0;
       if (tank && v.litres > tank * 1.15) return `${num(v.litres, 1)} L is more than your ${num(tank)} L tank holds. A typo, or is the tank size in Settings wrong?`;
-      if (v.cost && v.litres) { const pl = v.cost / v.litres; if (pl < 2.3 || pl > 4.5) return `That works out to $${num(pl, 2)} a litre. Pump prices are usually $2.50–$4. Check the litres and cost.`; } return null; },
-    onSave: v => { if (e) { Object.assign(e, v); return; }
+      if (v.cost && v.litres) { const pl = v.cost / v.litres, rm = v.cur === 'MYR';
+        if (rm ? (pl < 1.5 || pl > 5) : (pl < 2.3 || pl > 4.5)) return `That works out to ${rm ? 'RM ' : '$'}${num(pl, 2)} a litre. ${rm ? 'Malaysian pump prices are usually RM 2–4.' : 'Pump prices are usually $2.50–$4.'} Check the litres, cost and currency.`; } return null; },
+    onSave: v => { if (v.cur === 'MYR') { const r = v.fx > .1 && v.fx < 1 ? v.fx : ((S.fx && S.fx.rate) || .3); v.costSgd = v.cost ? +(v.cost * r).toFixed(2) : null; v.fx = r; } else { delete v.fx; v.costSgd = null; }
+      if (e) { Object.assign(e, v); return; }
       // after the fuel light: learn this bike's real reserve from how much went in
       const fl = S.fuelLight, k = fuelStats().kpl;
       if (fl && v.full && k && v.litres && v.odo >= fl.odo) { const est = (+S.bike.tank - v.litres) + (v.odo - fl.odo) / k; if (est > .3 && est < S.bike.tank * .5) S.bike.reserve = Math.round(((+S.bike.reserve || 2.5) * 2 + est) / 3 * 10) / 10; }
@@ -750,7 +819,7 @@ function renewalForm(r) {
 const bikeFields = b => [{ k: 'name', l: 'Nickname', v: b.name, req: 1, ph: 'Black Mamba' },
   { type: 'row', f: [{ k: 'model', l: 'Model', v: b.model, ph: 'Yamaha MT-07' }, { k: 'plate', l: 'Plate', v: b.plate, ph: 'FBA1234X' }] },
   { type: 'row', f: [{ k: 'tank', l: 'Tank size (L)', type: 'number', v: b.tank }, { k: 'reserve', l: 'Fuel light reserve (L)', type: 'number', v: b.reserve ?? 2.5 }] },
-  { k: 'cc', l: 'Engine (cc)', type: 'number', v: b.cc },
+  { type: 'row', f: [{ k: 'cc', l: 'Engine (cc)', type: 'number', v: b.cc }, { k: 'kplEst', l: 'Usual km/L (rough)', type: 'number', v: b.kplEst, ph: 'auto' }] },
   { k: 'licence', l: 'Licence class', type: 'chips', o: ['2B', '2A', '2'].map(v => ({ v, l: 'Class ' + v })), v: b.licence }];
 function bikeForm() {
   form({ title: 'Your bike', lede: 'How it’s built decides which parts Redline tracks.', fields: [
@@ -771,7 +840,7 @@ function myDataSheet(tab = 'odo') {
         <div class="bl">Readings</div><p class="gnote">Redline uses the <b>most recent</b> reading, plus rides since then. Tap any reading to fix or delete it.</p><div class="list">${r.map((x, i) => { const nx = r[i + 1], bad = nx && x.odo < nx.odo - 5;
         return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}">${statusDot(bad ? 'over' : i ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(x.odo)} km</span><span class="s">${fmtD(todayISO(new Date(x.t)))} · ${SRC[x.src]}${bad ? ' · lower than the one before' : ''}${i === 0 ? ' · in use' : ''}</span></span>${ic('chev')}</button>`; }).join('')}</div><button type="button" class="btn ghost" id="mdAdd">+ Add a reading</button>` : `<div class="empty">No odometer readings yet.</div><button type="button" class="btn" id="mdAdd">Add a reading</button>`; }
     if (tab === 'fuel') { const l = [...S.fuel].sort((a, b) => (b.date > a.date ? 1 : -1) || b.odo - a.odo);
-      return l.length ? `<div class="list">${l.map(f => `<button type="button" class="li" data-src="fuel" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L · ${num(f.odo)} km</span><span class="s">${fmtD(f.date)}${f.station ? ' · ' + esc(f.station) : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? money(f.cost) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No fill-ups yet.</div>'; }
+      return l.length ? `<div class="list">${l.map(f => `<button type="button" class="li" data-src="fuel" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L · ${num(f.odo)} km</span><span class="s">${fmtD(f.date)}${f.station ? ' · ' + esc(f.station) : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? costTxt(f) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No fill-ups yet.</div>'; }
     if (tab === 'service') { const l = [...S.services].sort((a, b) => (b.date > a.date ? 1 : -1));
       return l.length ? `<div class="list">${l.map(x => `<button type="button" class="li" data-src="service" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${esc(x.items.map(id => (S.items.find(i => i.id === id) || {}).name).filter(Boolean).join(', ') || 'Service')}</span><span class="s">${fmtD(x.date)} · ${num(x.odo)} km${x.shop ? ' · ' + esc(x.shop) : ''}</span></span><span class="r">${x.cost ? money(x.cost, 0) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No services yet.</div>'; }
     const l = [...S.rides].sort((a, b) => b.start.t - a.start.t);
@@ -798,13 +867,13 @@ function statSheet(kind) {
   const fs = fuelStats(), f = [...S.fuel].sort((a, b) => a.odo - b.odo), full = f.filter(x => x.full);
   let h = '', lede = '';
   if (kind === 'kpl') { const a = full[full.length - 2], b = full[full.length - 1];
-    lede = fs.kpl ? `${num(fs.kpl, 1)} km/L comes from the distance between full tanks, divided by the litres you put in.` : 'Log two full tanks and this works itself out.';
+    lede = fs.measured ? `${num(fs.kpl, 1)} km/L: the distance between full tanks (or between fuel-light moments), divided by every litre you put in, top-ups included.` : `${num(fs.kpl || kplGuess(), 1)} km/L is a starting estimate for your bike. Your second full tank (or a second “Fuel light on?”) swaps in your real number. Change the estimate in Settings → Bike.`;
     if (a && b) { const used = f.filter(x => x.odo > a.odo && x.odo <= b.odo); h = `<div class="calc"><span>${num(b.odo)} − ${num(a.odo)} km</span><b>${num(b.odo - a.odo)} km</b><span>÷ ${num(used.reduce((s, x) => s + (+x.litres || 0), 0), 2)} L</span></div>`; }
     h += `<div class="list">${full.slice(-4).reverse().map(x => `<button type="button" class="li" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${fmtD(x.date)} · ${num(x.odo)} km</span><span class="s">${num(x.litres, 2)} L · full tank</span></span>${ic('chev')}</button>`).join('')}</div>`; }
   if (kind === 'spend' || kind === 'cpk') { const n = new Date(), m = f.filter(x => { const d = new Date(x.date); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
     lede = kind === 'spend' ? 'Every fill-up this month, added up.' : 'All fuel spend divided by the kilometres between your first and latest fill-up.';
     const l = kind === 'spend' ? m : f.slice(-6);
-    h = `<div class="list">${l.reverse().map(x => `<button type="button" class="li" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${fmtD(x.date)} · ${num(x.litres, 2)} L</span><span class="s">${num(x.odo)} km${x.station ? ' · ' + esc(x.station) : ''}</span></span><span class="r">${x.cost ? money(x.cost) : '—'}</span></button>`).join('') || '<div class="empty">Nothing yet.</div>'}</div>`; }
+    h = `<div class="list">${l.reverse().map(x => `<button type="button" class="li" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${fmtD(x.date)} · ${num(x.litres, 2)} L</span><span class="s">${num(x.odo)} km${x.station ? ' · ' + esc(x.station) : ''}</span></span><span class="r">${x.cost ? costTxt(x) : '—'}</span></button>`).join('') || '<div class="empty">Nothing yet.</div>'}</div>`; }
   openSheet({ kpl: 'Fuel economy', spend: 'This month', cpk: 'Cost per km' }[kind], lede, h + `<p class="gnote">Spot a wrong one? Tap it to fix it. Everything else is in Settings → My data.</p>`,
     sh => $$('.li', sh).forEach(b => b.onclick = () => fuelForm(S.fuel.find(x => x.id === b.dataset.id))));
 }
@@ -816,7 +885,7 @@ function historySheet() {
 function fuelHistSheet() {
   const list = [...S.fuel].sort((a, b) => b.odo - a.odo), fs = fuelStats();
   openSheet('Fill-ups', `${list.length} fill-ups · ${money(fs.cost, 0)} total${fs.kpl ? ' · ' + num(fs.kpl, 1) + ' km/L' : ''}`, list.length ? `<div class="list">${list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
-    return `<button type="button" class="li" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${fmtD(f.date)} · ${num(f.odo)} km${d ? ` · +${num(d)} km` : ''}${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? money(f.cost) : ''}</span></button>`; }).join('')}</div>` : '<div class="empty">Log fills with the odometer reading. Or say “Hey Siri, log fuel” at the pump once auto-log is set up.</div>',
+    return `<button type="button" class="li" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${fmtD(f.date)} · ${num(f.odo)} km${d ? ` · +${num(d)} km` : ''}${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? costTxt(f) : ''}</span></button>`; }).join('')}</div>` : '<div class="empty">Log fills with the odometer reading. Or say “Hey Siri, log fuel” at the pump once auto-log is set up.</div>',
     sh => $$('.li', sh).forEach(b => b.onclick = () => fuelForm(S.fuel.find(x => x.id === b.dataset.id))));
 }
 function journalSheet() {
@@ -843,6 +912,22 @@ function backupSheet() {
     $('#imp', sh).onclick = () => $('#impIn', sh).click();
     $('#impIn', sh).onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (d.v !== 3 || !d.bike) throw 0; S = Object.assign(fresh(), d); save(); closeSheet(); if (window.W) W.setBike(S.bike.type, true); refresh(); toast('Backup restored'); } catch (err) { toast('That file isn’t a Redline backup', 'over'); } }; r.readAsText(f); };
     const w = $('#wipe', sh); w.onclick = () => { if (!w.dataset.sure) { w.dataset.sure = 1; w.textContent = 'Tap again to wipe everything'; return; } localStorage.removeItem(KEY); location.reload(); };
+  });
+}
+// the "Redline Scan" shortcut: snap from the Action Button, Back Tap or Share in Photos; Redline offers to save it next time it opens
+function quickScanSheet() {
+  const ui = t => `<b class="ui">${t}</b>`, code = S.relay ? riderCode() : '';
+  openSheet('Quick scan', 'Snap your odometer, the pump or a receipt without opening Redline. Next time you open it, Redline shows what it read with a Save button.', `
+    ${SHORTCUTS.scan ? `<div class="cpy"><code id="qcode">${code}</code><button type="button" class="btn ghost sm" data-copy="qcode">Copy</button></div>
+    <div class="scbtns"><button type="button" class="btn" id="qsAdd">${ic('cam', 2.4)} Add “Redline Scan”</button></div>
+    <ol class="gsteps"><li>Tap ${ui('Add Shortcut')} and paste your rider code when asked.</li></ol>` : `<p class="gnote">The shared “Redline Scan” shortcut isn’t ready yet. Until then, use ${ui('+')} → ${ui('Scan a photo')}, which also takes photos from your library.</p>`}
+    <div class="bl">Ways to run it</div><ol class="gsteps">
+      <li><b>Action Button</b> (iPhone 15 Pro and newer): ${ui('Settings')} → ${ui('Action Button')} → ${ui('Shortcut')} → ${ui('Redline Scan')}.</li>
+      <li><b>Back Tap</b>: ${ui('Settings')} → ${ui('Accessibility')} → ${ui('Touch')} → ${ui('Back Tap')} → ${ui('Double Tap')} → ${ui('Redline Scan')}.</li>
+      <li><b>From Photos</b>: open a photo → ${ui('Share')} → ${ui('Redline Scan')}.</li>
+      <li><b>Lock Screen</b>: add a Shortcuts widget and pick Redline Scan.</li></ol>`, sh => {
+    $$('[data-copy]', sh).forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(code); b.textContent = 'Copied'; } catch (e) {} });
+    if ($('#qsAdd', sh)) $('#qsAdd', sh).onclick = async () => { try { await navigator.clipboard.writeText(code); } catch (e) {} toast('Rider code copied'); setTimeout(() => window.open(SHORTCUTS.scan, '_blank'), 350); };
   });
 }
 // optional: OwnTracks, a free GPS app that tracks in the background and sends points to the relay, so rides show the real road
@@ -1016,7 +1101,7 @@ function fuelLight() {
   if (fs.light) { S.fuelLight = null; save(); refresh(); toast('Fuel light cleared'); return; }
   form({ title: 'Fuel light on?', lede: `Range resets to your reserve (${num(S.bike.reserve || 2.5, 1)} L) and counts down from here.`,
     fields: [{ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', req: 1 }], cta: 'Fuel light’s on',
-    onSave: v => { S.fuelLight = { odo: v.odo, date: todayISO() }; if (v.odo > (estOdo() || 0)) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, ts: Date.now() }); toast('Counting down from reserve');
+    onSave: v => { S.fuelLight = { odo: v.odo, date: todayISO() }; S.lightLog = [...(S.lightLog || []), { odo: v.odo, t: Date.now() }].slice(-30); if (v.odo > (estOdo() || 0)) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, ts: Date.now() }); toast('Counting down from reserve');
       setTimeout(() => { const l = $('#hLamp') || $('#fLamp'); if (l) l.animate([{ transform: 'translateX(-50%) scale(1)' }, { transform: 'translateX(-50%) scale(1.6)' }, { transform: 'translateX(-50%) scale(1)' }], { duration: 500, easing: 'ease-out' }); }, 300); } });
 }
 // after a fill-up: the needle climbs from where it was, and the fuel lamp clicks off
@@ -1028,10 +1113,10 @@ function refillSweep(oldF, wasOn) {
 }
 function plusSheet() {
   openSheet('Log', '', `<div class="plusgrid">${[['fuel', 'fuel', 'Fill-up', 'c-orange'], ['ride', 'ride', 'Ride', 'c-sky'], ['service', 'wrench', 'Service', 'c-lemon'], ['odo', 'odo', 'Odometer', 'c-cream']].map(([a, i, t, c], n) => `<button type="button" class="pg ${c}" data-go="${a}" style="--d:${n * 45}ms">${ic(i)}<b>${t}</b></button>`).join('')}</div>
-    <div class="plus2"><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
+    <div class="plus2"><button type="button" class="mrow scanrow2" data-go="scan"><span class="mi">${ic('cam')}</span><span class="grow"><b>Scan a photo</b><span>Odometer, pump or receipt. Redline fills in the form</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
-const ACTIONS = { fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
+const ACTIONS = { scan: () => scanAny(), quickscan: () => quickScanSheet(), scansave: b => saveScan(b.dataset.i, true), scancheck: b => saveScan(b.dataset.i, false), scanx: b => { S.scanQ = (S.scanQ || []).filter(x => String(x.t) !== b.dataset.i); save(); refresh(); }, fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
   light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */
@@ -1076,6 +1161,7 @@ function settingsSheet() {
     ['autolog', 'head', 'Auto-log rides', S.relay ? (S.intercom && S.intercom !== 'none' ? `${S.intercom} · set up in Shortcuts` : 'Set up in Shortcuts') : 'Needs a relay first'],
     ['relay', 'link', 'Relay', S.relay ? S.relay.replace(/^https:\/\//, '') : 'Not connected'],
     ['roads', 'alert', 'Traffic', `${myRoads().length ? myRoads().map(r => r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r).join(', ') : 'Pick your roads'} · ${S.relay ? 'alerts on' : 'alerts off'}`],
+    ['quickscan', 'cam', 'Quick scan', 'Snap the odometer or pump without opening Redline'],
     ['mydata', 'list', 'My data', 'Fix any reading, fill-up, service or ride'],
     ['badges', 'trophy', 'Badges', `${earned} of ${BADGES.length} earned`],
     ['sound', 'spk', 'Sound', [S.prefs.sound ? 'Tap sounds on' : 'Tap sounds off', S.prefs.music ? 'music on' : ''].filter(Boolean).join(' · ')],
@@ -1104,28 +1190,6 @@ export default {
     const out = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: head });
     if (req.method === 'OPTIONS') return new Response(null, { headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST', 'access-control-allow-headers': 'content-type' } });
 
-    // Photo reading: odometer, pump display or receipt (needs a Workers AI binding named AI)
-    if (q.has('ocr')) {
-      if (!env.AI) return out({ error: 'Add a Workers AI binding named AI' }, 500);
-      if (!/^[a-z0-9]{8,40}$/.test(q.get('k') || '')) return out({ error: 'Bad rider code' }, 400);
-      const bytes = new Uint8Array(await req.arrayBuffer());
-      if (!bytes.length || bytes.length > 4000000) return out({ error: 'Photo missing or too big' }, 413);
-      const ask = {
-        odo: 'This photo shows a motorcycle dashboard. Read the ODOMETER: the total distance, often labelled ODO, usually 4 to 6 digits. Ignore the trip meter (TRIP A/B), the clock, the speed and the fuel. Reply only with JSON like {"odo": 18453}. Use null if you cannot read it.',
-        pump: 'This photo shows a petrol pump display or a fuel receipt from Singapore. Reply only with JSON like {"litres": 12.34, "cost": 35.20, "price": 2.85, "station": "Shell", "date": "2026-10-15"}. litres is the volume pumped, cost the total in dollars, price the dollars per litre, station one of Shell, Esso, SPC, Caltex, Sinopec or null, date as YYYY-MM-DD or null. Use null for anything you cannot read.',
-        service: 'This photo shows a motorcycle workshop invoice or receipt. Reply only with JSON like {"cost": 180.00, "date": "2026-10-15", "shop": "Ah Huat Motor", "odo": 18453, "work": ["engine oil", "oil filter"]}. work is a list of the jobs done, in plain words. Use null for anything you cannot read.'
-      }[q.get('ocr')];
-      if (!ask) return out({ error: 'Bad kind' }, 400);
-      const MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
-      const run = () => env.AI.run(MODEL, { messages: [{ role: 'system', content: 'You read numbers and text from photos. Reply with JSON only.' }, { role: 'user', content: ask }], image: [...bytes], max_tokens: 256 });
-      let r;
-      try { r = await run(); }
-      catch (e) { if (!/agree/i.test(String(e && e.message || e))) return out({ error: String(e && e.message || e) }, 500); await env.AI.run(MODEL, { prompt: 'agree' }); r = await run(); }
-      const text = String(r && r.response || ''), m = text.match(/\\{[\\s\\S]*\\}/);
-      let data = null; try { data = m ? JSON.parse(m[0]) : null; } catch (e) {}
-      return out({ ok: !!data, data, raw: text.slice(0, 300) });
-    }
-
     // Rides: your Shortcut drops start/end events here, Redline collects them when you open it.
     // Storage: a D1 database bound as DB (instant), or KV bound as RIDES (can lag up to a minute).
     const okCode = k => /^[a-z0-9]{8,40}$/.test(k || '');
@@ -1137,6 +1201,42 @@ export default {
         if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM ev WHERE t < ?').bind(Date.now() - 2592000000).run();
       } else await env.RIDES.put(id, JSON.stringify(ev), { expirationTtl: 2592000 });
     };
+
+    // Photo reading: odometer, pump display or receipt (needs a Workers AI binding named AI).
+    // The phone sends the photo already as base64 text, so this Worker stays within the free plan's CPU limit.
+    if (q.has('ocr')) {
+      if (!env.AI) return out({ error: 'Add a Workers AI binding named AI' }, 500);
+      const k = q.get('k') || ''; if (!/^[a-z0-9]{8,40}$/.test(k)) return out({ error: 'Bad rider code' }, 400);
+      let img = (await req.text()).trim();
+      if (!img || img.length > 6000000) return out({ error: 'Photo missing or too big' }, 413);
+      if (!img.startsWith('data:')) img = 'data:image/jpeg;base64,' + img.replace(/\\s+/g, '');
+      const tips = 'Odometers: read ODO (the big total, usually 4 to 6 digits), not TRIP, the clock or the speed. Digital digits can look like 7-segment numbers. ' +
+        'Pump displays show three numbers: the amount paid, the litres and the price per litre; amount is about litres times price. ' +
+        'If you see RM, Ringgit, Petronas, Petron, BHPetrol or a Malaysian address, the currency is MYR, otherwise SGD.';
+      const shapes = {
+        odo: '{"kind":"odo","odo":18453}',
+        pump: '{"kind":"pump","litres":12.34,"cost":35.20,"price":2.85,"currency":"SGD","station":"Shell","date":"2026-10-15"}',
+        service: '{"kind":"service","cost":180.00,"date":"2026-10-15","shop":"Ah Huat Motor","odo":18453,"work":["engine oil","oil filter"]}'
+      };
+      const kind = q.get('ocr');
+      const ask = kind === 'auto'
+        ? 'This photo is one of: a motorcycle dashboard (odometer), a petrol pump display, a fuel receipt, or a workshop invoice. Decide which, then reply with ONLY one JSON object in the matching shape. Odometer: ' + shapes.odo + '. Pump or fuel receipt: ' + shapes.pump + '. Workshop invoice: ' + shapes.service + '. ' + tips + ' Use null for anything you cannot read. First list every number you can see in a field called "seen".'
+        : shapes[kind] ? 'Read this photo and reply with ONLY one JSON object shaped like ' + shapes[kind] + '. ' + tips + ' Use null for anything you cannot read. Also list every number you can see in a field called "seen".' : null;
+      if (!ask) return out({ error: 'Bad kind' }, 400);
+      let r = null, used = '';
+      try { used = 'llama-4-scout'; r = await env.AI.run('@cf/meta/llama-4-scout-17b-16e-instruct', { messages: [{ role: 'user', content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: img } }] }], max_tokens: 400, temperature: 0 }); }
+      catch (e) {
+        used = 'llama-3.2-vision'; const M = '@cf/meta/llama-3.2-11b-vision-instruct', run = () => env.AI.run(M, { messages: [{ role: 'user', content: ask }], image: img, max_tokens: 400 });
+        try { r = await run(); } catch (e2) { if (!/agree/i.test(String(e2 && e2.message || e2))) return out({ error: String(e2 && e2.message || e2) }, 500); await env.AI.run(M, { prompt: 'agree' }); r = await run(); }
+      }
+      const resp = r && r.response, text = typeof resp === 'string' ? resp : JSON.stringify(resp || '');
+      let data = typeof resp === 'object' && resp ? resp : null;
+      if (!data) { const m = text.match(/\\{[\\s\\S]*\\}/); try { data = m ? JSON.parse(m[0]) : null; } catch (e) {} }
+      if (data && kind !== 'auto' && !data.kind) data.kind = kind;
+      // from the "Redline Scan" shortcut: keep the result for the app to offer next time it opens
+      if (q.get('save') && data) await store(k, { e: 'scan', t: Date.now(), data: JSON.stringify(data).slice(0, 1500) });
+      return out({ ok: !!data, data, raw: text.slice(0, 400), model: used });
+    }
 
     // OwnTracks (optional background GPS app) posts its location points here
     if (q.has('ot')) {
@@ -1185,7 +1285,7 @@ export default {
 // the shared Redline relay (Haiqal's). Everyone uses it unless they set their own or remove it.
 const DEFAULT_RELAY = 'https://redline.lvredline.workers.dev';
 // iCloud links to the shared shortcuts (made once on Haiqal's iPhone). Empty = show the build-it-yourself guide.
-const SHORTCUTS = { start: 'https://www.icloud.com/shortcuts/afb9c505c54c4b81ba3d5d4c69251b40', end: 'https://www.icloud.com/shortcuts/a0445371b3e74afbb50d15adcd5aaa7e' };
+const SHORTCUTS = { scan: '', start: 'https://www.icloud.com/shortcuts/afb9c505c54c4b81ba3d5d4c69251b40', end: 'https://www.icloud.com/shortcuts/a0445371b3e74afbb50d15adcd5aaa7e' };
 if (!S.relay && !S.relayOff && !window.PREVIEW) S.relay = DEFAULT_RELAY;
 // ---- ride relay: the phone drops events there; the app collects them
 const relayBase = () => (S.relay || '').replace(/\/+$/, '');
@@ -1254,7 +1354,7 @@ function demoSheet() {
     $('#dSetup', sh).onclick = () => { closeSheet(); S = fresh(); save(); startSetup(); };
   });
 }
-const MORE = { mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
+const MORE = { quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
 
 function applyLite() {}
 /* ================= audio: off by default ================= */

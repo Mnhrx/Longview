@@ -36,7 +36,7 @@ function data(y, m) {
   const longest = rides.reduce((a, r) => (!a || r.km > a.km) ? r : a, null);
   const jb = rides.filter(r => r.path && r.path.some(([la, lo]) => !MAP.inSG(la, lo)));
   const inM = d => { const x = new Date(d); return x.getFullYear() === y && x.getMonth() === m; };
-  const fills = S.fuel.filter(f => inM(f.date)).sort((a, b) => a.odo - b.odo), litres = fills.reduce((s, f) => s + (+f.litres || 0), 0), cost = fills.reduce((s, f) => s + (+f.cost || 0), 0);
+  const fills = S.fuel.filter(f => inM(f.date)).sort((a, b) => a.odo - b.odo), litres = fills.reduce((s, f) => s + (+f.litres || 0), 0), cost = fills.reduce((s, f) => s + fuelSgd(f), 0);
   const jobs = S.services.filter(s => inM(s.date)).flatMap(s => s.items.map(id => S.items.find(i => i.id === id)).filter(Boolean));
   const hrs = rides.map(r => new Date(r.start.t)), n = rides.length || 1;
   const night = hrs.filter(d => d.getHours() >= 20 || d.getHours() < 5).length / n, dawn = hrs.filter(d => d.getHours() >= 5 && d.getHours() < 8).length / n,

@@ -135,30 +135,38 @@ function upcoming(n = 4) {
 }
 
 /* ---------- fuel ---------- */
+// fill-up cost in Singapore dollars (JB fill-ups are saved in RM and converted at that day's rate)
+function fuelSgd(f) { const c = +f.cost || 0; if (f.cur !== 'MYR') return c; return f.costSgd != null ? +f.costSgd : c * ((S.fx && S.fx.rate) || .3); }
+// a rough starting km/L until your own fill-ups give the real number (by engine size; editable in Settings → Bike)
+function kplGuess() { const set = +S.bike.kplEst; if (set > 3) return set; const cc = +S.bike.cc || 0; return cc && cc <= 150 ? 40 : cc && cc <= 250 ? 30 : cc && cc <= 400 ? 25 : cc && cc <= 750 ? 19 : cc ? 16 : 22; }
 function fuelStats() {
-  const f = [...S.fuel].sort((a, b) => a.odo - b.odo);
-  let km = 0, L = 0, lastFull = null, pending = 0, best = null;
-  for (const x of f) {
-    if (lastFull) { pending += +x.litres || 0; if (x.full) { const d = x.odo - lastFull.odo; if (pending > 0 && d > 0) { const k = d / pending; best = Math.max(best || 0, k); } km += d; L += pending; pending = 0; lastFull = x; } }
-    else if (x.full) lastFull = x;
-  }
-  const kpl = L > 0 ? km / L : null;
-  const cost = S.fuel.reduce((s, x) => s + (+x.cost || 0), 0);
+  const f = [...S.fuel].sort((a, b) => a.odo - b.odo), tank = +S.bike.tank || 0, reserve = +S.bike.reserve || 2.5;
+  // economy, measured two ways: full tank → full tank, and fuel light → fuel light (both are "known level" moments)
+  let km = 0, L = 0, best = null;
+  { let lastFull = null, pending = 0;
+    for (const x of f) { if (lastFull) { pending += +x.litres || 0; if (x.full) { const d = x.odo - lastFull.odo; if (pending > 0 && d > 0) { best = Math.max(best || 0, d / pending); km += d; L += pending; } pending = 0; lastFull = x; } } else if (x.full) lastFull = x; } }
+  const lights = [...(S.lightLog || [])].sort((a, b) => a.odo - b.odo);
+  for (let i = 1; i < lights.length; i++) { const a = lights[i - 1], b = lights[i], d = b.odo - a.odo, add = f.filter(x => x.odo > a.odo && x.odo <= b.odo && !x.full).reduce((s, x) => s + (+x.litres || 0), 0);
+    if (d > 20 && add > 0 && !f.some(x => x.full && x.odo > a.odo && x.odo <= b.odo)) { km += d; L += add; best = Math.max(best || 0, d / add); } }
+  const measured = L > 0 ? km / L : null, kpl = measured || (tank ? kplGuess() : null), est = !measured;
+  const cost = S.fuel.reduce((s, x) => s + fuelSgd(x), 0);
   const spanKm = f.length > 1 ? f[f.length - 1].odo - f[0].odo : 0;
-  const last = f[f.length - 1];
-  let range = null, tankFrac = null, pastE = false, light = false;
-  if (kpl && last && S.bike.tank) {
-    const odo = estOdo(), fl = S.fuelLight;
-    let left;
-    // the bike's own fuel light is the truth: once it's on, count down from the reserve instead
-    if (fl && fl.odo >= last.odo) { light = true; left = (+S.bike.reserve || 2.5) - Math.max(0, (odo - fl.odo) / kpl); }
-    else { const inTank = last.full ? +S.bike.tank : Math.min(+S.bike.tank, +S.bike.tank * .5 + (+last.litres || 0)); left = inTank - Math.max(0, (odo - last.odo) / kpl); }
-    if (left < 0) pastE = true;
-    left = Math.max(0, left);
-    range = Math.round(left * kpl); tankFrac = clamp(left / S.bike.tank, 0, 1);
+  // running tank level: start at the latest known level (a full tank, or the fuel light = your reserve), add top-ups, take off what rides use
+  let range = null, tankFrac = null, pastE = false, light = false, level = null;
+  const fl = S.fuelLight, odo = estOdo();
+  const anchors = [...f.filter(x => x.full).map(x => ({ odo: x.odo, lvl: tank, i: f.indexOf(x) })), ...(fl ? [{ odo: fl.odo, lvl: reserve, light: true }] : [])].sort((a, b) => a.odo - b.odo);
+  const anc = anchors[anchors.length - 1];
+  if (kpl && tank && anc && odo != null) {
+    level = anc.lvl; let at = anc.odo;
+    const after = f.filter(x => x.odo > anc.odo || (x.odo === anc.odo && anc.light && !x.full));
+    for (const x of after) { level = Math.min(tank, Math.max(0, level - (x.odo - at) / kpl) + (+x.litres || 0)); at = x.odo; }
+    level -= Math.max(0, (odo - at) / kpl);
+    light = !!anc.light && !after.length;
+    if (level < 0) pastE = true; level = Math.max(0, level);
+    range = Math.round(level * kpl); tankFrac = clamp(level / tank, 0, 1);
   }
   const low = range != null && (range < 60 || tankFrac < .15 || light);
-  return { kpl, cost, cpk: spanKm > 0 ? cost / spanKm : null, range, tankFrac, best, low, pastE, light, full: kpl && S.bike.tank ? S.bike.tank * kpl : null };
+  return { kpl, est, measured, cost, cpk: spanKm > 0 ? cost / spanKm : null, range, tankFrac, best, low, pastE, light, level, full: kpl && tank ? tank * kpl : null };
 }
 function monthRides(y = new Date().getFullYear(), m = new Date().getMonth()) {
   return S.rides.filter(r => { const d = new Date(r.start.t); return d.getFullYear() === y && d.getMonth() === m; });
@@ -248,6 +256,7 @@ async function applyEvents(items) {
   for (const x of items) {
     const sig = 'relay:' + x.id; if (S.seen.includes(sig)) continue; S.seen = [...S.seen.slice(-120), sig];
     const lat = parseFloat(x.lat), lon = parseFloat(x.lon);
+    if (x.e === 'scan') { let d = null; try { d = JSON.parse(x.data); } catch (e) {} if (d && d.kind) { S.scanQ = [...(S.scanQ || []), { t: x.t, data: d }].slice(-10); out.push({ msg: 'A photo you scanned is ready to save' }); } continue; }
     if (x.e === 'pt') { const la = parseFloat(x.lat), lo = parseFloat(x.lon); if (!isNaN(la)) { S.pts = (S.pts || []).filter(p => x.t - p.t < 3 * 864e5).concat({ lat: la, lon: lo, t: x.t, acc: x.acc || 0 }).slice(-5000); S.al = Object.assign({}, S.al, { pt: x.t }); } continue; }
     if (x.e === 'start' || x.e === 'end') { S.al = Object.assign({ added: x.t }, S.al, { [x.e]: x.t }); }
     if (x.e === 'start') {
