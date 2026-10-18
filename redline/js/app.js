@@ -400,8 +400,8 @@ function preRide() {
 // photos sent with the "Redline Scan" shortcut, waiting for one tap
 function scanQHTML() {
   const q = S.scanQ || []; if (!q.length) return ''; const x = q[q.length - 1], d = x.data || {};
-  const what = d.kind === 'odo' ? `Odometer ${num(+d.odo)} km` : d.kind === 'service' ? `Service${d.cost ? ' · ' + money(+d.cost) : ''}${d.shop ? ' · ' + esc(d.shop) : ''}` : `${d.litres ? num(+d.litres, 2) + ' L' : 'Fill-up'}${d.cost ? ' · ' + (d.currency === 'MYR' ? 'RM ' + num(+d.cost, 2) : money(+d.cost)) : ''}${STATION_OF(d.station) ? ' · ' + STATION_OF(d.station) : ''}`;
-  const canSave = (d.kind === 'odo' && d.odo) || ((d.kind === 'pump' || d.kind === 'receipt') && d.litres && (estOdo() != null || d.odo));
+  const what = d.unsure && !(d.odo || d.litres || d.cost) ? 'Tap to pick the numbers' : d.kind === 'odo' ? `Odometer ${num(+d.odo)} km` : d.kind === 'service' ? `Service${d.cost ? ' · ' + money(+d.cost) : ''}${d.shop ? ' · ' + esc(d.shop) : ''}` : `${d.litres ? num(+d.litres, 2) + ' L' : 'Fill-up'}${d.cost ? ' · ' + (d.currency === 'MYR' ? 'RM ' + num(+d.cost, 2) : money(+d.cost)) : ''}${STATION_OF(d.station) ? ' · ' + STATION_OF(d.station) : ''}`;
+  const canSave = !d.unsure && ((d.kind === 'odo' && d.odo) || ((d.kind === 'pump' || d.kind === 'receipt') && d.litres && (estOdo() != null || d.odo)));
   return `<section class="card scanq"><span class="aln-ic">${ic('cam', 2.4)}</span><div class="grow"><span>From your photo · ${fmtTime(x.t)}${q.length > 1 ? ` · +${q.length - 1} more` : ''}</span><b>${what}</b></div>
     <div class="tabtns">${canSave ? `<button type="button" class="minibtn dark" data-act="scansave" data-i="${x.t}">Save</button>` : ''}<button type="button" class="minibtn" data-act="scancheck" data-i="${x.t}">${canSave ? 'Check' : 'Open'}</button></div><button type="button" class="alx" data-act="scanx" data-i="${x.t}" aria-label="Dismiss">${ic('x', 2.6)}</button></section>`;
 }
@@ -604,23 +604,67 @@ function celebrate() { const ups = checkBadges(); if (ups.length) { const { b, t
 const odoGuess = () => estOdo() ?? '';
 /* ---------- photo scanning: odometer, pump display, receipts (read by AI on your relay) ---------- */
 const scanBtn = (kind, label) => `<div class="scanrow"><button type="button" class="scanbtn" data-scan="${kind}">${ic('cam', 2.2)}<span>${label}</span></button><input type="file" accept="image/*" hidden data-scanin="${kind}"></div><div class="scanres" hidden></div>`;
-// shrink the photo on the phone and turn it into text (base64), so the relay doesn't have to
-async function photoData(file) {
-  const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
-  const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return c.toDataURL('image/jpeg', .88);
+// ---- 1. crop: you drag a box around the numbers (or use the whole photo) ----
+function cropPhoto(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file), wrap = document.createElement('div'); wrap.className = 'crop';
+    wrap.innerHTML = `<div class="crop-top"><b>Box the numbers</b><span>Drag the box (or its corners) so it just covers the numbers you want read.</span></div>
+      <div class="crop-stage"><div class="crop-in"><img alt=""><div class="crop-box"><i data-c="tl"></i><i data-c="tr"></i><i data-c="bl"></i><i data-c="br"></i></div></div></div>
+      <div class="crop-btns"><button type="button" class="btn ghost" data-c="x">Cancel</button><button type="button" class="btn ghost" data-c="all">Whole photo</button><button type="button" class="btn" data-c="ok">Read this</button></div>`;
+    document.body.appendChild(wrap);
+    const img = $('img', wrap), box = $('.crop-box', wrap), stage = $('.crop-stage', wrap);
+    let r = { x: .1, y: .3, w: .8, h: .4 };
+    const paint = () => Object.assign(box.style, { left: r.x * 100 + '%', top: r.y * 100 + '%', width: r.w * 100 + '%', height: r.h * 100 + '%' });
+    const fit = () => { const sw = stage.clientWidth, shh = stage.clientHeight, k = Math.min(sw / img.naturalWidth, shh / img.naturalHeight);
+      Object.assign($('.crop-in', wrap).style, { width: img.naturalWidth * k + 'px', height: img.naturalHeight * k + 'px' }); };
+    img.onload = () => { fit(); paint(); }; img.src = url;
+    const area = () => img.getBoundingClientRect();
+    let drag = null;
+    stage.onpointerdown = e => { e.preventDefault(); const a = area(), px = (e.clientX - a.left) / a.width, py = (e.clientY - a.top) / a.height, c = e.target.dataset && e.target.dataset.c;
+      drag = { c: c || (e.target === box ? 'move' : 'new'), px, py, r0: { ...r } }; if (drag.c === 'new') r = { x: px, y: py, w: 0, h: 0 }; stage.setPointerCapture(e.pointerId); };
+    stage.onpointermove = e => { if (!drag) return; const a = area(), px = clamp((e.clientX - a.left) / a.width, 0, 1), py = clamp((e.clientY - a.top) / a.height, 0, 1), o = drag.r0, dx = px - drag.px, dy = py - drag.py;
+      if (drag.c === 'move') r = { ...o, x: clamp(o.x + dx, 0, 1 - o.w), y: clamp(o.y + dy, 0, 1 - o.h) };
+      else { let x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
+        if (drag.c === 'new') { x1 = drag.px; y1 = drag.py; x2 = px; y2 = py; }
+        else { if (/l/.test(drag.c)) x1 = px; if (/r/.test(drag.c)) x2 = px; if (/t/.test(drag.c)) y1 = py; if (/b/.test(drag.c)) y2 = py; }
+        r = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }; }
+      paint(); };
+    stage.onpointerup = () => { if (drag && (r.w < .04 || r.h < .03)) r = drag.r0; drag = null; paint(); };
+    const done = v => { wrap.remove(); URL.revokeObjectURL(url); resolve(v); };
+    $$('.crop-btns button', wrap).forEach(b => b.onclick = () => { haptic(); const c = b.dataset.c; done(c === 'x' ? null : { img, r: c === 'all' ? { x: 0, y: 0, w: 1, h: 1 } : r }); });
+  });
 }
+// ---- 2. shrink (or enlarge a small crop), make it grey and boost the contrast so faint LCD digits stand out ----
+function photoData(img, r, enhance) {
+  const sx = r.x * img.naturalWidth, sy = r.y * img.naturalHeight, sw = r.w * img.naturalWidth, sh = r.h * img.naturalHeight;
+  const k = Math.min(1600 / Math.max(sw, sh), 3, Math.max(1, 1024 / Math.max(sw, sh))), c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  if (enhance) { const d = g.getImageData(0, 0, c.width, c.height), p = d.data, hist = new Uint32Array(256), N = p.length / 4;
+    for (let i = 0; i < p.length; i += 4) { const y = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 | 0; p[i] = y; hist[y]++; }
+    let lo = 0, hi = 255, acc = 0; while (lo < 255 && (acc += hist[lo]) < N * .02) lo++; acc = 0; while (hi > 0 && (acc += hist[hi]) < N * .02) hi--;
+    const span = Math.max(30, hi - lo); for (let i = 0; i < p.length; i += 4) { const v = clamp((p[i] - lo) * 255 / span, 0, 255); p[i] = p[i + 1] = p[i + 2] = v; }
+    g.putImageData(d, 0, 0); }
+  return c.toDataURL('image/jpeg', .9);
+}
+const OLD_RELAY = 'Your relay is running older code that can’t read photos. Settings → Relay → Copy code, paste it into the worker and Deploy (and add the AI binding).';
+// ---- 3. send to the relay with hints: your expected odometer and tank size ----
 async function readPhoto(kind, file) {
   if (window.PREVIEW) { await new Promise(r => setTimeout(r, 1200)); const o = (estOdo() || 18000) + 312;
     const d = { odo: { kind: 'odo', odo: o }, pump: { kind: 'pump', litres: 12.41, cost: 34.62, price: 2.79, currency: 'SGD', station: 'Shell', date: todayISO() }, service: { kind: 'service', cost: 168, date: todayISO(), shop: 'Ah Huat Motor', odo: o, work: ['engine oil', 'oil filter', 'chain adjust'] } };
-    return { data: d[kind] || d.pump, raw: '' }; }
+    return { data: d[kind] || d.pump, raw: '', seen: [], unsure: false }; }
   if (!S.relay) throw new Error('Scanning needs the relay. Settings → Relay.');
-  const body = await photoData(file), c = new AbortController(); setTimeout(() => c.abort(), 45000);
-  const r = await fetch(`${relayBase()}/?ocr=${kind}&k=${riderCode()}`, { method: 'POST', body, headers: { 'content-type': 'text/plain' }, signal: c.signal, cache: 'no-store' });
-  const j = await r.json().catch(() => ({}));
-  if (j.error && /binding named AI/.test(j.error)) throw new Error('Photo reading isn’t switched on in the relay yet (the AI binding).');
-  if (!r.ok) throw Object.assign(new Error('The relay couldn’t read it' + (j.error ? ': ' + j.error : '.')), { raw: j.raw });
-  return { data: j.data, raw: j.raw || '' };
+  const cut = await cropPhoto(file); if (!cut) return null;
+  const body = photoData(cut.img, cut.r, kind === 'odo' || kind === 'pump'), c = new AbortController(); setTimeout(() => c.abort(), 60000);
+  const hint = estOdo(), qs = `ocr=${kind}&k=${riderCode()}${hint ? '&odo=' + Math.round(hint) : ''}${S.bike.tank ? '&cap=' + +S.bike.tank : ''}`;
+  let r, j = null;
+  try { r = await fetch(`${relayBase()}/?${qs}`, { method: 'POST', body, headers: { 'content-type': 'text/plain' }, signal: c.signal, cache: 'no-store' }); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'The relay took too long. Try again, or with a tighter box.' : 'Couldn’t reach the relay. Check your connection.'); }
+  try { j = await r.json(); } catch (e) {}
+  if (!j || !j.v) throw new Error(OLD_RELAY);
+  if (j.error && /binding named AI/.test(j.error)) throw new Error('Photo reading isn’t switched on in the relay yet. Add the Workers AI binding named AI (Settings → Relay, step 6).');
+  if (!r.ok) throw Object.assign(new Error('The relay couldn’t read it' + (j.error ? ': ' + j.error : '.')), { raw: j.raw, seen: j.seen });
+  return { data: j.data, raw: j.raw || '', seen: j.seen || [], unsure: !!j.unsure };
 }
 const STATION_OF = s => { s = String(s || ''); if (/petronas|petron|bhp|malaysia|caltex m/i.test(s)) return 'Malaysia'; const m = ['Shell', 'Esso', 'SPC', 'Caltex', 'Sinopec'].find(x => new RegExp(x, 'i').test(s)); return m || ''; };
 const WORK = [[/engine oil|oil change|\boil\b/i, /engine oil/i], [/oil filter/i, /oil filter/i], [/chain.*(lube|clean)|lube/i, /chain clean/i], [/chain.*adjust|adjust.*chain|slack/i, /chain adjust/i], [/brake pad/i, /brake pads/i], [/front tyre|front tire/i, /front tyre/i], [/rear tyre|rear tire|back tyre/i, /rear tyre/i], [/spark/i, /spark/i], [/air filter/i, /air filter/i], [/coolant|radiator/i, /coolant/i], [/brake fluid/i, /brake fluid/i], [/belt/i, /belt/i], [/gear oil/i, /gear oil/i]];
@@ -630,41 +674,82 @@ function fillFromScan(sh, kind, d) {
   const set = (name, v) => { const el = $(`[name="${name}"]`, sh); if (el && v != null && v !== '' && !(typeof v === 'number' && isNaN(v))) { el.value = v; el.classList.add('filled'); setTimeout(() => el.classList.remove('filled'), 1600); n++; } };
   const chip = (k, v) => { const b = $$(`[data-k=${k}] .chipbtn`, sh).find(c => c.dataset.v.toLowerCase() === String(v).toLowerCase()); if (b && b.getAttribute('aria-pressed') !== 'true') { b.click(); n++; } };
   const okDate = x => x && /^\d{4}-\d\d-\d\d$/.test(x) && x <= todayISO();
-  if (kind === 'odo') set('odo', d.odo != null ? Math.round(+d.odo) : null);
+  const e0 = estOdo(), okOdo = o => o != null && o >= 10 && (e0 == null || (o >= e0 - 300 && o <= e0 + 10000));
+  if (kind === 'odo') set('odo', d.odo != null && okOdo(Math.round(+d.odo)) ? Math.round(+d.odo) : null);
   if (kind === 'pump') { set('litres', d.litres != null ? +d.litres : null); set('cost', d.cost != null ? +d.cost : (d.litres && d.price ? +(d.litres * d.price).toFixed(2) : null)); if (okDate(d.date)) set('date', d.date);
     const st = STATION_OF(d.station); if (st) chip('station', st); if (d.currency === 'MYR' || st === 'Malaysia') chip('cur', 'MYR'); }
-  if (kind === 'service') { set('cost', d.cost != null ? +d.cost : null); set('shop', d.shop); if (okDate(d.date)) set('date', d.date); if (d.odo) set('odo', Math.round(+d.odo));
+  if (kind === 'service') { set('cost', d.cost != null ? +d.cost : null); set('shop', d.shop); if (okDate(d.date)) set('date', d.date); if (d.odo && okOdo(Math.round(+d.odo))) set('odo', Math.round(+d.odo));
     const work = (d.work || []).join(' | '); if (work) { WORK.forEach(([re, nameRe]) => { if (!re.test(work)) return; const it = S.items.find(i => nameRe.test(i.name)); const c = it && $(`[data-k=items] .chipbtn[data-v="${it.id}"]`, sh); if (c && c.getAttribute('aria-pressed') !== 'true') { c.setAttribute('aria-pressed', 'true'); n++; } }); notes.push('Work: ' + esc(work)); } }
   return { n, notes };
 }
-function scanResult(res, n, notes, raw) {
-  res.hidden = false; res.className = 'scanres ' + (n ? 'ok' : 'bad');
-  res.innerHTML = n ? `<b>${ic('check', 3)} Filled in ${n} field${n > 1 ? 's' : ''}</b><span>Check they’re right before saving.${notes.length ? '<br>' + notes.join('<br>') : ''}</span>`
-    : `<b>Couldn’t find the numbers</b><span>Try again closer and straight on, without glare, or type them in.${raw ? `<br><small class="saw">What the AI saw: ${esc(raw.slice(0, 220))}</small>` : ''}</span>`;
+// ---- 4. if the AI wasn't sure, show the numbers it saw as buttons: one tap fills the field ----
+const PICK = { odo: [['odo', 'your ODO (total km)']], pump: [['cost', 'the amount paid'], ['litres', 'the litres']], service: [['cost', 'the total'], ['odo', 'the odometer (if shown)']] };
+function pickerHTML(kind, seen) {
+  let nums = [...new Set((seen || []).map(Number).filter(x => isFinite(x) && x > 0))];
+  if (kind === 'odo') { const e = estOdo(); nums = nums.filter(x => x >= 10 && x === Math.round(x)); if (e) nums.sort((a, b) => Math.abs(a - e) - Math.abs(b - e)); }
+  else nums = nums.filter(x => x < 100000);
+  if (!nums.length || !PICK[kind]) return '';
+  return `<div class="pick" data-kind="${kind}" data-step="0"><small>Tap <b>${PICK[kind][0][1]}</b></small><div class="pk">${nums.slice(0, 10).map(x => `<button type="button" data-n="${x}">${num(x, x % 1 ? (String(x).split('.')[1] || '').length : 0)}</button>`).join('')}<button type="button" data-n="skip" class="sk">Not here</button></div></div>`;
+}
+function wirePicker(sh, res) {
+  const p = $('.pick', res); if (!p) return; const steps = PICK[p.dataset.kind];
+  $$('[data-n]', p).forEach(b => b.onclick = () => { haptic(); let i = +p.dataset.step; const [name] = steps[i];
+    if (b.dataset.n !== 'skip') { const el = $(`[name="${name}"]`, sh); if (el) { el.value = b.dataset.n; el.dispatchEvent(new Event('input', { bubbles: true })); el.classList.add('filled'); setTimeout(() => el.classList.remove('filled'), 1600); } b.disabled = true; }
+    i++; if (i >= steps.length) { p.innerHTML = `<small>${ic('check', 3)} Done. Check the form, then save.</small>`; return; }
+    p.dataset.step = i; $('small', p).innerHTML = `Tap <b>${steps[i][1]}</b>`; });
+}
+function scanResult(res, n, notes, raw, x = {}) {
+  const sh = res.closest('.sheet') || sheetEl, pk = (x.unsure || !n) ? pickerHTML(x.kind, x.seen) : '';
+  res.hidden = false; res.className = 'scanres ' + (n && !x.unsure ? 'ok' : 'bad');
+  const saw = raw ? `<details class="sawd"><summary>What the AI saw</summary><small class="saw">${esc(raw.slice(0, 600))}</small></details>` : '';
+  res.innerHTML = n && !x.unsure ? `<b>${ic('check', 3)} Filled in ${n} field${n > 1 ? 's' : ''}</b><span>Check they’re right before saving.${notes.length ? '<br>' + notes.join('<br>') : ''}</span>`
+    : n ? `<b>Filled in ${n}, but the AI wasn’t sure</b><span>Compare with your photo.${pk ? ' If it’s wrong, tap the right number below.' : ''}</span>${pk}${saw}`
+    : pk ? `<b>Which number is it?</b><span>The AI found these numbers but couldn’t tell which is which.</span>${pk}${saw}`
+    : `<b>Couldn’t find the numbers</b><span>Try again with a tighter box around the digits, straight on and without glare, or type them in.</span>${saw}`;
+  wirePicker(sh, res);
+}
+function scanError(res, err) {
+  res.hidden = false; res.className = 'scanres bad';
+  res.innerHTML = `<b>Couldn’t read it</b><span>${esc(err.message || 'Try again.')}</span>${err.raw ? `<details class="sawd"><summary>What the AI saw</summary><small class="saw">${esc(err.raw.slice(0, 600))}</small></details>` : ''}`;
 }
 function wireScan(sh, kind) {
   const b = $(`[data-scan="${kind}"]`, sh), inp = $(`[data-scanin="${kind}"]`, sh), res = $('.scanres', sh); if (!b) return;
   b.onclick = () => { haptic(); if (window.PREVIEW) inp.onchange({ target: { files: [new Blob()] } }); else inp.click(); };
   inp.onchange = async e => { const file = e.target.files && e.target.files[0]; if (!file) return;
     b.disabled = true; b.classList.add('busy'); $('span', b).textContent = 'Reading the photo…'; res.hidden = true;
-    try { const { data, raw } = await readPhoto(kind, file); const { n, notes } = fillFromScan(sh, kind, data); scanResult(res, n, notes, raw); haptic(); }
-    catch (err) { res.hidden = false; res.className = 'scanres bad'; res.innerHTML = `<b>Couldn’t read it</b><span>${esc(err.message || 'Try again.')}${err.raw ? `<br><small class="saw">What the AI saw: ${esc(err.raw.slice(0, 220))}</small>` : ''}</span>`; }
+    try { const got = await readPhoto(kind, file); if (got) { const { data, raw, seen, unsure } = got; const { n, notes } = fillFromScan(sh, kind, data); scanResult(res, n, notes, raw, { kind, seen, unsure }); haptic(); } }
+    catch (err) { scanError(res, err); }
     b.disabled = false; b.classList.remove('busy'); $('span', b).textContent = b.dataset.l; inp.value = ''; };
   b.dataset.l = $('span', b).textContent;
 }
 // one "Scan a photo" from the + menu: works out what it is and opens the right form, filled in
 async function scanAny() {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-  const go2 = async file => { toast('Reading the photo…');
-    try { const { data, raw } = await readPhoto('auto', file); if (!data || !data.kind) { toast('Couldn’t tell what that photo is. Try the scan button inside the form.', 'over'); return; } openScan(data); }
-    catch (err) { toast(err.message || 'Couldn’t read it', 'over'); } };
+  const go2 = async file => {
+    let got; try { got = await (window.PREVIEW ? readPhoto('auto', file) : (toastSoon(), readPhoto('auto', file))); }
+    catch (err) { whatPhoto({ error: err.message, raw: err.raw, seen: err.seen }); return; }
+    if (!got) return; const d = got.data || {};
+    if (!['odo', 'pump', 'receipt', 'service'].includes(d.kind)) { whatPhoto({ raw: got.raw, seen: got.seen }); return; }
+    openScan(d, got);
+  };
   if (window.PREVIEW) { go2(new Blob()); return; }
   inp.onchange = () => inp.files[0] && go2(inp.files[0]); inp.click();
 }
-function openScan(d) {
+function toastSoon() { setTimeout(() => { if (!$('.crop')) toast('Reading the photo…'); }, 50); }
+// the AI couldn't tell (or the relay failed): say why, and let you say what the photo was
+function whatPhoto({ error, raw, seen }) {
+  openSheet('What’s in the photo?', error ? esc(error) : 'The AI couldn’t tell what this photo shows. Pick one and you can tap the right numbers.', `
+    <button type="button" class="choice" data-w="odo">${ic('odo')}<b>Odometer</b></button>
+    <button type="button" class="choice" data-w="pump">${ic('fuel')}<b>Pump display or fuel receipt</b></button>
+    <button type="button" class="choice" data-w="service">${ic('wrench')}<b>Workshop bill</b></button>
+    ${raw ? `<details class="sawd"><summary>What the AI saw</summary><small class="saw">${esc(raw.slice(0, 600))}</small></details>` : ''}`,
+    sh => $$('[data-w]', sh).forEach(b => b.onclick = () => openScan({ kind: b.dataset.w }, { seen, raw, unsure: true })));
+}
+function openScan(d, x = {}) {
   const kind = d.kind === 'receipt' ? 'pump' : d.kind;
+  if (!['odo', 'pump', 'service'].includes(kind)) { whatPhoto({ seen: x.seen || d.seen, raw: x.raw }); return; }
   if (kind === 'odo') odoForm(); else if (kind === 'service') serviceForm(); else fuelForm();
-  setTimeout(() => { const r = fillFromScan(sheetEl, kind, d), res = $('.scanres', sheetEl); if (res) scanResult(res, r.n, r.notes, ''); }, 80);
+  setTimeout(() => { const r = fillFromScan(sheetEl, kind, d), res = $('.scanres', sheetEl); if (res) scanResult(res, r.n, r.notes, x.raw || '', { kind, seen: x.seen || d.seen, unsure: x.unsure ?? d.unsure }); }, 80);
 }
 // the reading just before a date (ignoring the entry being edited), to judge an odometer number
 function odoBefore(date, skipId) { const t = +new Date(date + 'T12:00'); const r = odoReadings().filter(x => x.id !== skipId && x.t <= t); return r.length ? r[r.length - 1] : null; }
@@ -1202,40 +1287,64 @@ export default {
       } else await env.RIDES.put(id, JSON.stringify(ev), { expirationTtl: 2592000 });
     };
 
+    // Health check: tells the app which version this relay is and what's switched on
+    if (q.has('ping')) return out({ v: 7, ai: !!env.AI, db: !!env.DB, kv: !!env.RIDES, lta: !!env.LTA_KEY });
+
     // Photo reading: odometer, pump display or receipt (needs a Workers AI binding named AI).
-    // The phone sends the photo already as base64 text, so this Worker stays within the free plan's CPU limit.
+    // The phone crops and shrinks the photo and sends it as base64 text, so this stays within the free plan.
+    // It tries up to 3 AI models and keeps the first answer that makes sense.
     if (q.has('ocr')) {
-      if (!env.AI) return out({ error: 'Add a Workers AI binding named AI' }, 500);
-      const k = q.get('k') || ''; if (!/^[a-z0-9]{8,40}$/.test(k)) return out({ error: 'Bad rider code' }, 400);
+      if (!env.AI) return out({ v: 7, error: 'Add a Workers AI binding named AI' }, 500);
+      const k = q.get('k') || ''; if (!/^[a-z0-9]{8,40}$/.test(k)) return out({ v: 7, error: 'Bad rider code' }, 400);
       let img = (await req.text()).trim();
-      if (!img || img.length > 6000000) return out({ error: 'Photo missing or too big' }, 413);
+      if (!img || img.length > 6000000) return out({ v: 7, error: 'Photo missing or too big' }, 413);
       if (!img.startsWith('data:')) img = 'data:image/jpeg;base64,' + img.replace(/\\s+/g, '');
-      const tips = 'Odometers: read ODO (the big total, usually 4 to 6 digits), not TRIP, the clock or the speed. Digital digits can look like 7-segment numbers. ' +
-        'Pump displays show three numbers: the amount paid, the litres and the price per litre; amount is about litres times price. ' +
+      const hint = +q.get('odo') || 0, cap = +q.get('cap') || 25;
+      const tips = 'The numbers are usually on a digital display made of 7-segment digits (like a calculator): read each digit carefully, an 8 has all seven bars, a 0 has no middle bar, a 6 has no top-right bar, a 9 has no bottom-left bar. Ignore reflections, dust and glare. ' +
+        'Motorcycle dashboard: read the number next to ODO (the total distance, usually 3 to 6 digits). Do NOT use TRIP, the clock, the speed (the big number) or the gear.' + (hint ? ' This rider\\'s odometer should be roughly ' + Math.round(hint) + ' km.' : '') + ' ' +
+        'Petrol pump display: in Singapore the TOP number is the amount paid in dollars and the number BELOW it is litres; the price per litre is often not shown (use null then). The amount is usually more than the litres. ' +
         'If you see RM, Ringgit, Petronas, Petron, BHPetrol or a Malaysian address, the currency is MYR, otherwise SGD.';
       const shapes = {
-        odo: '{"kind":"odo","odo":18453}',
-        pump: '{"kind":"pump","litres":12.34,"cost":35.20,"price":2.85,"currency":"SGD","station":"Shell","date":"2026-10-15"}',
-        service: '{"kind":"service","cost":180.00,"date":"2026-10-15","shop":"Ah Huat Motor","odo":18453,"work":["engine oil","oil filter"]}'
+        odo: '{"kind":"odo","odo":18453,"seen":[18453,0]}',
+        pump: '{"kind":"pump","cost":35.20,"litres":12.34,"price":2.85,"currency":"SGD","station":"Shell","date":"2026-10-15","seen":[35.2,12.34]}',
+        service: '{"kind":"service","cost":180.00,"date":"2026-10-15","shop":"Ah Huat Motor","odo":18453,"work":["engine oil","oil filter"],"seen":[180,18453]}'
       };
       const kind = q.get('ocr');
       const ask = kind === 'auto'
-        ? 'This photo is one of: a motorcycle dashboard (odometer), a petrol pump display, a fuel receipt, or a workshop invoice. Decide which, then reply with ONLY one JSON object in the matching shape. Odometer: ' + shapes.odo + '. Pump or fuel receipt: ' + shapes.pump + '. Workshop invoice: ' + shapes.service + '. ' + tips + ' Use null for anything you cannot read. First list every number you can see in a field called "seen".'
-        : shapes[kind] ? 'Read this photo and reply with ONLY one JSON object shaped like ' + shapes[kind] + '. ' + tips + ' Use null for anything you cannot read. Also list every number you can see in a field called "seen".' : null;
-      if (!ask) return out({ error: 'Bad kind' }, 400);
-      let r = null, used = '';
-      try { used = 'llama-4-scout'; r = await env.AI.run('@cf/meta/llama-4-scout-17b-16e-instruct', { messages: [{ role: 'user', content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: img } }] }], max_tokens: 400, temperature: 0 }); }
-      catch (e) {
-        used = 'llama-3.2-vision'; const M = '@cf/meta/llama-3.2-11b-vision-instruct', run = () => env.AI.run(M, { messages: [{ role: 'user', content: ask }], image: img, max_tokens: 400 });
-        try { r = await run(); } catch (e2) { if (!/agree/i.test(String(e2 && e2.message || e2))) return out({ error: String(e2 && e2.message || e2) }, 500); await env.AI.run(M, { prompt: 'agree' }); r = await run(); }
+        ? 'This photo is one of: a motorcycle dashboard (odometer), a petrol pump display, a fuel receipt, or a workshop invoice. Decide which, then reply with ONLY one JSON object in the matching shape. Odometer: ' + shapes.odo + '. Pump or fuel receipt: ' + shapes.pump + '. Workshop invoice: ' + shapes.service + '. ' + tips + ' Use null for anything you cannot read. "seen" lists every number you can see.'
+        : shapes[kind] ? 'Read this photo and reply with ONLY one JSON object shaped like ' + shapes[kind] + '. ' + tips + ' Use null for anything you cannot read. "seen" lists every number you can see.' : null;
+      if (!ask) return out({ v: 7, error: 'Bad kind' }, 400);
+      const parse = r => { const resp = r && r.response; const text = typeof resp === 'string' ? resp : JSON.stringify(resp || '');
+        let d = typeof resp === 'object' && resp ? resp : null;
+        if (!d) { const m = text.match(/\\{[\\s\\S]*\\}/); try { d = m ? JSON.parse(m[0]) : null; } catch (e) {} }
+        if (d && kind !== 'auto' && !d.kind) d.kind = kind; if (d && d.kind === 'receipt') d.kind = 'pump';
+        return { d, text }; };
+      const n = x => (x == null || x === '' || isNaN(+x)) ? null : +x;
+      // does the answer make sense? (odometer near what the app expects, litres fit the tank, $2 to $5 a litre)
+      const sane = d => { if (!d) return false;
+        if (d.kind === 'odo') { const o = n(d.odo); if (o == null || o < 1 || o > 999999) return false; return !hint || (o >= hint - 300 && o <= hint + 4000); }
+        if (d.kind === 'pump') { const L = n(d.litres), c = n(d.cost); if (L == null || c == null || L <= 0.3 || L > cap + 3) return false; const p = c / L; return p >= 1.5 && p <= 5.5; }
+        if (d.kind === 'service') return n(d.cost) != null && n(d.cost) > 0;
+        return false; };
+      const models = [
+        ['llama-4-scout', '@cf/meta/llama-4-scout-17b-16e-instruct'],
+        ['mistral-small', '@cf/mistralai/mistral-small-3.1-24b-instruct'],
+        ['gemma-3', '@cf/google/gemma-3-12b-it']];
+      const tries = [], seen = new Set(); let best = null, used = '';
+      for (const [name, id] of models) {
+        let r = null;
+        try { r = await env.AI.run(id, { messages: [{ role: 'user', content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: img } }] }], max_tokens: 400, temperature: 0 }); }
+        catch (e) { tries.push(name + ': ' + String(e && e.message || e).slice(0, 120)); continue; }
+        const { d, text } = parse(r); tries.push(name + ': ' + text.slice(0, 160));
+        if (d && Array.isArray(d.seen)) d.seen.forEach(x => { if (n(x) != null) seen.add(n(x)); });
+        (text.match(/\\d+(?:\\.\\d+)?/g) || []).forEach(x => { if (+x !== 2026 && +x !== 18453) seen.add(+x); });
+        if (sane(d)) { best = d; used = name; break; }
+        if (!best && d) { best = d; used = name; }
       }
-      const resp = r && r.response, text = typeof resp === 'string' ? resp : JSON.stringify(resp || '');
-      let data = typeof resp === 'object' && resp ? resp : null;
-      if (!data) { const m = text.match(/\\{[\\s\\S]*\\}/); try { data = m ? JSON.parse(m[0]) : null; } catch (e) {} }
-      if (data && kind !== 'auto' && !data.kind) data.kind = kind;
+      const ok = sane(best);
       // from the "Redline Scan" shortcut: keep the result for the app to offer next time it opens
-      if (q.get('save') && data) await store(k, { e: 'scan', t: Date.now(), data: JSON.stringify(data).slice(0, 1500) });
-      return out({ ok: !!data, data, raw: text.slice(0, 400), model: used });
+      if (q.get('save') && (best || seen.size)) await store(k, { e: 'scan', t: Date.now(), data: JSON.stringify(Object.assign({ kind: kind === 'auto' ? 'unknown' : kind }, best || {}, { unsure: !ok, seen: [...seen].slice(0, 16) })).slice(0, 1500) });
+      return out({ v: 7, ok, unsure: !ok, data: best, seen: [...seen].slice(0, 16), model: used, raw: tries.join(' | ').slice(0, 600) });
     }
 
     // OwnTracks (optional background GPS app) posts its location points here
@@ -1327,6 +1436,7 @@ function relaySheet() {
       <pre class="code" id="wcode">${esc(WORKER)}</pre><button type="button" class="btn ghost sm" id="copyW">Copy code</button></li>
     <li><b>For rides:</b> go to ${ui('Storage &amp; databases')} → ${ui('D1 SQL database')} → ${ui('Create')}, name it <span class="mono">redline-rides</span>, tap ${ui('Create')}.</li>
     <li>Back in your worker, open ${ui('Bindings')} (under ${ui('Settings')} on some accounts) → ${ui('Add binding')} → ${ui('D1 database')}. Variable name <b class="mono">DB</b>, pick <span class="mono">redline-rides</span>, then ${ui('Add binding')}.</li>
+    <li><b>For photo scanning:</b> in the same ${ui('Bindings')} → ${ui('Add binding')} → ${ui('Workers AI')}. Variable name <b class="mono">AI</b>, then ${ui('Add binding')}. It’s free up to a daily limit, plenty for a group of friends.</li>
     <li><b>For traffic (optional):</b> sign up for LTA DataMall (free); your AccountKey arrives by email. In the worker: ${ui('Settings')} → ${ui('Variables and Secrets')} → ${ui('Add')}, type ${ui('Secret')}, name <b class="mono">LTA_KEY</b>, paste the key, ${ui('Deploy')}.</li>
     <li>Copy the worker’s address (it ends in <span class="mono">.workers.dev</span>), paste it at the top and tap ${ui('Save and test')}.</li></ol></details>`, sh => {
     $('#copyW', sh).onclick = async e => { try { await navigator.clipboard.writeText(WORKER); e.target.textContent = 'Copied'; } catch (err) { const r = document.createRange(); r.selectNodeContents($('#wcode', sh)); getSelection().removeAllRanges(); getSelection().addRange(r); e.target.textContent = 'Selected, copy it'; } };
@@ -1334,11 +1444,11 @@ function relaySheet() {
       if (!/^https:\/\//.test(u)) { toast('Paste the https:// address of the relay', 'over'); return; }
       box.hidden = false; box.className = 'gres'; box.innerHTML = '<b>Testing…</b>';
       const ok = async q => { try { const j = await getJSON(u + q); return j; } catch (err) { return null; } };
-      const [rides, traffic] = await Promise.all([ok('/?log=pull&k=testtesttest'), ok('/?path=TrafficIncidents')]);
+      const [rides, traffic, ping] = await Promise.all([ok('/?log=pull&k=testtesttest'), ok('/?path=TrafficIncidents'), ok('/?ping=1')]);
       const rOk = rides && Array.isArray(rides.items), tOk = traffic && 'value' in traffic;
       if (!rOk && !tOk) { box.className = 'gres bad'; box.innerHTML = '<b>Couldn’t reach it</b><span>Check the address, and that you tapped Deploy after pasting the code.</span>'; return; }
       S.relay = u; S.relayOff = false; save(); loadLive(true);
-      box.className = 'gres ok'; box.innerHTML = `<b>Saved</b><span>Rides: ${rOk ? (rides.store === 'kv' ? 'ready ✓ (KV: up to a minute behind. Add the DB binding for instant)' : 'ready ✓ instant') : 'needs the DB binding (step 5)'}<br>Traffic: ${tOk ? `on ✓ · ${traffic.value.length} incidents right now` : 'off (needs the LTA_KEY secret, step 6)'}</span>`;
+      box.className = 'gres ok'; box.innerHTML = `<b>Saved</b><span>Rides: ${rOk ? (rides.store === 'kv' ? 'ready ✓ (KV: up to a minute behind. Add the DB binding for instant)' : 'ready ✓ instant') : 'needs the DB binding (step 5)'}<br>Traffic: ${tOk ? `on ✓ · ${traffic.value.length} incidents right now` : 'off (needs the LTA_KEY secret, step 7)'}<br>Photo scanning: ${!ping || !ping.v ? '<b class="warn">old relay code</b>. Copy the code below again, paste it in and Deploy' : ping.ai ? 'on ✓' : 'needs the AI binding (step 6)'}</span>`;
       if (rOk) { riderCode(); box.insertAdjacentHTML('beforeend', '<button type="button" class="btn" id="toAuto">Set up auto-log →</button>'); $('#toAuto', sh).onclick = () => autoLogSheet(); } };
     if ($('#roff', sh)) $('#roff', sh).onclick = () => { S.relay = ''; S.relayOff = true; save(); closeSheet(); LIVE.inc = null; paintLive(); toast('Relay removed'); };
   });
