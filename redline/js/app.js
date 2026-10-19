@@ -310,6 +310,7 @@ function ridesHTML() {
     <div class="hcol a"><section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
       <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
       <div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
+    ${S.rides.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${S.rides.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
     <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div></div>
     <div class="hcol b"><h2 class="sec">Road check</h2>
     <div class="roadchk"><div id="live1a"></div><div class="cams" id="cams"></div><div id="live1"></div></div>
@@ -497,7 +498,7 @@ function navTo(i) {
   requestAnimationFrame(() => { const b = $(`#nav [data-i="${i}"]`), ind = $('#navInd'); if (!b || !ind) return; ind.style.width = b.offsetWidth + 'px'; ind.style.height = b.offsetHeight + 'px'; ind.style.transform = `translate(${b.offsetLeft}px,${b.offsetTop}px)`; });
 }
 addEventListener('resize', () => navTo(place));
-function syncWorld() { if (window.MAP) MAP.setRides(S.rides.map(r => ({ id: r.id, t: r.start.t, path: r.path }))); }
+function syncWorld() { if (window.MAP) MAP.setRides(S.rides.map(r => ({ id: r.id, t: r.start.t, path: r.path, kind: rideKind(r), gps: r.gps }))); }
 function focusRide(id) {
   if (!window.MAP) return; if (MAP.focused === id) id = null;
   MAP.focus(id); $$('.rrow[data-focus]', viewEl).forEach(x => x.classList.toggle('sel', x.dataset.focus === id)); showFocus();
@@ -506,7 +507,7 @@ function focusRide(id) {
 function showFocus() {
   const box = $('#mfocus'); if (!box) return; const r = window.MAP && S.rides.find(x => x.id === MAP.focused);
   box.hidden = !r; if (!r) return;
-  box.innerHTML = `<div class="grow"><span>${fmtDs(todayISO(new Date(r.start.t)))} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min</span><b>${esc(r.title || 'Ride')}</b></div><b class="k">${num(r.km, 1)}<small>km</small></b>${r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="rbtn alt" data-route="${r.id}" aria-label="Which way did you go?">${ic('ride')}</button>` : ''}<button type="button" class="rbtn" data-ride="${r.id}" aria-label="Edit ride">${ic('list')}</button>`;
+  box.innerHTML = `<div class="grow"><span>${fmtDs(todayISO(new Date(r.start.t)))} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min</span><b>${esc(r.title || 'Ride')}</b><em class="rk" style="--kc:${RIDE_KINDS[rideKind(r)][1]}">${RIDE_KINDS[rideKind(r)][0]}${r.gps ? ` · ${r.gps.length} points` : ''}</em></div><b class="k">${num(r.km, 1)}<small>km</small></b>${r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="rbtn alt" data-route="${r.id}" aria-label="Which way did you go?">${ic('ride')}</button>` : ''}<button type="button" class="rbtn" data-ride="${r.id}" aria-label="Edit ride">${ic('list')}</button>`;
   box.animate([{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,1.3,.4,1)' });
 }
 function setType(type) { if (type === S.bike.type) return; S.bike.type = type; save(); syncWorld(); if (place === 2) refresh(); }
@@ -975,7 +976,7 @@ function myDataSheet(tab = 'odo') {
     if (tab === 'service') { const l = [...S.services].sort((a, b) => (b.date > a.date ? 1 : -1));
       return l.length ? `<div class="list">${l.map(x => `<button type="button" class="li" data-src="service" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${esc(x.items.map(id => (S.items.find(i => i.id === id) || {}).name).filter(Boolean).join(', ') || 'Service')}</span><span class="s">${fmtD(x.date)} · ${num(x.odo)} km${x.shop ? ' · ' + esc(x.shop) : ''}</span></span><span class="r">${x.cost ? money(x.cost, 0) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No services yet.</div>'; }
     const l = [...S.rides].sort((a, b) => b.start.t - a.start.t);
-    return l.length ? `<div class="list">${l.slice(0, 80).map(r => `<button type="button" class="li" data-src="ride" data-id="${r.id}">${statusDot(r.est === 'estimate' ? 'soon' : 'ok')}<span class="grow"><span class="t">${esc(r.title || 'Ride')} · ${num(r.km, 1)} km</span><span class="s">${fmtDT(r.start.t)} · ${Math.round((r.end.t - r.start.t) / 6e4)} min${r.est === 'estimate' ? ' · distance estimated' : ''}</span></span>${ic('chev')}</button>`).join('')}</div>` : '<div class="empty">No rides yet.</div>';
+    return l.length ? `<div class="list">${l.slice(0, 80).map(r => `<button type="button" class="li" data-src="ride" data-id="${r.id}"><i class="dot" style="background:${RIDE_KINDS[rideKind(r)][1]}"></i><span class="grow"><span class="t">${esc(r.title || 'Ride')} · ${num(r.km, 1)} km</span><span class="s">${fmtDT(r.start.t)} · ${Math.round((r.end.t - r.start.t) / 6e4)} min · ${RIDE_KINDS[rideKind(r)][0]}${r.est === 'estimate' ? ', straight line' : ''}</span></span>${ic('chev')}</button>`).join('')}</div>` : '<div class="empty">No rides yet.</div>';
   };
   openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><button type="button" class="btn ghost" id="mdRes">${ic('save', 2.2)} Restore something deleted${(S.bin || []).length ? ` (${S.bin.length})` : ''}</button>`, sh => {
     $('#mdRes', sh).onclick = () => restoreSheet();
@@ -1642,7 +1643,7 @@ function seedPreview() {
     ['Work commute', 'commute', 6, ''], ['Work commute', 'commute', 8, ''], ['Sentosa sunset', 'sentosa', 17, 'Chill'], ['Punggol night', 'punggol', 22, 'Night'], ['Work commute', 'commute', 27, ''],
     ['Tuas sunrise run', 'tuas', 34, 'Spirited'], ['West coast AYE', 'ayer', 41, 'Chill'], ['Lim Chu Kang', 'lck', 48, 'Chill'], ['Second Link to JB', 'link2', 56, 'Touring'], ['ECP night run', 'ecp', 63, 'Night'], ['Work commute', 'commute', 70, '']];
   const RD = { commute: ['PIE'], ecp: ['ECP'], jb: ['TPE', 'SLE', 'BKE', 'WDL'], tuas: ['PIE', 'AYE'], mandai: ['TPE', 'SLE'], link2: ['AYE', 'TUAS'], sentosa: ['ECP'], ayer: ['AYE'], changi: [], punggol: ['TPE'], lck: ['KJE'] };
-  R0.forEach(([title, k, d, mood], i) => { const t0 = now - d * 864e5 - i * 37e5, path = smooth(P[k]); S.rides.push({ id: uid(), title, km: len(path), path, roads: RD[k] || [], start: { t: t0 }, end: { t: t0 + Math.round(len(path) * 1.8) * 6e4 }, src: 'manual', mood, note: '' }); });
+  R0.forEach(([title, k, d, mood], i) => { const t0 = now - d * 864e5 - i * 37e5, path = smooth(P[k]), est = ['tracked', 'picked', 'route'][i % 3]; S.rides.push({ id: uid(), title, km: len(path), path, est, gps: est === 'tracked' ? path.filter((_, j) => j % 4 === 0) : undefined, roads: RD[k] || [], start: { t: t0 }, end: { t: t0 + Math.round(len(path) * 1.8) * 6e4 }, src: 'manual', mood, note: '' }); });
   const R = S.renewals; R[0].date = D(-24); R[1].date = D(-148); R[2].date = D(-1680); R[3].date = D(-210);
   S.parked = { lat: 1.3521, lon: 103.8198, t: now - 3 * 36e5 };
   S.roads = ['ECP', 'TPE']; S.demoInc = true; S.intercom = 'Cardo'; S.setupDone = true; syncItems(); save();

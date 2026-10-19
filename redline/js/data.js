@@ -214,6 +214,10 @@ function rememberRoute(ride, alt) {
   const mid = alt.path[Math.floor(alt.path.length / 2)];
   S.routeMem = [...(S.routeMem || []).filter(x => !(haversine(x.a, ride.start) < 1.2 && haversine(x.b, ride.end) < 1.2)), { a: { lat: ride.start.lat, lon: ride.start.lon }, b: { lat: ride.end.lat, lon: ride.end.lon }, roads: alt.roads || [], mid: { lat: mid[0], lon: mid[1] } }].slice(-60);
 }
+// where a ride's line came from: a real GPS trail, a road you picked, or Redline's best guess
+const RIDE_KINDS = { gps: ['GPS track', '#45E0A2'], pick: ['Your pick', '#5AB8FF'], guess: ['Best guess', '#FFB020'], typed: ['Typed in', '#B5ABBA'] };
+function rideKind(r) { const e = r.est; if (e === 'tracked') return 'gps'; if (e === 'picked' || e === 'remembered') return 'pick'; if (e === 'manual' || !(r.path && r.path.length > 1)) return 'typed'; return 'guess'; }
+const keepGps = trail => sampleTrail(trail, 120).map(p => [+(+p.lat).toFixed(5), +(+p.lon).toFixed(5)]);
 function applyRoute(ride, r, how) {
   ride.km = Math.round(r.km * 10) / 10; ride.path = r.path; ride.roads = r.roads || []; ride.est = how || r.src;
 }
@@ -242,6 +246,7 @@ async function logRide(start, end) {
   const ride = { id: uid(), start, end, km: 0, src: 'auto', loop: straight < 1 && mins >= 15 && !marks.length && !tracked, title: '', note: '', mood: '' };
   if (r.alts) { ride.alts = r.alts.map(a => ({ km: a.km, mins: a.mins, path: a.path, roads: a.roads })); const pick = rememberedChoice(start, end, r.alts); applyRoute(ride, r.alts[pick], pick ? 'remembered' : 'route'); ride.pick = pick; }
   else applyRoute(ride, r, tracked ? 'tracked' : r.src);
+  if (tracked) ride.gps = keepGps(trail);
   S.rides.push(ride); save();
   return { ride };
 }
@@ -311,7 +316,7 @@ async function refineRides(out) {
   for (const r of S.rides.filter(r => r.start && r.end && r.start.lat != null && r.est !== 'tracked' && r.est !== 'manual' && Date.now() - r.end.t < 2 * 864e5)) {
     const trail = trailFor(r.start, r.end); if (trail.length < 3) continue;
     const res = await routeKm([r.start, ...sampleTrail(trail), r.end]); if (res.src !== 'route') continue;
-    applyRoute(r, res, 'tracked'); delete r.alts; out.push({ msg: 'A ride was redrawn with your real route' });
+    applyRoute(r, res, 'tracked'); r.gps = keepGps(trail); delete r.alts; out.push({ msg: 'A ride was redrawn with your real route' });
   }
 }
 async function handleURL() {

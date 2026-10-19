@@ -22,13 +22,20 @@ function land() {
   for (const set of [GEO.my, GEO.id, GEO.sg]) for (const r of set) { poly(r); g.fillStyle = set === GEO.sg ? '#2A2330' : '#211B26'; g.fill(); g.strokeStyle = set === GEO.sg ? 'rgba(246,235,221,.18)' : 'rgba(246,235,221,.08)'; g.lineWidth = 1; g.stroke(); }
   label('SINGAPORE', 103.82, 1.30, .22); label('JOHOR BAHRU', 103.74, 1.53, .16);
 }
+const KC = { gps: '69,224,162', pick: '90,184,255', guess: '255,176,32', typed: '181,171,186' };
 function trail(r, a, hot) {
   const p = r.path; if (!p || p.length < 2) return; const n = Math.max(2, Math.ceil(p.length * drawIn));
   const path = () => { g.beginPath(); for (let i = 0; i < n; i++) { const [x, y] = px(p[i][1], p[i][0]); i ? g.lineTo(x, y) : g.moveTo(x, y); } };
   g.lineCap = 'round'; g.lineJoin = 'round';
-  path(); g.strokeStyle = `rgba(90,184,255,${.14 * a})`; g.lineWidth = hot ? 12 : 8; g.stroke();
-  path(); g.strokeStyle = `rgba(90,184,255,${.5 * a})`; g.lineWidth = hot ? 4.5 : 3; g.stroke();
-  path(); g.strokeStyle = hot ? '#FFFFFF' : `rgba(235,246,255,${.85 * a})`; g.lineWidth = hot ? 2.2 : 1.2; g.stroke();
+  // colour by where the line came from: green = real GPS, blue = road you picked, amber = Redline's guess (dashed), grey = typed in
+  const c = KC[r.kind] || KC.pick;
+  path(); g.strokeStyle = `rgba(${c},${.14 * a})`; g.lineWidth = hot ? 12 : 8; g.stroke();
+  path(); g.strokeStyle = `rgba(${c},${.32 * a})`; g.lineWidth = hot ? 4.5 : 3; g.stroke();
+  if (r.kind === 'guess') g.setLineDash(hot ? [7, 6] : [5, 5]);
+  const op = g.globalCompositeOperation; g.globalCompositeOperation = 'source-over'; // keep the core its true colour (adding light would turn it white)
+  path(); g.strokeStyle = `rgba(${c},${hot ? 1 : .9 * a})`; g.lineWidth = hot ? 2.6 : 1.6; g.stroke(); g.setLineDash([]); g.globalCompositeOperation = op;
+  // the real GPS points OwnTracks sent, as small dots on the focused ride
+  if (hot && r.gps && drawIn >= 1) for (const q of r.gps) { const [x, y] = px(q[1], q[0]); g.fillStyle = 'rgba(69,224,162,.95)'; g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); }
   if (hot) for (const q of [p[0], p[p.length - 1]]) { const [x, y] = px(q[1], q[0]); g.fillStyle = '#FFF8F0'; g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); }
 }
 // a point a fraction of the way along a path (by distance)
