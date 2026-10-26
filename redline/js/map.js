@@ -22,6 +22,29 @@ function land() {
   for (const set of [GEO.my, GEO.id, GEO.sg]) for (const r of set) { poly(r); g.fillStyle = set === GEO.sg ? '#2A2330' : '#211B26'; g.fill(); g.strokeStyle = set === GEO.sg ? 'rgba(246,235,221,.18)' : 'rgba(246,235,221,.08)'; g.lineWidth = 1; g.stroke(); }
   label('SINGAPORE', 103.82, 1.30, .22); label('JOHOR BAHRU', 103.74, 1.53, .16);
 }
+// OneMap's night street map under the trails (roads, expressways, names). Tiles are Web Mercator; this close to the
+// equator that's almost exactly the same as our flat map, so each tile is simply stretched onto its corners.
+const TILE = 'https://www.onemap.gov.sg/maps/tiles/Night/{z}/{x}/{y}.png', tiles = new Map(); let tilesOK = 0;
+const tLon = (x, z) => x / 2 ** z * 360 - 180, tLat = (y, z) => Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 2 ** z))) * 180 / Math.PI;
+function tileImg(z, x, y) { const k = z + '/' + x + '/' + y; let t = tiles.get(k);
+  if (!t) { t = new Image(); t.onload = () => { t.ok = 1; tilesOK++; tick(); }; t.onerror = () => { t.bad = 1; }; t.src = TILE.replace('{z}', z).replace('{x}', x).replace('{y}', y); tiles.set(k, t); if (tiles.size > 400) tiles.delete(tiles.keys().next().value); }
+  return t; }
+function streetMap() {
+  if (window.PREVIEW_NOTILES) return false;
+  const z = Math.max(10, Math.min(18, Math.round(Math.log2(K * cam.z * 360 / 256 * Math.min(DPR, 1.5))))), n = 2 ** z;
+  const [lo0, la0] = unpx(0, 0), [lo1, la1] = unpx(W, H);
+  const x0 = Math.floor((lo0 + 180) / 360 * n), x1 = Math.floor((lo1 + 180) / 360 * n);
+  const yOf = la => { const r = la * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n); };
+  const y0 = yOf(la0), y1 = yOf(la1); if ((x1 - x0 + 1) * (y1 - y0 + 1) > 60) return false;
+  let drew = 0;
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { let t = tileImg(z, x, y), zz = z, sx = 0, sy = 0, sw = 256;
+    // while a sharp tile loads, stretch its parent so the map never goes blank
+    if (!t.ok) { const p = tiles.get((z - 1) + '/' + (x >> 1) + '/' + (y >> 1)); if (p && p.ok) { t = p; zz = z - 1; sx = (x & 1) * 128; sy = (y & 1) * 128; sw = 128; } else continue; }
+    const [ax, ay] = px(tLon(x, z), tLat(y, z)), [bx, by] = px(tLon(x + 1, z), tLat(y + 1, z));
+    g.drawImage(t, sx, sy, sw, sw, ax, ay, bx - ax + .5, by - ay + .5); drew++; }
+  if (drew) { g.fillStyle = 'rgba(15,12,18,.28)'; g.fillRect(0, 0, W, H); } // dim it a touch so the trails stay the star
+  return drew > 0;
+}
 const KC = { gps: '69,224,162', pick: '90,184,255', guess: '255,176,32', typed: '181,171,186' };
 function trail(r, a, hot) {
   const p = r.path; if (!p || p.length < 2) return; const n = Math.max(2, Math.ceil(p.length * drawIn));
@@ -46,10 +69,11 @@ function along(p, f) {
 }
 function draw() {
   if (!cv) return; g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalCompositeOperation = 'source-over';
-  land();
+  land(); streetMap();
   g.globalCompositeOperation = 'lighter';
   const now = Date.now();
-  for (const r of rides) if (r.id !== focus) trail(r, focus ? .3 : Math.max(.4, 1 - (now - r.t) / 864e5 / 120), false);
+  // one ride tapped: only that ride shows, so overlapping trails don't confuse it
+  if (!focus) for (const r of rides) trail(r, Math.max(.4, 1 - (now - r.t) / 864e5 / 120), false);
   const f = focus && rides.find(r => r.id === focus); if (f) trail(f, 1, true);
   g.globalCompositeOperation = 'source-over';
   // the rider: a glowing dot that rides the focused trail once the camera lands
@@ -72,8 +96,10 @@ function frame(now) {
   clampCam(); draw(); if (busy) tick(); else last = 0;
 }
 // never let the map wander off Singapore and southern Johor
-function clampCam() { if (!cam) return; cam.x = Math.min(104.06, Math.max(103.6, cam.x)); cam.y = Math.min(1.5, Math.max(1.2, cam.y)); }
-function target() { return fit(boundsOf(focus ? rides.filter(r => r.id === focus) : rides, !focus), focus ? 40 : 16); }
+function clampCam() { if (!cam) return; cam.x = Math.min(104.15, Math.max(103.5, cam.x)); cam.y = Math.min(1.65, Math.max(1.15, cam.y)); }
+// a tapped ride is framed in the space between the month label (top) and the ride card (bottom)
+function target() { if (!focus) return fit(boundsOf(rides, true), 16);
+  const top = 66, bot = 108, c = fit(boundsOf(rides.filter(r => r.id === focus), false), 10, W, Math.max(80, H - top - bot)); c.y -= ((bot - top) / 2) / c.z; return c; }
 function flyTo(b) {
   if (!cam || RM) { cam = b; draw(); return; }
   const span = Math.hypot((b.x - cam.x) * K, b.y - cam.y) * Math.min(cam.z, b.z) / Math.max(W, 1);
@@ -111,6 +137,7 @@ return {
   focus(id) { focus = id; if (cv) { home = target(); setMoved(false); flyTo(home); } }, get focused() { return focus; },
   recentre() { if (!cv) return; home = target(); setMoved(false); flyTo(home); },
   replay() { if (focus && !RM) { dot = { t: 0 }; tick(); } },
+  get tiles() { return tilesOK > 0; },
   inSG: (la, lo) => la < 1.445 || inPoly(GEO.sg[0], lo, la), GEO, K, land: (ctx, w, h, c) => { const s = { g, W, H, cam }; g = ctx; W = w; H = h; cam = c; land(); g = s.g; W = s.W; H = s.H; cam = s.cam; }, fit: (b, pad, w, h) => fit(b, pad, w, h),
 };
 })();

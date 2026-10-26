@@ -143,6 +143,13 @@ const SL = {
     return () => { shapes($('.fs', el), ['#FF6A2B', '#F6EBDD'], 6); pop($('.kick', el), 50); pop($('.huge', el), 150); count($('.n', el), D.jobs.length, 800, 200); pop($('.line', el), 600);
       $$('.pg2', el).forEach((p, i) => A(p, [{ transform: 'scale(0) rotate(-30deg)', opacity: 0 }, { transform: 'scale(1.12) rotate(6deg)', opacity: 1, offset: .7 }, { transform: 'none', opacity: 1 }], { delay: 800 + i * 160, duration: 700 })); };
   },
+  photos(el, D) {
+    const ph = D.photos.slice(0, 7), spots = [[-30, -38, -8], [26, -30, 7], [-28, 6, 5], [30, 4, -6], [0, -6, -2], [-24, 40, -5], [26, 42, 6]];
+    el.className = 'ws s-dark'; el.innerHTML = `<div class="fs"></div><div class="wc top"><p class="kick">Moments</p><h2 class="big">${D.photos.length} photo${D.photos.length > 1 ? 's' : ''} from the road</h2></div>
+      <div class="polys">${ph.map((p, i) => { const [x, y, r] = spots[i]; return `<figure class="poly" style="--x:${x}vw;--y:${y}vh;--r:${r}deg"><img src="${p.src}" alt=""><figcaption>${esc(p.title)}</figcaption></figure>`; }).join('')}</div>`;
+    return () => { shapes($('.fs', el), ['#FF6A2B', '#FFD84D', '#45E0A2'], 6); pop($('.kick', el), 50); pop($('.big', el), 150);
+      $$('.poly', el).forEach((p, i) => A(p, [{ transform: 'translate(-50%,-50%) translate(0, 70vh) rotate(30deg) scale(.6)', opacity: 0 }, { transform: 'translate(-50%,-50%) translate(var(--x), var(--y)) rotate(var(--r))', opacity: 1 }], { delay: 300 + i * 420, duration: 900, easing: 'cubic-bezier(.2,1.2,.4,1)' })); };
+  },
   card(el, D) {
     el.className = 'ws s-plum'; el.innerHTML = `<div class="fs"></div><div class="wcard"><div class="wch"><b>RED<i>LINE</i></b><span>${D.name} ${D.y}</span></div><canvas class="wmap"></canvas>
       <div class="wst"><div><b>${num(D.km)}</b><span>km</span></div><div><b>${D.rides.length}</b><span>rides</span></div><div><b>${num(D.litres, 0)}</b><span>litres</span></div></div>
@@ -180,12 +187,14 @@ async function share(D) {
 
 /* ---------- the player ---------- */
 let D = null, order = [], idx = 0, timer = 0, paused = false, cleanup = null, tx = innerWidth / 2, ty = innerHeight / 2, holdT = 0, startT = 0, remain = 0;
-const DUR = { intro: 5600, distance: 6000, map: 7000, longest: 6500, time: 6500, jb: 6000, fuel: 6500, garage: 6000, card: 0 };
-function open(y, m) {
+const DUR = { intro: 5600, distance: 6000, map: 7000, longest: 6500, time: 6500, jb: 6000, fuel: 6500, garage: 6000, photos: 7000, card: 0 };
+async function open(y, m) {
   const w = y == null ? (() => { const n = new Date(), d = new Date(n.getFullYear(), n.getMonth() - 1, 1); return { y: d.getFullYear(), m: d.getMonth() }; })() : { y, m };
   D = data(w.y, w.m); if (D.rides.length < 1) { toast('Ride a few times this month and your Wrap appears'); return; }
+  // your ride photos for the month (kept on this phone)
+  D.photos = []; if (typeof kv === 'function') for (const r of D.rides) for (const k of (r.photos || [])) { const p = await kv('get', k); if (p && p.src) D.photos.push({ src: p.src, title: r.title || fmtDs(todayISO(new Date(r.start.t))) }); }
   S.wrapSeen = `${w.y}-${w.m}`; S.stats.wraps++; save();
-  order = ['intro', 'distance', 'map']; if (D.longest && D.longest.path) order.push('longest'); order.push('time'); if (D.jb.length) order.push('jb'); if (D.fills.length) order.push('fuel'); order.push('garage', 'card');
+  order = ['intro', 'distance', 'map']; if (D.longest && D.longest.path) order.push('longest'); order.push('time'); if (D.jb.length) order.push('jb'); if (D.fills.length) order.push('fuel'); order.push('garage'); if (D.photos.length) order.push('photos'); order.push('card');
   const st = $('#story'); st.innerHTML = `<div class="wbars">${order.map(() => '<i><b></b></i>').join('')}</div><button type="button" class="wx" aria-label="Close Wrap">${ic('x', 3)}</button><div class="wstage"></div>`;
   st.classList.add('on'); document.body.classList.add('wrapping'); if (S.prefs.sound || S.prefs.music) applyAudio();
   $('.wx', st).onclick = e => { e.stopPropagation(); close(); };

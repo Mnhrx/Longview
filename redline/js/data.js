@@ -21,8 +21,13 @@ const ITEM_DEFS = [
   ['Drive belt', 'belt', 20000, 24, 'belt'], ['CVT rollers', 'belt', 15000, 0, 'belt'], ['CVT clean', 'belt', 6000, 0, 'belt'], ['Gear oil', 'final', 6000, 12, 'belt'],
   ['Final drive oil', 'final', 20000, 24, 'shaft'],
   ['Brake pads', 'brakes', 5000, 6], ['Front tyre', 'frontTyre', 15000, 0], ['Rear tyre', 'rearTyre', 12000, 0],
-  ['Spark plug', 'spark', 10000, 0], ['Air filter', 'air', 10000, 12], ['Coolant', 'coolant', 20000, 24, 'liquid'], ['Brake fluid', 'brakes', 0, 24]
+  ['Spark plug', 'spark', 10000, 0], ['Air filter', 'air', 10000, 12], ['Coolant', 'coolant', 20000, 24, 'liquid'], ['Brake fluid', 'brakes', 0, 24],
+  // added in v7: every bike needs these, plus a few by build. Typical intervals; the owner's manual has the exact ones
+  ['Valve clearance', 'spark', 12000, 0], ['Fork oil', 'other', 20000, 24], ['Battery check', 'other', 0, 12], ['Steering head bearings', 'other', 12000, 12], ['Throttle free play', 'other', 6000, 12],
+  ['Chain & sprockets', 'chain', 20000, 0, 'chain'], ['Clutch cable free play', 'other', 6000, 12, 'chain'], ['CVT clutch shoes', 'belt', 20000, 0, 'belt']
 ];
+// existing riders get these offered once instead of added silently
+const NEW_V7 = ['Valve clearance', 'Fork oil', 'Battery check', 'Steering head bearings', 'Throttle free play', 'Chain & sprockets', 'Clutch cable free play', 'CVT clutch shoes'];
 const fits = (need, b) => !need || need === (b.drive || 'chain') || (need === 'liquid' && b.cooling !== 'air');
 const PARTS = [['frontTyre', 'Front tyre'], ['rearTyre', 'Rear tyre'], ['chain', 'Chain'], ['belt', 'Drive belt'], ['final', 'Final drive'], ['oil', 'Engine oil'], ['coolant', 'Coolant'], ['brakes', 'Brakes'], ['spark', 'Spark plug'], ['air', 'Air filter'], ['other', 'Other']];
 const DRIVES = [['chain', 'Chain', 'Most bikes. A chain and two sprockets.'], ['belt', 'Belt (CVT)', 'Most scooters. Twist and go, no gears.'], ['shaft', 'Shaft', 'Some tourers and cruisers.']];
@@ -31,7 +36,7 @@ const COOLS = [['liquid', 'Liquid-cooled', 'There’s a radiator at the front.']
 function applyBuild() {
   for (const [name, part, km, months, need] of ITEM_DEFS) {
     const has = S.items.find(i => i.name === name), ok = fits(need, S.bike);
-    if (ok && !has) S.items.push({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null });
+    if (ok && !has && !(S.skipStd || []).includes(name)) S.items.push({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null });
     if (!ok && has && need) S.items = S.items.filter(i => i !== has);
   }
 }
@@ -42,9 +47,12 @@ const ROADS = [['PIE', 'Pan-Island', /\bPIE\b|Pan[- ]Island/i], ['CTE', 'Central
   ['WDL', 'Woodlands Causeway', /Causeway|Woodlands Checkpoint|Woodlands Crossing/i], ['TUAS', 'Tuas Second Link', /Second Link|Tuas Checkpoint|Tuas Crossing|Linkedua/i]];
 const roadCodes = text => ROADS.filter(([, , re]) => re.test(text)).map(([c]) => c);
 // your roads = the ones you picked + any you've ridden at least twice in the last 60 days
-function myRoads() { const n = {}, since = Date.now() - 60 * DAY; S.rides.filter(r => r.start.t > since).forEach(r => (r.roads || []).forEach(c => n[c] = (n[c] || 0) + 1));
-  return [...new Set([...(S.roads || []), ...Object.keys(n).filter(c => n[c] >= 2)])]; }
-const learnedRoads = () => myRoads().filter(c => !(S.roads || []).includes(c));
+// your roads = the ones you picked + (if you allow it) any you've really ridden at least twice in the last 60 days.
+// Only rides with a GPS track or a road you picked count; Redline's own guesses don't.
+function learnedRoads() { if (S.roadLearn === false) return []; const n = {}, since = Date.now() - 60 * DAY;
+  S.rides.filter(r => r.start.t > since && (r.est === 'tracked' || r.est === 'picked' || r.est === 'remembered')).forEach(r => (r.roads || []).forEach(c => n[c] = (n[c] || 0) + 1));
+  return Object.keys(n).filter(c => n[c] >= 2 && !(S.roads || []).includes(c) && !(S.roadDrop || []).includes(c)); }
+function myRoads() { return [...new Set([...(S.roads || []), ...learnedRoads()])]; }
 const RENEW_DEFS = ['Road tax', 'Insurance', 'COE expiry', 'LTA inspection', 'Helmet replace'];
 const RIDE_COLS = ['#4DF3FF', '#FF8A1F', '#B7FF3D', '#FF4FD8', '#8B7BFF', '#FFE14D'];
 
@@ -54,7 +62,7 @@ function fresh() {
     bike: { name: '', model: '', plate: '', drive: 'chain', cooling: 'liquid', cc: '', tank: 13, reserve: 2.5, licence: '2B' },
     items: ITEM_DEFS.filter(x => fits(x[4], { drive: 'chain', cooling: 'liquid' })).map(([name, part, km, months]) => ({ id: uid(), name, part, km, months, lastOdo: null, lastDate: null })),
     renewals: RENEW_DEFS.map(name => ({ id: uid(), name, date: '', cost: null })),
-    services: [], fuel: [], rides: [], marks: [], odoLog: [], parked: null,
+    services: [], fuel: [], rides: [], marks: [], odoLog: [], parked: null, expenses: [], itemsV: 7, skipStd: [], roadLearn: true, roadDrop: [], log: [],
     intercom: null, seen: [], minMin: 3, minKm: .5, fuelLight: null, relay: window.PREVIEW ? '' : 'https://redline.lvredline.workers.dev', home: null, roads: [], rider: '', openRide: null,
     prefs: { sound: false, music: false },
     stats: { exports: 0, wraps: 0 }, badges: {}
@@ -62,10 +70,44 @@ function fresh() {
 }
 let S = load();
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 3) return Object.assign(fresh(), s); } catch (e) {}
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 3) { const o = Object.assign(fresh(), s);
+      // a rider from before v7: offer the new service items once rather than adding them behind their back
+      if (!s.itemsV) { o.itemsV = 7; o.skipStd = NEW_V7.filter(n => !o.items.some(i => i.name === n)); o.newItemsOffer = o.skipStd.length > 0; }
+      return o; } } catch (e) {}
   return fresh();
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { window.toast && toast('Could not save. Storage is full or blocked on this phone.', 'over'); } }
+
+/* ---------- costs: every dollar the bike costs, in S$ ---------- */
+const EXP_CATS = [['gear', 'Riding gear', '#C49BFF'], ['parts', 'Parts & mods', '#FF6A2B'], ['acc', 'Accessories', '#5AB8FF'], ['park', 'Parking & tolls', '#FFD84D'], ['care', 'Wash & care', '#45E0A2'], ['renewal', 'Road tax & insurance', '#FF8FB1'], ['other', 'Other', '#B5ABBA']];
+const COST_CATS = [['fuel', 'Fuel', '#FFB020'], ['service', 'Servicing', '#FF3B3B'], ...EXP_CATS];
+const catOf = k => COST_CATS.find(c => c[0] === k) || COST_CATS[COST_CATS.length - 1];
+const expSgd = x => { const c = +x.cost || 0; return x.cur === 'MYR' ? (x.costSgd != null ? +x.costSgd : c * ((S.fx && S.fx.rate) || .3)) : c; };
+// one list of everything paid: fill-ups, services and other expenses
+function costLedger() {
+  const svcName = s => (s.items || []).map(id => (S.items.find(i => i.id === id) || {}).name).filter(Boolean).join(', ') || 'Service';
+  return [...S.fuel.filter(f => +f.cost > 0).map(f => ({ id: f.id, src: 'fuel', cat: 'fuel', date: f.date, label: `${num(f.litres, 1)} L${f.station ? ' · ' + f.station : ''}`, sgd: fuelSgd(f), cur: f.cur || 'SGD', amt: +f.cost })),
+    ...S.services.filter(s => +s.cost > 0).map(s => ({ id: s.id, src: 'service', cat: 'service', date: s.date, label: svcName(s) + (s.shop ? ' · ' + s.shop : ''), sgd: +s.cost, cur: 'SGD', amt: +s.cost })),
+    ...(S.expenses || []).filter(x => +x.cost > 0).map(x => ({ id: x.id, src: 'expense', cat: x.cat || 'other', date: x.date, label: x.note || catOf(x.cat)[1], sgd: expSgd(x), cur: x.cur || 'SGD', amt: +x.cost }))]
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+// km ridden between two dates (rides, scaled to your real odometer)
+// km ridden between two moments: your real odometer readings, topped up with rides since the nearest reading
+function odoAt(t) { const r = odoReadings().filter(x => x.t <= t), c = correction(); if (!r.length) return null; const la = r[r.length - 1];
+  return la.odo + S.rides.filter(x => x.end && x.end.t > la.t && x.end.t <= t).reduce((s, x) => s + (x.km || 0), 0) * c; }
+function kmBetween(from, to) { const rides = S.rides.filter(r => r.end && r.start.t >= from && r.start.t < to).reduce((s, r) => s + (r.km || 0), 0) * correction();
+  const first = odoReadings()[0], a = odoAt(Math.max(from, first ? first.t : from)), b = odoAt(Math.min(to, Date.now()));
+  return a != null && b != null && b - a > rides ? b - a : rides; }
+function costSummary(from = 0, to = Date.now() + DAY) {
+  const inR = d => { const t = +new Date(d + 'T12:00'); return t >= from && t < to; };
+  const items = costLedger().filter(x => inR(x.date)), by = {}; items.forEach(x => by[x.cat] = (by[x.cat] || 0) + x.sgd);
+  const total = items.reduce((s, x) => s + x.sgd, 0), km = kmBetween(from, to);
+  return { items, by, total, km, cpk: km > 20 ? total / km : null };
+}
+// what an item cost last time: from a service that was only that item, else "part of a $X service"
+function itemCost(it) { const sv = S.services.filter(s => (s.items || []).includes(it.id) && +s.cost > 0).sort((a, b) => b.odo - a.odo);
+  const solo = sv.find(s => s.items.length === 1); if (solo) return { cost: +solo.cost, date: solo.date, solo: true };
+  return sv[0] ? { cost: +sv[0].cost, date: sv[0].date, solo: false, n: sv[0].items.length } : null; }
 
 /* ---------- odometer & tracking ---------- */
 // every real odometer reading, oldest first. Same day: fill-ups, then services, then odometer checks (most deliberate last)
@@ -201,6 +243,20 @@ function sampleTrail(pts, max = 30) {
 function trailFor(start, end) {
   return (S.pts || []).filter(p => p.t >= start.t - 9e4 && p.t <= end.t + 9e4 && (!p.acc || p.acc < 300)).sort((a, b) => a.t - b.t);
 }
+// GPS goes haywire in tunnels (KPE, MCE, CTE) and between tall buildings. Before measuring a ride, throw out:
+// low-accuracy fixes, jumps you couldn't physically ride (over 150 km/h), and out-and-back spikes
+function cleanTrail(pts) {
+  const in0 = pts.filter(p => !p.acc || p.acc <= 65).sort((a, b) => a.t - b.t), out = [];
+  for (const p of in0) { const q = out[out.length - 1]; if (!q) { out.push(p); continue; }
+    const d = haversine(q, p), h = Math.max(1, (p.t - q.t) / 1000) / 3600;
+    if (d < .015) continue;               // standing still at a light
+    if (d / h > 150) continue;            // teleported: not a real position
+    out.push(p); }
+  for (let i = 1; i < out.length - 1; i++) { const a = out[i - 1], b = out[i], c = out[i + 1], ac = haversine(a, c);
+    if (haversine(a, b) + haversine(b, c) > ac * 2.5 + .3) { out.splice(i, 1); i--; } } // a spike out and straight back
+  return { pts: out, dropped: pts.length - out.length };
+}
+const trailKm = pts => pts.reduce((s, p, i) => i ? s + haversine(pts[i - 1], p) : 0, 0);
 // remembered choices: same start + end (either way round) → the same roads as last time
 function rememberedChoice(start, end, alts) {
   const near = (a, b) => haversine(a, b) < 1.2;
@@ -217,6 +273,9 @@ function rememberRoute(ride, alt) {
 // where a ride's line came from: a real GPS trail, a road you picked, or Redline's best guess
 const RIDE_KINDS = { gps: ['GPS track', '#45E0A2'], pick: ['Your pick', '#5AB8FF'], guess: ['Best guess', '#FFB020'], typed: ['Typed in', '#B5ABBA'] };
 function rideKind(r) { const e = r.est; if (e === 'tracked') return 'gps'; if (e === 'picked' || e === 'remembered') return 'pick'; if (e === 'manual' || !(r.path && r.path.length > 1)) return 'typed'; return 'guess'; }
+// joining GPS points to roads can add little detours. With dense points, the dot-to-dot distance (+15% for curves) is a ceiling
+function trimKm(ride, trail) { if (trail.length < 6) return; const dk = trailKm(trail), gap = dk / (trail.length - 1);
+  if (gap < .8 && ride.km > dk * 1.3) { ride.kmRoad = ride.km; ride.km = Math.round(dk * 1.15 * 10) / 10; ride.kmFix = true; } }
 const keepGps = trail => sampleTrail(trail, 120).map(p => [+(+p.lat).toFixed(5), +(+p.lon).toFixed(5)]);
 function applyRoute(ride, r, how) {
   ride.km = Math.round(r.km * 10) / 10; ride.path = r.path; ride.roads = r.roads || []; ride.est = how || r.src;
@@ -240,13 +299,14 @@ async function logRide(start, end) {
   const marks = S.marks.filter(m => m.t >= start.t && m.t <= end.t).sort((a, b) => a.t - b.t);
   const straight = haversine(start, end);
   if (mins < S.minMin || (straight < S.minKm && !marks.length && mins < 15)) { save(); return { msg: 'Parked spot saved', icon: 'park', col: 'sky' }; }
-  const trail = trailFor(start, end), tracked = trail.length >= 2;
+  const raw = trailFor(start, end), cl = cleanTrail(raw), trail = cl.pts, tracked = trail.length >= 2;
   const way = tracked ? [start, ...sampleTrail(trail), end] : [start, ...marks, end];
   const r = await routeKm(way, !tracked && !marks.length);
   const ride = { id: uid(), start, end, km: 0, src: 'auto', loop: straight < 1 && mins >= 15 && !marks.length && !tracked, title: '', note: '', mood: '' };
   if (r.alts) { ride.alts = r.alts.map(a => ({ km: a.km, mins: a.mins, path: a.path, roads: a.roads })); const pick = rememberedChoice(start, end, r.alts); applyRoute(ride, r.alts[pick], pick ? 'remembered' : 'route'); ride.pick = pick; }
   else applyRoute(ride, r, tracked ? 'tracked' : r.src);
-  if (tracked) ride.gps = keepGps(trail);
+  if (tracked) { ride.gps = keepGps(trail); ride.gpsN = trail.length; ride.gpsDrop = cl.dropped; trimKm(ride, trail); }
+  else ride.gpsN = raw.length;
   S.rides.push(ride); save();
   return { ride };
 }
@@ -264,6 +324,7 @@ async function applyEvents(items) {
     if (x.e === 'scan') { let d = null; try { d = JSON.parse(x.data); } catch (e) {} if (d && d.kind) { S.scanQ = [...(S.scanQ || []), { t: x.t, data: d }].slice(-10); out.push({ msg: 'A photo you scanned is ready to save' }); } continue; }
     if (x.e === 'pt') { const la = parseFloat(x.lat), lo = parseFloat(x.lon); if (!isNaN(la)) { S.pts = (S.pts || []).filter(p => x.t - p.t < 3 * 864e5).concat({ lat: la, lon: lo, t: x.t, acc: x.acc || 0 }).slice(-5000); S.al = Object.assign({}, S.al, { pt: x.t }); } continue; }
     if (x.e === 'start' || x.e === 'end') { S.al = Object.assign({ added: x.t }, S.al, { [x.e]: x.t }); }
+    if (x.e !== 'pt') S.log = [...(S.log || []).filter(l => Date.now() - l.t < 3 * DAY), { t: x.t, e: x.e, got: Date.now(), loc: !isNaN(lat) }].slice(-200);
     if (x.e === 'start') {
       // the end can arrive before its start (the relay's storage isn't instant): pair them up instead of opening a ride that never ends
       const le = S.lastEnd;
@@ -314,9 +375,9 @@ async function answerTrip(k, yes) {
 // OwnTracks can upload its points late (no signal mid-ride): redraw recent rides once their points arrive
 async function refineRides(out) {
   for (const r of S.rides.filter(r => r.start && r.end && r.start.lat != null && r.est !== 'tracked' && r.est !== 'manual' && Date.now() - r.end.t < 2 * 864e5)) {
-    const trail = trailFor(r.start, r.end); if (trail.length < 3) continue;
+    const cl = cleanTrail(trailFor(r.start, r.end)), trail = cl.pts; if (trail.length < 3) continue;
     const res = await routeKm([r.start, ...sampleTrail(trail), r.end]); if (res.src !== 'route') continue;
-    applyRoute(r, res, 'tracked'); r.gps = keepGps(trail); delete r.alts; out.push({ msg: 'A ride was redrawn with your real route' });
+    applyRoute(r, res, 'tracked'); r.gps = keepGps(trail); r.gpsN = trail.length; r.gpsDrop = cl.dropped; trimKm(r, trail); delete r.alts; out.push({ msg: 'A ride was redrawn with your real route' });
   }
 }
 async function handleURL() {

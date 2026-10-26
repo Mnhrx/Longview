@@ -14,6 +14,10 @@ const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform 
 
 /* ---------- icons ---------- */
 const IC = {
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M15 9.2c-.5-1-1.6-1.6-3-1.6-1.8 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.5 0-2.7-.7-3.1-1.8M12 6v1.6M12 16.6V18"/>',
+  share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
+  img: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  walk: '<circle cx="13" cy="4" r="2"/><path d="m9 21 2.5-6.5L14 17v4M7.5 12.5 9 8.5l4-1 2.5 3.5 3 1"/><path d="m11.5 14.5.9-5.5"/>',
   fuel: '<path d="M5 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16M4 21h11M5 10h9"/><path d="M14 8h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/>',
   ride: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.3 5.2L3.5 17.4a1.9 1.9 0 0 0 2.7 2.7l5.9-5.9a4 4 0 0 0 5.2-5.3l-2.6 2.6-2.3-.6-.6-2.3z"/>',
@@ -273,7 +277,7 @@ function homeHTML() {
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
     <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<button type="button" class="odo tapodo" data-act="mydata" aria-label="Odometer readings"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></button>`}${(() => { const oi = odoInfo(); return oi ? `<button type="button" class="odosince" data-act="mydata">${oi.since > 0 ? `<b>+${num(oi.since * oi.c, 1)} km</b> ridden since your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}` : `From your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}`}</button>` : ''; })()}</div>
     <div id="rideNow">${rideNowHTML()}</div>${alNudgeHTML()}</div>
-    <div class="hcol b">${scanQHTML()}${tripAskHTML()}<div class="alerts" id="alerts">${alertsHTML()}</div>
+    <div class="hcol b">${newItemsHTML()}${scanQHTML()}${tripAskHTML()}${parkHTML()}<div class="alerts" id="alerts">${alertsHTML()}</div>
     <div id="live0"></div>
     <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span>${window.RADAR ? RADAR.ATTR : ''}</section>
     <div class="cams" id="cams"></div>
@@ -309,18 +313,18 @@ function ridesHTML() {
   return `<div class="hi"><div><h1>Rides</h1></div></div>
     <div class="hcol a"><section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
       <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
-      <div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
+      ${window.RADAR ? RADAR.ATTR : ''}<div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
     ${S.rides.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${S.rides.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
     <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div></div>
     <div class="hcol b"><h2 class="sec">Road check</h2>
     <div class="roadchk"><div id="live1a"></div><div class="cams" id="cams"></div><div id="live1"></div></div>
     <h2 class="sec">Journal</h2>
     <section class="list2">${rides.length ? rides.slice(0, 40).map((r, i) => `<button type="button" class="rrow" data-focus="${r.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(r.start.t).getDate()}</b><small>${new Date(r.start.t).toLocaleDateString('en-SG', { month: 'short' })}</small></span>
-        <span class="grow"><span class="t">${esc(r.title || 'Ride')}${abroadKm(r) > 1 ? ' <em class="flag">JB</em>' : ''}</span><span class="s">${new Date(r.start.t).toLocaleDateString('en-SG', { weekday: 'short' })} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min${r.mood ? ' · ' + esc(r.mood) : ''}</span></span><span class="km">${num(r.km, 1)}<small>km</small></span></button>`).join('')
+        <span class="grow"><span class="t">${esc(r.title || 'Ride')}${abroadKm(r) > 1 ? ' <em class="flag">JB</em>' : ''}${r.photos && r.photos.length ? ` <em class="flag ph">${ic('img', 2.4)}${r.photos.length}</em>` : ''}</span><span class="s">${new Date(r.start.t).toLocaleDateString('en-SG', { weekday: 'short' })} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min${r.mood ? ' · ' + esc(r.mood) : ''}</span></span><span class="km">${num(r.km, 1)}<small>km</small></span></button>`).join('')
       : '<div class="empty">No rides yet. Tap Start ride on Home, or turn on auto-log in Settings.</div>'}</section></div>`;
 }
 function liveRoads() { const mine = myRoads();
-  return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b>${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>`; }
+  return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b class="${(S.roads || []).includes(r) ? '' : 'auto'}">${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>`; }
 function liveRides() {
   const all = LIVE.all, mine = myRoads();
   return `${all ? (all.length ? `<div class="incs">${all.slice(0, 8).map(x => { const m = x.roads.some(r => mine.includes(r)); return `<div class="inc ${m ? 'mine' : ''}"><span class="tag ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${incKind(x.Type)}</span><p>${esc(incText(x.Message))}</p></div>`; }).join('')}</div>` : '<div class="note">Expressways are clear right now.</div>')
@@ -351,6 +355,7 @@ function fuelHTML() {
     <button type="button" class="bigbtn c-orange" data-act="fuel"><span class="nozzle">${ic('pump', 2.4)}</span><span>Log a fill-up</span></button>
     <div class="stats tap"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L ⓘ</span></button><button type="button" data-stat="spend"><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })} ⓘ</span></button><button type="button" data-stat="cpk"><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km ⓘ</span></button></div></div>
     <div class="hcol b"><section class="card plain"><div class="ch"><b>Spend</b><span>last 6 months</span></div><div class="bars">${months.map(({ d, v }, i) => `<div class="bcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><i style="height:${Math.max(3, v / mmax * 100)}%;--d:${i * 70}ms"></i><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div></section>
+    ${costCardHTML()}
     <h2 class="sec">Fill-ups</h2>
     <section class="list2">${list.length ? list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
       return `<button type="button" class="rrow" data-fuel="${f.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(f.date).getDate()}</b><small>${new Date(f.date).toLocaleDateString('en-SG', { month: 'short' })}</small></span><span class="grow"><span class="t">${num(f.litres, 1)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="km">${f.cost ? costTxt(f) : ''}</span></button>`; }).join('') : '<div class="empty">Log fills with the odometer reading. Two full tanks unlock range and km/L.</div>'}</section></div>`;
@@ -507,7 +512,7 @@ function focusRide(id) {
 function showFocus() {
   const box = $('#mfocus'); if (!box) return; const r = window.MAP && S.rides.find(x => x.id === MAP.focused);
   box.hidden = !r; if (!r) return;
-  box.innerHTML = `<div class="grow"><span>${fmtDs(todayISO(new Date(r.start.t)))} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min</span><b>${esc(r.title || 'Ride')}</b><em class="rk" style="--kc:${RIDE_KINDS[rideKind(r)][1]}">${RIDE_KINDS[rideKind(r)][0]}${r.gps ? ` · ${r.gps.length} points` : ''}</em></div><b class="k">${num(r.km, 1)}<small>km</small></b>${r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="rbtn alt" data-route="${r.id}" aria-label="Which way did you go?">${ic('ride')}</button>` : ''}<button type="button" class="rbtn" data-ride="${r.id}" aria-label="Edit ride">${ic('list')}</button>`;
+  box.innerHTML = `<div class="grow"><span>${fmtDs(todayISO(new Date(r.start.t)))} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min</span><b>${esc(r.title || 'Ride')}</b><em class="rk" style="--kc:${RIDE_KINDS[rideKind(r)][1]}">${RIDE_KINDS[rideKind(r)][0]}${r.gps ? ` · ${r.gpsN || r.gps.length} points` : ''}${r.kmFix ? ' · GPS jumps removed' : ''}</em></div><b class="k">${num(r.km, 1)}<small>km</small></b>${r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="rbtn alt" data-route="${r.id}" aria-label="Which way did you go?">${ic('ride')}</button>` : ''}<button type="button" class="rbtn" data-ride="${r.id}" aria-label="Edit ride, journal and photos">${ic(r.photos && r.photos.length ? 'img' : 'list')}</button>`;
   box.animate([{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,1.3,.4,1)' });
 }
 function setType(type) { if (type === S.bike.type) return; S.bike.type = type; save(); syncWorld(); if (place === 2) refresh(); }
@@ -830,7 +835,7 @@ function odoForm() {
 }
 function rideForm(r) {
   const isNew = !r, dt = r ? todayISO(new Date(r.start.t)) : todayISO();
-  form({ title: isNew ? 'Log a ride' : (esc(r.title) || 'Ride'), lede: isNew ? 'For rides the auto-log missed.' : fmtDT(r.start.t) + (r.est === 'estimate' ? ' · distance estimated' : ''),
+  form({ title: isNew ? 'Log a ride' : (esc(r.title) || 'Ride'), lede: isNew ? 'For rides the auto-log missed.' : fmtDT(r.start.t) + (r.est === 'estimate' ? ' · distance estimated' : '') + (gpsReason(r) ? `<br><span class="why ${rideKind(r)}">${esc(gpsReason(r))}${r.kmFix ? ` · ${num(r.kmRoad, 1)} km trimmed to ${num(r.km, 1)} km` : ''}</span>` : ''),
     fields: [{ k: 'title', l: 'Title', v: r?.title || '', ph: 'Sunday ride to Changi' },
       ...(isNew ? [{ type: 'row', f: [{ k: 'from', l: 'From', ph: 'Bedok or 460123' }, { k: 'to', l: 'To', ph: 'Woodlands Checkpoint' }] }] : []),
       { type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: dt }, { k: 'km', l: isNew ? 'Distance (km), or leave blank' : 'Distance (km)', type: 'number', v: r?.km ?? '' }] },
@@ -842,9 +847,20 @@ function rideForm(r) {
       if (isNew) { const t0 = +new Date(v.date + 'T' + (v.time || '09:00')); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
       else { const t0 = v.date ? +new Date(v.date + 'T' + (v.time || '09:00')) : r.start.t, dur = v.mins != null ? v.mins * 6e4 : r.end.t - r.start.t, kmChanged = v.km !== r.km;
         Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); r.start.t = t0; r.end.t = t0 + dur; if (kmChanged) r.est = 'manual'; } },
-    extra: !isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : '',
-    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); },
+    extra: (!isNew ? `<div class="rphotos" id="rph"></div>` : '') + (!isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : ''),
+    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); if (!isNew) ridePhotos(r, $('#rph', sh)); },
     onDelete: !isNew && (() => S.rides = S.rides.filter(x => x !== r)), bin: !isNew && { list: 'rides', obj: r, label: r.title || `Ride of ${num(r.km, 1)} km` } });
+}
+// photos on a ride: shrunk on the phone and kept on the phone (IndexedDB), never uploaded
+async function ridePhotos(r, box) { if (!box) return;
+  const keys = r.photos || [], srcs = await Promise.all(keys.map(k => kv('get', k)));
+  box.innerHTML = `${srcs.map((p, i) => p ? `<div class="rp"><img src="${p.src}" alt="Ride photo ${i + 1}"><button type="button" class="rpx" data-k="${keys[i]}" aria-label="Remove photo">${ic('x', 3)}</button></div>` : '').join('')}
+    <button type="button" class="rpadd">${ic('img', 2.2)}<span>${keys.length ? 'Add more' : 'Add photos'}</span></button>`;
+  $('.rpadd', box).onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true;
+    i.onchange = async () => { const fs = [...i.files].slice(0, 12 - keys.length); if (!fs.length) return; $('.rpadd span', box).textContent = 'Adding…';
+      for (const f of fs) { try { const src = await smallPhoto(f, 1400, .8), k = `ph:${r.id}:${uid()}`; await kv('put', k, { src, t: Date.now() }); r.photos = [...(r.photos || []), k]; } catch (e) {} }
+      save(); haptic(); toast(fs.length > 1 ? `${fs.length} photos added` : 'Photo added'); ridePhotos(r, box); refresh(); }; i.click(); };
+  $$('.rpx', box).forEach(b => b.onclick = async () => { await kv('del', b.dataset.k); r.photos = (r.photos || []).filter(k => k !== b.dataset.k); save(); ridePhotos(r, box); refresh(); });
 }
 /* ---------- "Which way did you go?": pick the road you actually took; Redline remembers it for next time ---------- */
 const ALTC = ['#5AB8FF', '#FFD84D', '#45E0A2'];
@@ -889,7 +905,8 @@ async function placePoint(q) {
 }
 function itemForm(it, part) {
   const isNew = !it; it = it || { id: uid(), name: '', part: part || 'other', km: 0, months: 0 };
-  form({ title: isNew ? 'New service item' : esc(it.name), lede: 'How often it needs doing: by km, by months, or both.',
+  const lc = !isNew && itemCost(it);
+  form({ title: isNew ? 'New service item' : esc(it.name), lede: 'How often it needs doing: by km, by months, or both.' + (lc ? (lc.solo ? ` Last time it cost <b>${money(lc.cost, 0)}</b> (${fmtD(lc.date)}).` : ` Last done as part of a ${money(lc.cost, 0)} service with ${lc.n - 1} other item${lc.n > 2 ? 's' : ''} (${fmtD(lc.date)}).`) : ''),
     fields: [{ k: 'name', l: 'Name', v: it.name, req: 1 }, { k: 'part', l: 'Part on the hologram', type: 'chips', o: PARTS.map(([v, l]) => ({ v, l })), v: it.part },
       { type: 'row', f: [{ k: 'km', l: 'Every (km)', type: 'number', v: it.km || '' }, { k: 'months', l: 'Every (months)', type: 'number', v: it.months || '' }] },
       { type: 'row', f: [{ k: 'lastOdo', l: 'Last done at (km)', type: 'number', v: it.lastOdo ?? '' }, { k: 'lastDate', l: 'Last done on', type: 'date', v: it.lastDate || '' }] }],
@@ -952,7 +969,7 @@ function addStd(name) {
 }
 function restoreSheet() {
   const bin = (S.bin || []).filter(x => Date.now() - x.t < BIN_DAYS * DAY), miss = missingStd();
-  const KIND = { items: 'Service item', services: 'Service', fuel: 'Fill-up', rides: 'Ride', renewals: 'Renewal', odoLog: 'Odometer reading' };
+  const KIND = { expenses: 'Expense', items: 'Service item', services: 'Service', fuel: 'Fill-up', rides: 'Ride', renewals: 'Renewal', odoLog: 'Odometer reading' };
   openSheet('Restore', 'Bring back something you deleted, or add a standard service item your bike should have.', `<div id="rsBody">
     <div class="bl">Recently deleted</div>
     ${bin.length ? `<div class="list">${bin.map(b => `<button type="button" class="li" data-bin="${b.key}">${statusDot('unset')}<span class="grow"><span class="t">${esc(b.label)}</span><span class="s">${KIND[b.list] || ''} · deleted ${fmtDs(todayISO(new Date(b.t)))} · ${Math.max(1, BIN_DAYS - Math.floor((Date.now() - b.t) / DAY))} days left</span></span><span class="r restore">Restore</span></button>`).join('')}</div>`
@@ -996,6 +1013,140 @@ function odoEditForm(o) {
     onDelete: () => { S.odoLog = S.odoLog.filter(x => x !== o); }, bin: { list: 'odoLog', obj: o, label: `Reading ${num(o.odo)} km` } });
 }
 // where a number comes from, with the entries behind it
+/* ================= find my bike: where you parked, how far, walk there ================= */
+// a little OneMap street map around a point (night style, same as the radar), with a pin in the middle
+function miniMap(lat, lon, w = 340, h = 150, z = 17) {
+  const px = ((lon + 180) / 360) * 256 * 2 ** z, r = lat * Math.PI / 180, py = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * 2 ** z;
+  const x0 = px - w / 2, y0 = py - h / 2, tx0 = Math.floor(x0 / 256), ty0 = Math.floor(y0 / 256), tx1 = Math.floor((x0 + w) / 256), ty1 = Math.floor((y0 + h) / 256); let t = '';
+  for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) t += `<img src="https://www.onemap.gov.sg/maps/tiles/Night/${z}/${tx}/${ty}.png" style="left:${tx * 256 - x0}px;top:${ty * 256 - y0}px" alt="" loading="lazy" onerror="this.remove()">`;
+  return `<div class="minimap" style="height:${h}px"><div class="mmi" style="width:${w}px;height:${h}px;margin-left:${-w / 2}px">${t}</div><span class="mpin">${ic('bike', 2.4)}</span>${window.RADAR ? RADAR.ATTR : ''}</div>`;
+}
+const ago = t => { const m = Math.round((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+const walkURL = p => isIOS ? `https://maps.apple.com/?daddr=${p.lat},${p.lon}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=walking`;
+function parkHTML() {
+  const p = S.parked; if (!p || p.lat == null || S.openRide || S.live) return '';
+  return `<section class="card parkcard"><div class="pkmap" data-act="park">${miniMap(p.lat, p.lon, 760, 130)}</div>
+    <div class="pkrow"><div class="grow" data-act="park"><span>Your bike · parked ${ago(p.t)}</span><b>${p.note ? esc(p.note) : 'Add level or lot'}</b><small id="pkDist">${p.photo ? ic('img', 2.2) + ' photo saved · ' : ''}tap for distance</small></div>
+    <a class="minibtn dark walkbtn" href="${walkURL(p)}" target="_blank" rel="noopener">${ic('walk', 2.4)} Walk there</a></div></section>`;
+}
+async function parkDistance() { const el = $('#pkDist'); if (!el || !S.parked) return; el.textContent = 'Finding you…';
+  try { const me = await here(), d = haversine(me, S.parked); el.innerHTML = `${S.parked.photo ? ic('img', 2.2) + ' photo saved · ' : ''}<b>${d < 1 ? Math.round(d * 1000) + ' m' : num(d, 1) + ' km'}</b> away · about ${Math.max(1, Math.round(d / 4.8 * 60))} min walk`; }
+  catch (e) { el.textContent = 'Couldn’t get your location'; } }
+function parkSheet() {
+  const p = S.parked;
+  openSheet('Your bike', p ? `Parked ${ago(p.t)}${p.manual ? ' (set by you)' : ' (where your intercom switched off)'}. Outdoors this is usually within 10–20 m; in multi-storey car parks, add the level and lot.` : 'No parked spot yet. It saves itself when your intercom switches off, or set it here.', `
+    ${p ? `<div class="pkbig">${miniMap(p.lat, p.lon, 760, 220, 18)}</div>` : ''}
+    <form id="pkF">${F({ k: 'note', l: 'Level, lot or landmark', v: p && p.note, ph: 'Level 3, Lot 124, near lift B' })}
+      <div class="pkph" id="pkPh"></div>
+      <div class="btns"><button type="button" class="btn ghost" id="pkPhoto">${ic('cam', 2.2)} ${p && p.photo ? 'Retake photo' : 'Photo of the sign'}</button><button class="btn">Save</button></div></form>
+    <div class="btns">${p ? `<a class="btn ghost" href="${walkURL(p)}" target="_blank" rel="noopener">${ic('walk', 2.2)} Walk there</a>` : ''}<button type="button" class="btn ghost" id="pkHere">${ic('pin', 2.2)} I parked here</button></div>`, async sh => {
+    if (p && p.photo) { const ph = await kv('get', 'parkphoto'); if (ph && ph.t === p.t) $('#pkPh', sh).innerHTML = `<img src="${ph.src}" alt="Photo of where you parked">`; }
+    $('#pkF', sh).onsubmit = e => { e.preventDefault(); if (!S.parked) { toast('Tap I parked here first', 'over'); return; } S.parked.note = read(e.target).note || ''; save(); closeSheet(); refresh(); toast('Saved'); };
+    $('#pkPhoto', sh).onclick = async () => { if (!S.parked) { toast('Tap I parked here first', 'over'); return; } const f = await pickImage(true); if (!f) return;
+      const src = await smallPhoto(f, 1100); await kv('put', 'parkphoto', { t: S.parked.t, src }); S.parked.photo = true; save(); $('#pkPh', sh).innerHTML = `<img src="${src}" alt="Photo of where you parked">`; haptic(); };
+    $('#pkHere', sh).onclick = async b => { b.target.textContent = 'Finding you…'; try { const me = await here(); S.parked = { lat: me.lat, lon: me.lon, t: Date.now(), manual: true }; save(); haptic(); parkSheet(); refresh(); toast('Parked spot saved'); } catch (e) { toast(LOC_HELP, 'over'); } };
+  });
+}
+/* ================= costs: fuel + servicing + everything else the bike costs ================= */
+function expenseForm(e, preset) {
+  form({ title: e ? 'Edit expense' : 'Expense', lede: 'Anything that isn’t fuel or a service: gear, parts, parking, washes, road tax…',
+    fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: e?.date || todayISO(), req: 1 }, { k: 'cost', l: 'Cost ($)', type: 'number', v: e?.cost, req: 1 }] },
+      { k: 'cur', l: 'Paid in', type: 'chips', o: [{ v: 'SGD', l: 'S$' }, { v: 'MYR', l: 'RM (JB)' }], v: e?.cur || 'SGD' },
+      { k: 'fx', l: '1 RM = S$ (today’s rate, edit if needed)', type: 'number', v: e?.fx || (S.fx && S.fx.rate) || .3 },
+      { k: 'cat', l: 'What for', type: 'chips', o: EXP_CATS.map(([v, l]) => ({ v, l })), v: e?.cat || preset || 'gear' },
+      { k: 'shop', l: 'What was it', v: e?.note, ph: 'New helmet visor, Shoei' }],
+    extra: e ? '' : scanBtn('service', 'Scan the receipt'), onOpen: sh => { wireScan(sh, 'service'); wireCur(sh); },
+    check: v => v.cost > 5000 ? `${money(v.cost)} is a lot for one expense. A typo?` : null,
+    onSave: v => { const x = { date: v.date, cost: v.cost, cur: v.cur || 'SGD', cat: v.cat || 'other', note: v.shop || '' };
+      if (x.cur === 'MYR') { x.fx = v.fx > .1 && v.fx < 1 ? v.fx : ((S.fx && S.fx.rate) || .3); x.costSgd = +(x.cost * x.fx).toFixed(2); }
+      if (e) Object.assign(e, x, x.cur === 'MYR' ? {} : { fx: undefined, costSgd: undefined }); else { S.expenses.push({ id: uid(), ...x, ts: Date.now() }); toast('Expense logged'); } },
+    onDelete: e && (() => S.expenses = S.expenses.filter(x => x !== e)), bin: e && { list: 'expenses', obj: e, label: e.note || catOf(e.cat)[1] } });
+}
+const PERIODS = [['month', 'This month'], ['year', 'This year'], ['all', 'All time']];
+function periodRange(p) { const n = new Date(); return p === 'month' ? [+new Date(n.getFullYear(), n.getMonth(), 1), Date.now() + DAY] : p === 'year' ? [+new Date(n.getFullYear(), 0, 1), Date.now() + DAY] : [0, Date.now() + DAY]; }
+function costsSheet(period = 'month') {
+  const body = () => {
+    const [a, b] = periodRange(period), c = costSummary(a, b), cats = COST_CATS.filter(([k]) => c.by[k] > 0).sort((x, y) => c.by[y[0]] - c.by[x[0]]);
+    const now = new Date(), months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return { d, s: costSummary(+d, +e) }; });
+    const mmax = Math.max(50, ...months.map(m => m.s.total));
+    const fixed = S.renewals.filter(r => +r.cost > 0 && !/helmet/i.test(r.name));
+    return `<div class="costhero"><span>${PERIODS.find(p => p[0] === period)[1]}</span><b>${money(c.total, 0)}</b><span>${c.cpk ? `${money(c.cpk, 2)} per km all-in · ${num(c.km)} km ridden` : c.km ? `${num(c.km)} km ridden` : 'Ride a bit more to see cost per km'}</span></div>
+      ${c.total ? `<div class="catbar">${cats.map(([k, , col]) => `<i style="flex:${c.by[k]};background:${col}"></i>`).join('')}</div>
+      <div class="catlist">${cats.map(([k, l, col]) => `<div><span style="--c:${col}"><i></i>${l}</span><b>${money(c.by[k], 0)}</b><small>${Math.round(c.by[k] / c.total * 100)}%</small></div>`).join('')}</div>` : '<div class="empty">Nothing spent in this period yet.</div>'}
+      <div class="bl">Last 6 months</div>
+      <div class="sbars">${months.map(({ d, s: m }) => `<div class="sbcol"><span class="bv">${m.total ? '$' + Math.round(m.total) : ''}</span><div class="stack" style="height:${Math.max(2, m.total / mmax * 100)}%">${COST_CATS.filter(([k]) => m.by[k] > 0).map(([k, , col]) => `<i style="flex:${m.by[k]};background:${col}"></i>`).join('')}</div><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div>
+      ${fixed.length ? `<p class="gnote">Yearly fixed costs from Renewals: ${fixed.map(r => `${esc(r.name)} ${money(r.cost, 0)}`).join(' · ')}. Tap <b>Done</b> on a renewal and enter what you paid, and it’s counted here.</p>` : ''}
+      <div class="bl">Spending</div>
+      ${c.items.length ? `<div class="list">${c.items.slice(0, 60).map(x => { const [, l, col] = catOf(x.cat); return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}"><i class="dot" style="background:${col}"></i><span class="grow"><span class="t">${esc(x.label)}</span><span class="s">${fmtD(x.date)} · ${l}</span></span><span class="r">${x.cur === 'MYR' ? `RM ${num(x.amt, 2)}<small class="fx">≈ ${money(x.sgd)}</small>` : money(x.sgd)}</span></button>`; }).join('')}</div>` : ''}`;
+  };
+  openSheet('Costs', 'Everything your bike costs, in S$: fuel, servicing and the rest. RM is converted at the rate you paid.', `
+    <div class="segs">${PERIODS.map(([k, l]) => `<button type="button" data-per="${k}" class="${k === period ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div id="cBody">${body()}</div>
+    <div class="btns"><button type="button" class="btn ghost" id="cExp">${ic('share', 2.2)} Export</button><button type="button" class="btn" id="cAdd">+ Expense</button></div>`, sh => {
+    const wireB = () => $$('#cBody .li', sh).forEach(b => b.onclick = () => { const id = b.dataset.id, src = b.dataset.src; if (src === 'fuel') fuelForm(S.fuel.find(x => x.id === id)); else if (src === 'service') serviceForm(S.services.find(x => x.id === id)); else expenseForm(S.expenses.find(x => x.id === id)); });
+    $$('[data-per]', sh).forEach(b => b.onclick = () => { period = b.dataset.per; $$('[data-per]', sh).forEach(x => x.classList.toggle('on', x === b)); $('#cBody', sh).innerHTML = body(); wireB(); haptic(); });
+    $('#cAdd', sh).onclick = () => expenseForm(); $('#cExp', sh).onclick = () => exportSheet(); wireB();
+  });
+}
+/* ---------- export: a designed Excel workbook or a PDF service record (libraries load only when you export) ---------- */
+function exportData() {
+  const odo = estOdo(), yr = periodRange('year'), all = costSummary(), y = costSummary(...yr), now = new Date();
+  const items = S.items.map(it => { const st = itemStatus(it), lc = itemCost(it); let nextDate = null;
+    if (it.months && it.lastDate) { const d = new Date(it.lastDate + 'T12:00'); d.setMonth(d.getMonth() + it.months); nextDate = todayISO(d); }
+    return { name: it.name, everyKm: it.km || null, everyMo: it.months || null, lastOdo: it.lastOdo ?? null, lastDate: it.lastDate || null, nextOdo: it.km && it.lastOdo != null ? it.lastOdo + it.km : null, nextDate, left: st.cls === 'unset' ? 'Not set' : st.text.split(' · ')[0], _st: st.cls === 'over' || st.cls === 'soon' || st.cls === 'unset' ? st.cls : 'ok', lastCost: lc && lc.solo ? lc.cost : null }; })
+    .sort((a, b) => ['over', 'soon', 'ok', 'unset'].indexOf(a._st) - ['over', 'soon', 'ok', 'unset'].indexOf(b._st));
+  const svcName = sv => (sv.items || []).map(id => (S.items.find(i => i.id === id) || {}).name).filter(Boolean).join(', ') || 'Service';
+  const fl = [...S.fuel].sort((a, b) => a.odo - b.odo);
+  const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1), c = costSummary(+d, +e); return { label: d.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' }), by: c.by, total: c.total }; });
+  return { today: todayISO(), odo: odo == null ? null : Math.round(odo), bike: { name: S.bike.name, model: S.bike.model, plate: S.bike.plate, build: buildName() },
+    items, rideKm: Math.round(S.rides.reduce((s, r) => s + (r.km || 0), 0)),
+    services: [...S.services].sort((a, b) => (a.date < b.date ? 1 : -1)).map(sv => ({ date: sv.date, odo: sv.odo, work: svcName(sv), shop: sv.shop || '', cost: +sv.cost || null, notes: sv.notes || '' })),
+    fuel: fl.map((f, i) => { const p = fl[i - 1], d = p ? f.odo - p.odo : 0, sg = fuelSgd(f); return { date: f.date, odo: f.odo, litres: +f.litres || null, paid: +f.cost || null, cur: f.cur === 'MYR' ? 'RM' : 'S$', sgd: sg || null, perL: sg && f.litres ? +(sg / f.litres).toFixed(2) : null, station: f.station || '', full: f.full ? 'Yes' : 'Partial', kpl: f.full && d > 0 && f.litres ? +(d / f.litres).toFixed(1) : null }; }).reverse(),
+    ledger: costLedger().map(x => ({ date: x.date, cat: catOf(x.cat)[1], _col: catOf(x.cat)[2].slice(1), label: x.label, paid: x.amt, cur: x.cur === 'MYR' ? 'RM' : 'S$', sgd: x.sgd })),
+    rides: [...S.rides].sort((a, b) => b.start.t - a.start.t).map(r => ({ date: todayISO(new Date(r.start.t)), time: new Date(r.start.t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }), title: r.title || 'Ride', mins: Math.round(Math.max(0, r.end.t - r.start.t) / 6e4), km: +(r.km || 0).toFixed(1), source: RIDE_KINDS[rideKind(r)][0], mood: r.mood || '', note: r.note || '' })),
+    renewals: S.renewals.map(r => { const st = renewStatus(r); return { name: r.name, date: r.date || null, left: r.date ? st.text : 'No date', cost: +r.cost || null, _st: !r.date ? 'unset' : st.cls === 'over' ? 'over' : st.cls === 'soon' ? 'soon' : 'ok' }; }),
+    costs: { all, year: y, months, cats: COST_CATS.map(([k, l, col]) => ({ key: k, label: l, col: col.slice(1), year: y.by[k] || 0, all: all.by[k] || 0 })).filter(c => c.all > 0 || ['fuel', 'service'].includes(c.key)) } };
+}
+const loadJS = src => new Promise((ok, no) => { if ($(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => no(new Error('Couldn’t load the export helper. Check your connection.')); document.head.appendChild(t); });
+function saveFile(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+function exportSheet() {
+  const base = `${(S.bike.name || 'redline').replace(/[^\w-]+/g, '-').toLowerCase()}-${todayISO()}`;
+  openSheet('Export', 'Your data as a proper document. Good for your own records, a workshop, or when you sell the bike.', `
+    <button type="button" class="choice" data-x="xlsx">${ic('list')}<span class="grow"><b>Excel spreadsheet</b><span class="s">Summary, maintenance, service history, costs by month, fuel, rides and renewals, each on its own sheet</span></span></button>
+    <button type="button" class="choice" data-x="pdf">${ic('save')}<span class="grow"><b>PDF service record</b><span class="s">A clean record of every service, what’s due, and running costs. Ready to print or send</span></span></button>
+    <p class="gnote">The first export downloads a small helper, so you need to be online.</p>`, sh => $$('[data-x]', sh).forEach(b => b.onclick = async () => {
+    const kind = b.dataset.x, lab = $('b', b), old = lab.textContent; lab.textContent = 'Making it…'; b.disabled = true;
+    try { const D = exportData();
+      if (kind === 'xlsx') { await loadJS('js/vendor/exceljs.min.js'); const buf = await REXPORT.xlsx(window.ExcelJS, D); saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '.xlsx'); }
+      else { await loadJS('js/vendor/jspdf.umd.min.js'); await loadJS('js/vendor/jspdf.plugin.autotable.min.js'); const doc = REXPORT.pdf(window.jspdf.jsPDF, D); saveFile(doc.output('blob'), base + '-service-record.pdf'); }
+      S.stats.exports++; save(); toast(kind === 'xlsx' ? 'Spreadsheet ready' : 'Service record ready'); celebrate();
+    } catch (err) { toast(err.message || 'Export failed', 'over'); }
+    lab.textContent = old; b.disabled = false; }));
+}
+function costCardHTML() {
+  const [a, b] = periodRange('month'), c = costSummary(a, b), y = costSummary(...periodRange('year'));
+  return `<section class="card plain costcard" data-act="costs"><div class="ch"><b>All-in costs</b><span>fuel, servicing &amp; more</span></div>
+    <div class="cc2"><div><b>${money(c.total, 0)}</b><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span></div><div><b>${money(y.total, 0)}</b><span>this year</span></div><div><b>${y.cpk ? '$' + num(y.cpk, 2) : '—'}</b><span>per km</span></div></div>
+    ${y.total ? `<div class="catbar sm">${COST_CATS.filter(([k]) => y.by[k] > 0).map(([k, , col]) => `<i style="flex:${y.by[k]};background:${col}"></i>`).join('')}</div>` : ''}
+    <div class="ccb"><button type="button" class="minibtn" data-act="expense">+ Expense</button><button type="button" class="minibtn" data-act="export">${ic('share', 2.4)} Export</button></div></section>`;
+}
+// riders from before v7: the new service items, offered once
+function newItemsHTML() { if (!S.newItemsOffer) return ''; const m = missingStd().filter(d => NEW_V7.includes(d[0]));
+  if (!m.length) return '';
+  return `<section class="card c-cream alertc ren newitems" data-act="newitems"><span class="renic">${ic('wrench', 2.4)}</span><div class="t"><span>New in Garage</span><b style="font-size:18px">${m.length} service item${m.length > 1 ? "s" : ""}</b></div><span class="minibtn dark">Review</span></section>`; }
+function newItemsSheet() {
+  const m = missingStd().filter(d => NEW_V7.includes(d[0]));
+  openSheet('New service items', 'Redline now tracks more of your bike. Pick the ones you want; the rest stay in My data → Restore if you change your mind. Intervals are typical, so check your owner’s manual.', `
+    <form id="niF"><div class="chips" data-type="chips" data-k="add" data-multi="1">${m.map(([name, , km, months]) => `<button type="button" class="chipbtn" data-v="${esc(name)}" aria-pressed="true">${esc(name)}<small> · ${[km ? num(km) + ' km' : '', months ? months + ' mo' : ''].filter(Boolean).join(' / ')}</small></button>`).join('')}</div>
+    <div class="btns"><button type="button" class="btn ghost" id="niNo" style="flex:.6">Not now</button><button class="btn">Add these</button></div></form>`, sh => {
+    wire(sh);
+    $('#niNo', sh).onclick = () => { S.newItemsOffer = false; save(); closeSheet(); refresh(); toast('They’re in My data → Restore any time'); };
+    $('#niF', sh).onsubmit = ev => { ev.preventDefault(); const pick = read(ev.target).add || [];
+      for (const name of pick) { const d = ITEM_DEFS.find(x => x[0] === name); if (d) S.items.push({ id: uid(), name, part: d[1], km: d[2], months: d[3], lastOdo: null, lastDate: null }); }
+      S.skipStd = (S.skipStd || []).filter(n => !pick.includes(n)); S.newItemsOffer = false; syncItems(); save(); closeSheet(); refresh();
+      toast(pick.length ? `${pick.length} added. Set when each was last done in Garage` : 'Nothing added'); };
+  });
+}
 function statSheet(kind) {
   const fs = fuelStats(), f = [...S.fuel].sort((a, b) => a.odo - b.odo), full = f.filter(x => x.full);
   let h = '', lede = '';
@@ -1041,9 +1192,12 @@ function backupSheet() {
   openSheet('Backup', 'Everything lives only on this phone. Export now and then so clearing the browser can’t wipe it.', `<div class="btns" style="flex-direction:column">
     <button type="button" class="btn" id="exp">Export backup</button><button type="button" class="btn ghost" id="imp">Import a backup</button><button type="button" class="btn danger" id="wipe">Start fresh</button></div>
     <input type="file" id="impIn" accept=".json,application/json" hidden>`, sh => {
-    $('#exp', sh).onclick = () => { S.stats.exports++; save(); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = `redline-backup-${todayISO()}.json`; document.body.appendChild(a); a.click(); a.remove(); toast('Backup downloaded'); celebrate(); };
+    $('#exp', sh).onclick = async () => { S.stats.exports++; save();
+      // ride photos live outside the main data, so they're added to the backup here
+      const photos = {}; for (const k of (await kv('keys')) || []) if (/^ph:/.test(k)) { const p = await kv('get', k); if (p) photos[k] = p; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.assign({}, S, { photos }))], { type: 'application/json' })); a.download = `redline-backup-${todayISO()}.json`; document.body.appendChild(a); a.click(); a.remove(); toast(Object.keys(photos).length ? `Backup downloaded with ${Object.keys(photos).length} photos` : 'Backup downloaded'); celebrate(); };
     $('#imp', sh).onclick = () => $('#impIn', sh).click();
-    $('#impIn', sh).onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); if (d.v !== 3 || !d.bike) throw 0; S = Object.assign(fresh(), d); save(); closeSheet(); if (window.W) W.setBike(S.bike.type, true); refresh(); toast('Backup restored'); } catch (err) { toast('That file isn’t a Redline backup', 'over'); } }; r.readAsText(f); };
+    $('#impIn', sh).onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (d.v !== 3 || !d.bike) throw 0; const ph = d.photos || {}; delete d.photos; for (const k in ph) await kv('put', k, ph[k]); S = Object.assign(fresh(), d); save(); closeSheet(); if (window.W) W.setBike(S.bike.type, true); refresh(); toast('Backup restored'); } catch (err) { toast('That file isn’t a Redline backup', 'over'); } }; r.readAsText(f); };
     const w = $('#wipe', sh); w.onclick = () => { if (!w.dataset.sure) { w.dataset.sure = 1; w.textContent = 'Tap again to wipe everything'; return; } localStorage.removeItem(KEY); location.reload(); };
   });
 }
@@ -1068,9 +1222,46 @@ function otLink() {
   const cfg = { _type: 'configuration', mode: 3, url: `${relayBase()}/?ot=1&k=${riderCode()}`, monitoring: 1, tid: 'RL', deviceId: 'redline', auth: false, cmd: false, extendedData: false, locatorDisplacement: 150, locatorInterval: 60, ignoreInaccurateLocations: 200 };
   return 'owntracks:///config?inline=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
 }
+/* ---------- activity log: what arrived from your intercom shortcuts and OwnTracks, and what Redline made of it ---------- */
+// OwnTracks points in a time window, and runs of points split by gaps over 5 minutes
+const ptsIn = (a, b) => (S.pts || []).filter(p => p.t >= a && p.t <= b).sort((x, y) => x.t - y.t);
+function ptRuns(pts) { const runs = []; for (const p of pts) { const r = runs[runs.length - 1]; if (r && p.t - r.b <= 5 * 6e4) { r.b = p.t; r.n++; } else runs.push({ a: p.t, b: p.t, n: 1 }); } return runs; }
+// why a ride came out as Best guess (or how good its GPS was)
+function gpsReason(r) {
+  const k = rideKind(r); if (!r.start || r.start.lat == null) return '';
+  const n = r.gpsN != null ? r.gpsN : (Date.now() - r.end.t < 3 * DAY ? ptsIn(r.start.t - 9e4, r.end.t + 9e4).length : null);
+  if (k === 'gps') return `${r.gpsN || (r.gps || []).length} GPS points${r.gpsDrop ? `, ${r.gpsDrop} bad one${r.gpsDrop > 1 ? 's' : ''} removed` : ''}`;
+  if (n == null) return '';
+  return n === 0 ? `No GPS: OwnTracks sent nothing between ${fmtTime(r.start.t)} and ${fmtTime(r.end.t)}` : `Only ${n} GPS point${n > 1 ? 's' : ''} during the ride (needs 2 good ones)`;
+}
+function lastRideGps() { const r = [...S.rides].filter(x => x.start && x.start.lat != null).sort((a, b) => b.end.t - a.end.t)[0]; if (!r) return null;
+  return { r, ok: rideKind(r) === 'gps', n: r.gpsN != null ? r.gpsN : ptsIn(r.start.t - 9e4, r.end.t + 9e4).length }; }
+function activitySheet(day = 0) {
+  const body = () => {
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0); const a = +d0 - day * DAY, b = a + DAY, ev = [];
+    (S.log || []).filter(l => l.t >= a && l.t < b).forEach(l => ev.push({ t: l.t, k: l.e, html: { start: `<b>Start</b> from your ${S.intercom || 'intercom'} shortcut${l.loc ? '' : ' <em class="bad">no location!</em>'}`, end: `<b>End</b> from your ${S.intercom || 'intercom'} shortcut${l.loc ? '' : ' <em class="bad">no location!</em>'}`, mark: '<b>Spot marked</b>', fuel: '<b>Fill-up</b> by voice', scan: '<b>Photo scan</b> from the shortcut', test: 'Test from setup' }[l.e] || esc(l.e) }));
+    ptRuns(ptsIn(a, b)).forEach(r => ev.push({ t: r.a, k: 'pt', html: `<b>OwnTracks</b> · ${r.n} point${r.n > 1 ? 's' : ''}${r.b > r.a ? ` until ${fmtTime(r.b)}` : ''}` }));
+    S.rides.filter(r => r.end && r.end.t >= a && r.end.t < b).forEach(r => { const k = rideKind(r), why = gpsReason(r);
+      ev.push({ t: r.end.t + 1, k: 'ride', html: `<b>Ride logged</b> · ${num(r.km, 1)} km · <span style="color:${RIDE_KINDS[k][1]}">${RIDE_KINDS[k][0]}</span>${why ? `<br><small>${esc(why)}</small>` : ''}`, ride: r.id }); });
+    ev.sort((x, y) => x.t - y.t);
+    if (!ev.length) return `<div class="empty">Nothing arrived ${day ? 'that day' : 'today'}. ${day ? '' : 'If you rode, check the Cardo automations ran and that OwnTracks is in Move mode.'}</div>`;
+    // gaps in OwnTracks during a ride stand out
+    return `<ol class="tl">${ev.map(x => `<li class="tl-${x.k}"${x.ride ? ` data-ride="${x.ride}"` : ''}><time>${fmtTime(x.t)}</time><span>${x.html}</span></li>`).join('')}</ol>`;
+  };
+  openSheet('Activity', 'Everything that reached Redline from your shortcuts and OwnTracks, in order. If a ride came out as a guess, this shows which part didn’t send.', `
+    <div class="segs">${['Today', 'Yesterday', '2 days ago'].map((l, i) => `<button type="button" data-day="${i}" class="${i === day ? 'on' : ''}">${l}</button>`).join('')}</div><div id="tlBody">${body()}</div>
+    <p class="gnote">Points and events are kept for 3 days. Redline collects new ones whenever it’s open.</p>`, sh => {
+    const wireB = () => $$('#tlBody [data-ride]', sh).forEach(li => li.onclick = () => rideForm(S.rides.find(r => r.id === li.dataset.ride)));
+    $$('[data-day]', sh).forEach(b => b.onclick = () => { day = +b.dataset.day; $$('[data-day]', sh).forEach(x => x.classList.toggle('on', x === b)); $('#tlBody', sh).innerHTML = body(); wireB(); });
+    wireB(); pullLog(true).then(() => { if ($('#tlBody', sh)) { $('#tlBody', sh).innerHTML = body(); wireB(); } });
+  });
+}
 function otBlock() {
   const a = S.al || {}, on = a.pt && Date.now() - a.pt < 7 * 864e5;
+  const lr = on && lastRideGps();
   return `<details class="gsec ${on ? 'gdone' : ''}"><summary><span class="gn">${on ? ic('check', 3.2) : '+'}</span>Optional: real routes with OwnTracks</summary>
+    ${lr ? `<div class="lrg ${lr.ok ? 'ok' : 'bad'}">${ic(lr.ok ? 'check' : 'alert', 2.6)}<span><b>Last ride: ${lr.ok ? `GPS track, ${lr.n} points` : `${lr.n} point${lr.n === 1 ? '' : 's'}, so it’s a best guess`}</b>${lr.ok ? '' : `<br>OwnTracks connects, but didn’t send during the ride. Usually Low Power Mode, or OwnTracks was closed from the app switcher.`}</span></div>` : ''}
+
     <p class="gnote">${on ? `Working. Last point ${fmtTime(a.pt)}${new Date(a.pt).toDateString() === new Date().toDateString() ? '' : ', ' + fmtDs(todayISO(new Date(a.pt)))}. Rides now follow the roads you really took.` : 'iPhone won’t let Shortcuts track you during a ride. OwnTracks, a free app, can: it sends your location every few hundred metres in the background, and Redline draws the road you actually took instead of guessing.'}</p>
     ${on ? '' : `<ol class="gsteps">
       <li>Install <b>OwnTracks</b> (free). <a class="inl" href="${isIOS ? 'https://apps.apple.com/app/id692424691' : 'https://play.google.com/store/apps/details?id=org.owntracks.android'}" target="_blank" rel="noopener">Open the store →</a></li>
@@ -1081,7 +1272,7 @@ function otBlock() {
       <details class="tipbox"><summary>${ic('alert', 2.2)} The button didn’t open OwnTracks?</summary><ul><li>Open OwnTracks → Settings (or Preferences) → Connection. Set Mode to <b>HTTP</b>.</li><li>Paste this as the URL / Host:<div class="cpy"><code id="otu">${esc(relayBase() + '/?ot=1&k=' + riderCode())}</code><button type="button" class="btn ghost sm" data-copy="otu">Copy</button></div></li><li>Set monitoring to <b>Significant</b> (or Move for sharper trails).</li></ul></details>`}
     <p class="gnote">${(S.al && S.al.pt) ? '' : 'No intercom? OwnTracks alone works too: Redline spots your trips and asks once “on the bike?”. After you confirm a route twice, it logs it without asking.'}</p>
     <a class="btn ${on ? 'ghost' : ''} openapp" href="${otLink()}">${ic('target', 2.2)} ${on ? 'Set up OwnTracks again' : 'Set up OwnTracks'}</a>
-    <p class="gnote">Battery: it uses iPhone’s low-power “significant change” tracking. For sharper trails, switch OwnTracks to <b>Move</b> mode (the icon at its top left), which uses more battery. Your points go only to the relay and are deleted once Redline collects them.</p></details>`;
+    <p class="gnote">Modes (top of the OwnTracks map): <b>Move</b> gives sharp routes but uses more battery; <b>Significant</b> sends a point every ~500 m and survives Low Power Mode better. Low Power Mode and closing OwnTracks from the app switcher both stop it during rides. Your points go only to the relay and are deleted once Redline collects them.</p></details>`;
 }
 // the setup guide follows the Shortcuts app's own wording, one tap per line
 function autoLogSheet() {
@@ -1104,6 +1295,7 @@ function autoLogSheet() {
     </ol>`;
   openSheet('Auto-log rides', `When your ${dev} connects, a ride starts. When it disconnects, the ride ends and Redline maps it. Nothing opens on your phone.`, `
   <div class="gstat ${ready ? 'ok' : ''}">${ready ? `${ic('check', 3)}<div><b>Relay connected</b><span>Your rider code: <b class="mono">${code}</b></span></div>` : `${ic('alert', 2.4)}<div><b>First, a relay</b><span>Your phone drops each ride there and Redline picks it up when you open it. Have an address from a friend? Paste it. Otherwise it takes about 10 minutes to make your own.</span></div><button type="button" class="btn sm" id="gRelay">Set up</button>`}</div>
+  ${ready ? `<button type="button" class="mrow actrow" id="toAct"><span class="mi">${ic('list')}</span><span class="grow"><b>Activity</b><span>What arrived from your ${dev} and OwnTracks, minute by minute</span></span>${ic('chev')}</button>` : ''}
   ${ready && SHORTCUTS.start ? `
   <p class="glede">Three steps. Each one ticks itself when Redline sees it working.</p>
   <div class="chk">
@@ -1157,6 +1349,7 @@ function autoLogSheet() {
       <li>Made the older version with ${ui('Save File')} and ${ui('Open URLs')}? Delete those two automations: swipe left on each in the Automation tab.</li></ul></div>` : ''}`, sh => {
     if ($('#gAdded', sh)) $('#gAdded', sh).onclick = () => { S.al = Object.assign({}, S.al, { added: Date.now() }); save(); haptic(); autoLogSheet(); };
     $$('[data-sc]', sh).forEach(b => b.addEventListener('click', () => { S.al = Object.assign({}, S.al, { ['tap_' + b.dataset.sc]: 1 }); if (S.al.tap_start && S.al.tap_end && !S.al.added) S.al.added = Date.now(); save(); }));
+    const ta = $('#toAct', sh); if (ta) ta.onclick = () => activitySheet();
     sh._alRefresh = async () => { const before = JSON.stringify(S.al || {}); await pullLog(true); const a = S.al || {}; if ((a.start || a.end) && !a.added) a.added = Date.now(); if (JSON.stringify(a) !== before && sheetEl.classList.contains('on') && $('.chk', sheetEl)) { save(); const y = sheetEl.scrollTop; autoLogSheet(); sheetEl.scrollTop = y; if (a.start && a.end) { toast('Auto-log is set up. Ride safe!'); celebrate(); } } };
     $$('[data-sc]', sh).forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(code); } catch (e) {} haptic(); toast('Rider code copied. Paste it when Shortcuts asks.'); setTimeout(() => window.open(SHORTCUTS[b.dataset.sc], '_blank'), 350); });
     $$('[data-copy]', sh).forEach(b => b.onclick = async () => { const el = $('#' + b.dataset.copy, sh); try { await navigator.clipboard.writeText(el.textContent); b.textContent = 'Copied'; haptic(); setTimeout(() => b.textContent = 'Copy', 1600); } catch (e) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Selected'; } });
@@ -1247,17 +1440,17 @@ function refillSweep(oldF, wasOn) {
 }
 function plusSheet() {
   openSheet('Log', '', `<div class="plusgrid">${[['fuel', 'fuel', 'Fill-up', 'c-orange'], ['ride', 'ride', 'Ride', 'c-sky'], ['service', 'wrench', 'Service', 'c-lemon'], ['odo', 'odo', 'Odometer', 'c-cream']].map(([a, i, t, c], n) => `<button type="button" class="pg ${c}" data-go="${a}" style="--d:${n * 45}ms">${ic(i)}<b>${t}</b></button>`).join('')}</div>
-    <div class="plus2"><button type="button" class="mrow scanrow2" data-go="scan"><span class="mi">${ic('cam')}</span><span class="grow"><b>Scan a photo</b><span>Odometer, pump or receipt. Redline fills in the form</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
+    <div class="plus2"><button type="button" class="mrow" data-go="parkhere"><span class="mi">${ic('park')}</span><span class="grow"><b>Find my bike</b><span>Where you parked, or save it now</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="expense"><span class="mi">${ic('coin')}</span><span class="grow"><b>Expense</b><span>Gear, parts, parking, washes, road tax</span></span>${ic('chev')}</button><button type="button" class="mrow scanrow2" data-go="scan"><span class="mi">${ic('cam')}</span><span class="grow"><b>Scan a photo</b><span>Odometer, pump or receipt. Redline fills in the form</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
-const ACTIONS = { scan: () => scanAny(), quickscan: () => quickScanSheet(), scansave: b => saveScan(b.dataset.i, true), scancheck: b => saveScan(b.dataset.i, false), scanx: b => { S.scanQ = (S.scanQ || []).filter(x => String(x.t) !== b.dataset.i); save(); refresh(); }, fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
+const ACTIONS = { park: b => (b && b.closest && b.closest('.pkrow') && $('#pkDist') && /distance/.test($('#pkDist').textContent) ? parkDistance() : parkSheet()), parkhere: () => parkSheet(), expense: () => expenseForm(), costs: () => costsSheet(), export: () => exportSheet(), newitems: () => newItemsSheet(), scan: () => scanAny(), quickscan: () => quickScanSheet(), scansave: b => saveScan(b.dataset.i, true), scancheck: b => saveScan(b.dataset.i, false), scanx: b => { S.scanQ = (S.scanQ || []).filter(x => String(x.t) !== b.dataset.i); save(); refresh(); }, fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
   light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */
 function renewedForm(r) {
   if (!r) return; const d = new Date((r.date || todayISO()) + 'T12:00'); d.setFullYear(d.getFullYear() + (/coe/i.test(r.name) ? 10 : 1));
   form({ title: `${esc(r.name)} renewed`, lede: 'Set the new expiry date. It will show up on Home again when it’s close.', fields: [{ type: 'row', f: [{ k: 'date', l: 'New expiry', type: 'date', v: todayISO(d), req: 1 }, { k: 'cost', l: 'Paid ($)', type: 'number', v: r.cost }] }], cta: 'Save',
-    onSave: v => { Object.assign(r, v); toast(`${r.name} sorted until ${fmtD(r.date)}`); } });
+    onSave: v => { Object.assign(r, v); if (+v.cost > 0) S.expenses.push({ id: uid(), date: todayISO(), cost: +v.cost, cur: 'SGD', cat: 'renewal', note: r.name, ts: Date.now() }); toast(`${r.name} sorted until ${fmtD(r.date)}`); } });
 }
 
 /* ================= traffic: your roads + live alerts ================= */
@@ -1274,13 +1467,23 @@ function wireFinder(root) {
     b.disabled = false; b.lastChild.textContent = ' Find my roads'; };
 }
 function trafficSheet() {
-  const learned = learnedRoads();
-  openSheet('Your roads', 'Jams and accidents on these show up on Home. Redline also learns roads from your rides.', `<form id="tf">${roadChips(S.roads || [])}
-    ${learned.length ? `<div class="note">Learned from your rides: <b>${learned.join(', ')}</b></div>` : ''}
+  const nm = r => r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r;
+  const learnBox = () => { const l = learnedRoads(), off = S.roadLearn === false;
+    return `${F({ k: 'learn', l: 'Also watch roads I ride often', type: 'toggle', v: !off })}
+    <p class="gnote">${off ? 'Off: only the roads you pick above are watched.' : 'Any expressway you’ve really ridden twice in 60 days (GPS-tracked or a road you picked, never a guess).'}</p>
+    ${!off && l.length ? `<div class="lchips">${l.map(r => `<span class="lchip">${nm(r)}<button type="button" data-drop="${r}" aria-label="Stop watching ${nm(r)}">${ic('x', 3)}</button></span>`).join('')}</div>` : ''}
+    ${(S.roadDrop || []).length ? `<button type="button" class="link" id="undrop">Bring back ${S.roadDrop.length} removed road${S.roadDrop.length > 1 ? 's' : ''}</button>` : ''}`; };
+  openSheet('Your roads', 'Jams and accidents on these show up on Home.', `<form id="tf">${roadChips(S.roads || [])}
+    <div id="learnBox">${learnBox()}</div>
     <div class="sep"></div><div class="bl">Or let Redline find them</div>${routeFinder()}
     <div class="btns"><button class="btn">Save</button></div></form>
     <div class="sep"></div><button type="button" class="mrow" id="toRelay"><span class="mi">${ic('alert')}</span><span class="grow"><b>Live alerts</b><span>${S.relay ? 'On · from LTA' : 'Off · free one-time setup'}</span></span>${ic('chev')}</button>`, sh => {
     wire(sh); wireFinder(sh);
+    const wireL = first => { const lb = $('#learnBox', sh); if (!first) wire(lb);
+      $('[data-k=learn]', lb).addEventListener('click', () => { S.roadLearn = $('[data-k=learn] .sw', lb).classList.contains('on'); save(); lb.innerHTML = learnBox(); wireL(); });
+      $$('[data-drop]', lb).forEach(b => b.onclick = () => { S.roadDrop = [...new Set([...(S.roadDrop || []), b.dataset.drop])]; save(); haptic(); lb.innerHTML = learnBox(); wireL(); });
+      const u = $('#undrop', lb); if (u) u.onclick = () => { S.roadDrop = []; save(); lb.innerHTML = learnBox(); wireL(); }; };
+    wireL(true);
     $('#tf', sh).onsubmit = e => { e.preventDefault(); S.roads = read(e.target).roads; save(); closeSheet(); loadLive(true); toast(S.roads.length ? `Watching ${S.roads.length} road${S.roads.length > 1 ? 's' : ''}` : 'No roads picked'); };
     $('#toRelay', sh).onclick = () => relaySheet();
   });
@@ -1293,9 +1496,12 @@ function settingsSheet() {
     ['bike', 'bike', 'Bike', `${esc(S.bike.name || 'Your bike')} · ${buildName()}`],
     ['renewals', 'cal', 'Renewals', nr ? `${nr.r.name} in ${nr.s.days} days` : 'Add your dates'],
     ['autolog', 'head', 'Auto-log rides', S.relay ? (S.intercom && S.intercom !== 'none' ? `${S.intercom} · set up in Shortcuts` : 'Set up in Shortcuts') : 'Needs a relay first'],
+    ['activity', 'list', 'Activity', 'What arrived from your shortcuts and OwnTracks'],
     ['relay', 'link', 'Relay', S.relay ? S.relay.replace(/^https:\/\//, '') : 'Not connected'],
     ['roads', 'alert', 'Traffic', `${myRoads().length ? myRoads().map(r => r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r).join(', ') : 'Pick your roads'} · ${S.relay ? 'alerts on' : 'alerts off'}`],
     ['quickscan', 'cam', 'Quick scan', 'Snap the odometer or pump without opening Redline'],
+    ['costs', 'coin', 'Costs', 'Everything the bike costs you'],
+    ['export', 'share', 'Export', 'Excel spreadsheet or PDF service record'],
     ['mydata', 'list', 'My data', 'Fix any reading, fill-up, service or ride · restore'],
     ['badges', 'trophy', 'Badges', `${earned} of ${BADGES.length} earned`],
     ['sound', 'spk', 'Sound', [S.prefs.sound ? 'Tap sounds on' : 'Tap sounds off', S.prefs.music ? 'music on' : ''].filter(Boolean).join(' · ')],
@@ -1512,7 +1718,7 @@ function demoSheet() {
     $('#dSetup', sh).onclick = () => { closeSheet(); S = fresh(); save(); startSetup(); };
   });
 }
-const MORE = { quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
+const MORE = { activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
 
 function applyLite() {}
 /* ================= audio: off by default ================= */
@@ -1528,6 +1734,14 @@ $('#trkIn').addEventListener('change', e => { const f = e.target.files[0]; if (!
 function idb(op, val) { return new Promise(res => { try { const r = indexedDB.open('redline', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv');
   r.onsuccess = () => { try { const tx = r.result.transaction('kv', op === 'get' ? 'readonly' : 'readwrite'), st = tx.objectStore('kv'); const q = op === 'get' ? st.get('track') : op === 'del' ? st.delete('track') : st.put(val, 'track'); q.onsuccess = () => res(q.result); q.onerror = () => res(null); } catch (e) { res(null); } }; r.onerror = () => res(null); } catch (e) { res(null); } }); }
 idb('get').then(v => { if (v && v.blob) savedTrack = v; });
+function kv(op, key, val) { return new Promise(res => { try { const r = indexedDB.open('redline', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv');
+  r.onsuccess = () => { try { const tx = r.result.transaction('kv', op === 'get' || op === 'keys' ? 'readonly' : 'readwrite'), st = tx.objectStore('kv');
+    const q = op === 'get' ? st.get(key) : op === 'del' ? st.delete(key) : op === 'keys' ? st.getAllKeys() : st.put(val, key); q.onsuccess = () => res(q.result); q.onerror = () => res(null); } catch (e) { res(null); } }; r.onerror = () => res(null); } catch (e) { res(null); } }); }
+// a photo shrunk on the phone to a small JPEG (so dozens fit easily)
+async function smallPhoto(file, max = 1280, q = .82) { const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
+  const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); return c.toDataURL('image/jpeg', q); }
+const pickImage = (camera) => new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; if (camera) i.capture = 'environment'; i.onchange = () => res(i.files[0] || null); i.click(); });
 // browsers only allow audio after a tap
 addEventListener('pointerdown', () => { if (!Snd.ctx && (S.prefs.sound || S.prefs.music)) applyAudio(); }, { capture: true });
 
@@ -1615,11 +1829,13 @@ function nextStep() {
 function seedPreview() {
   if (S.setupDone || S.rides.length) return;
   const D = n => todayISO(new Date(Date.now() - n * 864e5)), now = Date.now();
-  Object.assign(S.bike, { name: 'Black Mamba', model: 'Honda CB650R', plate: 'FBK1234X', type: 'naked', tank: 15, licence: '2' });
+  Object.assign(S.bike, { name: 'Sample XSR', model: 'Yamaha XSR155', plate: 'FBA1234X', type: 'naked', tank: 10, cc: 155, licence: '2B' });
   S.odoLog.push({ id: uid(), date: D(40), odo: 17400 });
   S.services.push({ id: uid(), date: D(40), odo: 17400, items: S.items.map(i => i.id), cost: 280, shop: 'Ah Huat Motor', notes: 'Full service' });
   S.services.push({ id: uid(), date: D(14), odo: 18150, items: [S.items[2].id], cost: 0, shop: 'DIY', notes: '' });
-  [[D(30), 17650, 13.4, 38.2], [D(19), 18010, 12.1, 34.9], [D(3), 18390, 12.8, 37.1]].forEach(([date, odo, litres, cost]) => S.fuel.push({ id: uid(), date, odo, litres, cost, full: true, station: 'Shell' }));
+  [[D(30), 17650, 8.4, 24.2], [D(19), 18010, 8.1, 23.6], [D(3), 18390, 8.6, 25.1]].forEach(([date, odo, litres, cost]) => S.fuel.push({ id: uid(), date, odo, litres, cost, full: true, station: 'Shell' }));
+  S.fuel.push({ id: uid(), date: D(9), odo: 18200, litres: 3.2, cost: 9.1, cur: 'MYR', fx: .31, costSgd: 2.82, full: false, station: 'Malaysia' });
+  [[D(2), 'gear', 'Tinted visor', 89], [D(8), 'park', 'Season parking (HDB)', 14.7], [D(12), 'care', 'Bike wash', 8], [D(25), 'acc', 'Phone mount', 45], [D(70), 'renewal', 'Insurance', 420], [D(160), 'renewal', 'Road tax', 160], [D(55), 'parts', 'LED indicators', 38]].forEach(([date, cat, note, cost]) => S.expenses.push({ id: uid(), date, cat, note, cost, cur: 'SGD' }));
   // sample rides with rough road shapes (the real app gets exact roads from routing)
   const HOME = [1.3526, 103.9447];
   const P = {
@@ -1644,7 +1860,7 @@ function seedPreview() {
     ['Tuas sunrise run', 'tuas', 34, 'Spirited'], ['West coast AYE', 'ayer', 41, 'Chill'], ['Lim Chu Kang', 'lck', 48, 'Chill'], ['Second Link to JB', 'link2', 56, 'Touring'], ['ECP night run', 'ecp', 63, 'Night'], ['Work commute', 'commute', 70, '']];
   const RD = { commute: ['PIE'], ecp: ['ECP'], jb: ['TPE', 'SLE', 'BKE', 'WDL'], tuas: ['PIE', 'AYE'], mandai: ['TPE', 'SLE'], link2: ['AYE', 'TUAS'], sentosa: ['ECP'], ayer: ['AYE'], changi: [], punggol: ['TPE'], lck: ['KJE'] };
   R0.forEach(([title, k, d, mood], i) => { const t0 = now - d * 864e5 - i * 37e5, path = smooth(P[k]), est = ['tracked', 'picked', 'route'][i % 3]; S.rides.push({ id: uid(), title, km: len(path), path, est, gps: est === 'tracked' ? path.filter((_, j) => j % 4 === 0) : undefined, roads: RD[k] || [], start: { t: t0 }, end: { t: t0 + Math.round(len(path) * 1.8) * 6e4 }, src: 'manual', mood, note: '' }); });
-  const R = S.renewals; R[0].date = D(-24); R[1].date = D(-148); R[2].date = D(-1680); R[3].date = D(-210);
+  const R = S.renewals; R[0].date = D(-24); R[1].date = D(-148); R[2].date = D(-1680); R[3].date = D(-210); R[0].cost = 160; R[1].cost = 420;
   S.parked = { lat: 1.3521, lon: 103.8198, t: now - 3 * 36e5 };
   S.roads = ['ECP', 'TPE']; S.demoInc = true; S.intercom = 'Cardo'; S.setupDone = true; syncItems(); save();
 }
