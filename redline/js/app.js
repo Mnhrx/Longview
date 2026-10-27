@@ -10,9 +10,12 @@ const buildName = () => `${(DRIVES.find(d => d[0] === (S.bike.drive || 'chain'))
 const haptic = () => navigator.vibrate && navigator.vibrate(8);
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ui = t => `<b class="ui">${t}</b>`; // a highlighted button name inside guide text
-(function fitBottom() { const f = () => { const portrait = innerHeight >= innerWidth, sh = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
-  const gap = sh - innerHeight, sa = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-  document.documentElement.style.setProperty('--nb', sa && gap > 12 && gap < 120 ? '6px' : 'max(6px, env(safe-area-inset-bottom, 0px))'); };
+// iPhone home-screen apps (black status bar, recent iOS) can report a screen a little shorter than the real one, leaving a strip
+// at the bottom. Measure it and stretch every full-screen layer down by exactly that much, so the bar sits on the real bottom edge.
+(function fitBottom() { const html = document.documentElement;
+  const f = () => { const portrait = innerHeight >= innerWidth, sh = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
+    const gap = Math.round(sh - innerHeight), sa = matchMedia('(display-mode: standalone)').matches || navigator.standalone, on = !!sa && gap > 12 && gap < 120;
+    html.classList.toggle('gapfix', on); html.style.setProperty('--gap', (on ? gap : 0) + 'px'); };
   f(); addEventListener('resize', f); addEventListener('orientationchange', () => setTimeout(f, 300)); })();
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -619,7 +622,7 @@ $('#nav').addEventListener('click', e => { const b = e.target.closest('button');
 ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => { if (!e.target.closest || !e.target.closest('#mapcv')) e.preventDefault(); }, { passive: false }));
 (function fitKeyboard() {
   const vv = window.visualViewport; if (!vv) return; const root = document.documentElement;
-  const fit = () => { const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop); if (kb > 80) { root.style.setProperty('--kbh', vv.height + 'px'); root.style.setProperty('--kbo', kb + 'px'); } else { root.style.removeProperty('--kbh'); root.style.removeProperty('--kbo'); } };
+  const fit = () => { const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop); if (kb > 80) { root.style.setProperty('--kbh', vv.height + 'px'); root.style.setProperty('--kbo', kb + 'px'); root.classList.add('kb'); } else { root.style.removeProperty('--kbh'); root.style.removeProperty('--kbo'); root.classList.remove('kb'); } };
   vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
   document.addEventListener('focusin', e => { if (e.target.matches('input,textarea')) setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300); });
 })();

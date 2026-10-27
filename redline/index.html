@@ -774,7 +774,12 @@ em.flag.ph{display:inline-flex;align-items:center;gap:3px;background:var(--panel
 .why{display:inline-block;margin-top:4px;font-weight:700} .why.gps{color:var(--mint)} .why.guess{color:var(--amber)}
 
 /* v7.2 docked bottom bar. --nb = room for the home bar; set to a few px by app.js when iPhone already keeps that area out of the app */
-:root{--nb:var(--sb)} html{background:#1B161F} body{background:var(--bg)}
+:root{--nb:max(6px,var(--sb));--gap:0px} html{background:#1B161F} body{background:var(--bg)}
+/* gapfix: the page is stretched down over the strip iPhone left out (measured in app.js) */
+html.gapfix .view,html.gapfix .shade,html.gapfix .story,html.gapfix .setup,html.gapfix .crop{bottom:calc(-1 * var(--gap))}
+html.gapfix .setup,html.gapfix .crop{padding-bottom:calc(14px + var(--sb))}
+html.gapfix body:not(.wide) .nav{bottom:calc(-1 * var(--gap))}
+html.gapfix:not(.kb) body:not(.wide) .sheet{bottom:calc(-1 * var(--gap));padding-bottom:var(--sb)}
 body:not(.wide) .nav{left:0;right:0;bottom:0;transform:none;width:100%;max-width:none;height:calc(58px + var(--nb));padding:5px max(8px,calc(50% - 252px)) var(--nb);align-items:start;border-radius:22px 22px 0 0;background:rgba(27,22,31,.9);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 -1px 0 rgba(255,255,255,.07),0 -10px 26px rgba(0,0,0,.3)}
 body:not(.wide) .nav button{height:46px} body:not(.wide) .navind{height:46px}
 body:not(.wide) .nav .plus{width:52px;height:52px;border-radius:18px;margin-top:-10px;box-shadow:0 0 0 4px #1B161F,0 8px 18px rgba(255,106,43,.3)}
