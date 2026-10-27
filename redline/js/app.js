@@ -10,6 +10,10 @@ const buildName = () => `${(DRIVES.find(d => d[0] === (S.bike.drive || 'chain'))
 const haptic = () => navigator.vibrate && navigator.vibrate(8);
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ui = t => `<b class="ui">${t}</b>`; // a highlighted button name inside guide text
+(function fitBottom() { const f = () => { const portrait = innerHeight >= innerWidth, sh = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
+  const gap = sh - innerHeight, sa = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  document.documentElement.style.setProperty('--nb', sa && gap > 12 && gap < 120 ? '6px' : 'max(6px, env(safe-area-inset-bottom, 0px))'); };
+  f(); addEventListener('resize', f); addEventListener('orientationchange', () => setTimeout(f, 300)); })();
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /* ---------- icons ---------- */
@@ -276,7 +280,7 @@ function homeHTML() {
   const fs = fuelStats(), w = wrapMonth(), nd = nextDue(), [m0, m1] = periodRange('month'), spent = costSummary(m0, m1).total;
   const live = S.live || (S.openRide && Date.now() - S.openRide.t < 12 * 3600e3);
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
-    <div class="hcol a"><div class="instr hgauge">${gaugeBlock('h', fs)}</div>
+    <div class="hcol a"><div class="instr hgauge">${gaugeBlock('h', fs)}${(() => { const o = estOdo(), oi = odoInfo(); return o == null ? `<button type="button" class="odoline" data-act="odo">${ic('odo', 2.2)}<span>Add your odometer</span></button>` : `<button type="button" class="odoline" data-act="mydata">${ic('odo', 2.2)}<span class="o1">ODO <b>≈ ${num(o)}</b> km${oi ? ` · last reading ${fmtDs(todayISO(new Date(oi.la.t)))}` : ''}</span></button>`; })()}</div>
     <div class="hstats"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L${fs.est ? ' · est' : ' avg'}</span></button>
       <button type="button" data-act="costs"><b>${money(spent, 0)}</b><span>${new Date().toLocaleDateString('en-SG', { month: 'short' })} all-in</span></button>
       <button type="button" ${nd ? `data-part="${nd.i.part}"` : 'data-tab="2"'}><b class="${nd ? nd.s.cls : ''}">${nd ? bigVal(nd.s) : '—'}</b><span>${nd ? esc(nd.i.name) : 'Next service'}</span></button></div>
@@ -314,7 +318,6 @@ function nowCards() {
   const partCard = top => `<section class="card c-lemon alertc ${top.s.cls}" data-part="${top.i.part}">${ART.art(top.i.part, top.s.frac, top.s.cls, 68)}<div class="t"><span>${top.s.cls === 'over' ? '<em>OVERDUE</em>' : '<em class="soon">DUE SOON</em>'}${esc(top.i.name)}</span><b>${bigVal(top.s)}</b></div><button type="button" class="sqbtn" data-done="${top.i.id}" aria-label="Mark ${esc(top.i.name)} done today">${ic('check', 3)}</button></section>`;
   const mini = (cls, icon, kick, title, act, btn) => `<section class="card alertc ren mini ${cls}" ${act ? `data-act="${act}"` : ''}><span class="renic">${ic(icon, 2.4)}</span><div class="t"><span>${kick}</span><b>${title}</b></div>${btn || ''}</section>`;
   if (fs.low) add(1, `<section class="card c-red alertc"><div class="t"><span>${fs.pastE ? 'Past E' : 'Low fuel'}</span><b>${fs.pastE ? 'Fill up now' : `${fs.range}<small>km left</small>`}</b></div><a class="cbtn" href="${isIOS ? 'https://maps.apple.com/?q=petrol%20station' : 'https://www.google.com/maps/search/petrol+station/'}" target="_blank" rel="noopener">${ic('pin')}<span>Find petrol</span></a></section>`, 'low fuel');
-  if (estOdo() == null) add(2, mini('c-mint', 'odo', 'Odometer', 'Add a reading', 'odo', '<span class="minibtn dark">Add</span>'), 'odometer');
   if (S.needFull) add(2.5, mini('c-lemon', 'wrench', 'Last service unknown', 'Get a full service', 'fullsvc', '<span class="minibtn dark">Log it</span>'), 'full service');
   const over = due.filter(x => x.s.cls === 'over'); if (over[0]) add(2, partCard(over[0]), over[0].i.name.toLowerCase());
   const cw = commuteWindow(), cr = COMMUTE.r; if (cw && cr && (cr.now.length || cr.wet.length)) add(1.5, mini('c-sky', 'rain', `Heading ${cw.to === "work" ? "to work" : "home"}`, cr.now.length ? `Raining near ${esc(cr.now[0])}` : `Rain near ${esc(cr.wet[0])}${cr.wet.length > 1 ? ` +${cr.wet.length - 1}` : ''}`, 'radar', '<span class="minibtn dark">Radar</span>'), 'rain on commute');

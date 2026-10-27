@@ -773,10 +773,14 @@ em.flag.ph{display:inline-flex;align-items:center;gap:3px;background:var(--panel
 .lrg.ok b{color:var(--mint)} .lrg.bad b{color:var(--amber)}
 .why{display:inline-block;margin-top:4px;font-weight:700} .why.gps{color:var(--mint)} .why.guess{color:var(--amber)}
 
-/* v7.1 docked bottom bar: flush to the screen edge (no empty strip), frosted, + raised in the middle */
-body:not(.wide) .nav{left:0;right:0;bottom:0;transform:none;width:100%;max-width:none;height:calc(64px + var(--sb));padding:7px max(8px,calc(50% - 252px)) var(--sb);align-items:start;border-radius:24px 24px 0 0;background:rgba(27,22,31,.84);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 -1px 0 rgba(255,255,255,.07),0 -12px 30px rgba(0,0,0,.35)}
-body:not(.wide) .nav .plus{margin-top:-16px;box-shadow:0 0 0 5px #1B161F,0 10px 22px rgba(255,106,43,.35)}
-body:not(.wide) .pad{padding-bottom:calc(92px + var(--sb))}
+/* v7.2 docked bottom bar. --nb = room for the home bar; set to a few px by app.js when iPhone already keeps that area out of the app */
+:root{--nb:var(--sb)} html{background:#1B161F} body{background:var(--bg)}
+body:not(.wide) .nav{left:0;right:0;bottom:0;transform:none;width:100%;max-width:none;height:calc(58px + var(--nb));padding:5px max(8px,calc(50% - 252px)) var(--nb);align-items:start;border-radius:22px 22px 0 0;background:rgba(27,22,31,.9);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 -1px 0 rgba(255,255,255,.07),0 -10px 26px rgba(0,0,0,.3)}
+body:not(.wide) .nav button{height:46px} body:not(.wide) .navind{height:46px}
+body:not(.wide) .nav .plus{width:52px;height:52px;border-radius:18px;margin-top:-10px;box-shadow:0 0 0 4px #1B161F,0 8px 18px rgba(255,106,43,.3)}
+body:not(.wide) .pad{padding-bottom:calc(80px + var(--nb))}
+/* the odometer, back as one quiet line under the gauge */
+.odoline span{display:inline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0} .odoline b{display:inline} .odoline{max-width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:0;background:none;color:var(--muted);font:600 14px var(--disp);padding:2px 8px} .odoline b{color:var(--cream);font:800 16px var(--inst);letter-spacing:.04em} .odoline svg{width:15px;height:15px}
 
 /* v7.1 Home */
 .hgauge .dash{max-width:270px}
