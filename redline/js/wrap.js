@@ -185,6 +185,27 @@ async function share(D) {
   $('#story').appendChild(v); v.onclick = e => { e.stopPropagation(); if (e.target.closest('button')) v.remove(); };
 }
 
+/* ---------- one ride as a story image (route, km, time, your first photo) ---------- */
+async function shareRide(r) {
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1920; const g = c.getContext('2d'), F = (w, z) => `${w} ${z}px "Bricolage Grotesque", system-ui`;
+  g.fillStyle = '#161219'; g.fillRect(0, 0, 1080, 1920);
+  g.fillStyle = '#FFF8F0'; g.font = F(800, 64); g.fillText('RED', 90, 150); g.fillStyle = '#FF6A2B'; g.fillText('LINE', 90 + g.measureText('RED').width, 150);
+  g.fillStyle = '#FFF8F0'; g.font = F(800, 92); const t = (r.title || 'Ride').slice(0, 26); g.fillText(t, 90, 290);
+  g.fillStyle = '#B5ABBA'; g.font = F(600, 42); g.fillText(fmtDT(r.start.t), 90, 356);
+  let y = 420; const ph = (r.photos || [])[0] && typeof kv === 'function' ? await kv('get', r.photos[0]) : null;
+  if (ph && ph.src) { const im = new Image(); im.src = ph.src; await im.decode().catch(() => {}); const w = 900, h = 640, k = Math.max(w / im.naturalWidth, h / im.naturalHeight);
+    g.save(); g.beginPath(); g.roundRect ? g.roundRect(90, y, w, h, 44) : g.rect(90, y, w, h); g.clip(); g.drawImage(im, 90 + (w - im.naturalWidth * k) / 2, y + (h - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k); g.restore(); y += h + 40; }
+  if (r.path && r.path.length > 1) { const mh = ph ? 520 : 900, m = document.createElement('canvas'); m.style.cssText = `position:fixed;left:-9999px;width:900px;height:${mh}px`; document.body.appendChild(m);
+    const d = mapDraw(m, [r], { pad: 50 }); d.base(); d.trail(r.path, r.path.length, true);
+    g.save(); g.beginPath(); g.roundRect ? g.roundRect(90, y, 900, mh, 44) : g.rect(90, y, 900, mh); g.clip(); g.drawImage(m, 90, y, 900, mh); g.restore(); m.remove(); y += mh + 60; }
+  const mins = Math.round(Math.max(0, r.end.t - r.start.t) / 6e4);
+  [[num(r.km, 1), 'km'], [String(mins), 'min'], [r.mood || (S.bike.name || ''), r.mood ? 'vibe' : 'bike']].forEach(([v, l], i) => { const x = 90 + i * 320; g.fillStyle = '#FFF8F0'; g.font = F(800, i === 2 ? 64 : 110); g.fillText(String(v).slice(0, 12), x, Math.min(1780, y + 90)); g.fillStyle = '#B5ABBA'; g.font = F(700, 40); g.fillText(l, x, Math.min(1840, y + 150)); });
+  const blob = await new Promise(res => c.toBlob(res, 'image/png')), file = new File([blob], `redline-ride.png`, { type: 'image/png' });
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: r.title || 'My ride' }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  const v = document.createElement('div'); v.className = 'wimg on'; v.innerHTML = `<img alt="Your ride card" src="${c.toDataURL('image/png')}"><p>Press and hold the image to save it.</p><button type="button" class="wb">Close</button>`;
+  document.body.appendChild(v); v.onclick = e => { if (e.target.closest('button')) v.remove(); };
+}
+
 /* ---------- the player ---------- */
 let D = null, order = [], idx = 0, timer = 0, paused = false, cleanup = null, tx = innerWidth / 2, ty = innerHeight / 2, holdT = 0, startT = 0, remain = 0;
 const DUR = { intro: 5600, distance: 6000, map: 7000, longest: 6500, time: 6500, jb: 6000, fuel: 6500, garage: 6000, photos: 7000, card: 0 };
@@ -225,5 +246,5 @@ function close() { clearTimeout(timer); if (cleanup) cleanup(); const st = $('#s
   const a = RMx() ? null : st.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.94)' }], { duration: 300, easing: 'ease-in' });
   const fin = () => { st.classList.remove('on', 'paused'); st.innerHTML = ''; document.body.classList.remove('wrapping'); if (typeof refresh === 'function') refresh(); celebrate && celebrate(); };
   a ? a.onfinish = fin : fin(); }
-return { open };
+return { open, shareRide };
 })();

@@ -248,9 +248,10 @@ label.toggle{cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:5
 .lvFill::after{content:"";position:absolute;left:10%;right:10%;top:2px;height:3px;border-radius:99px;background:rgba(255,255,255,.55)}
 .lvNote{margin:0;font-size:13px;color:var(--muted);text-align:center}
 .yearCard{padding:14px 10px 10px;position:relative}
-.yTip{position:absolute;z-index:3;transform:translate(-50%,-100%);padding:8px 12px;border-radius:14px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 8px 20px -6px rgba(0,0,0,.4)}
+.yTip{position:absolute;z-index:3;padding:8px 12px;border-radius:14px;background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;line-height:1.35;width:max-content;max-width:min(280px,calc(100vw - 24px));pointer-events:none;box-shadow:0 8px 20px -6px rgba(0,0,0,.4)}
+.yTip b{display:block;font-size:13.5px;font-weight:800}
+.yTip span{display:block;opacity:.82;font-weight:600}
 .yTip::after{content:"";position:absolute;left:var(--ax,50%);bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:2px}
-.yTip.below{transform:translate(-50%,0)}
 .yTip.below::after{bottom:auto;top:-5px}
 .holList{padding:6px 14px}
 .hol{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:15px}

@@ -14,6 +14,7 @@ const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform 
 
 /* ---------- icons ---------- */
 const IC = {
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
   coin: '<circle cx="12" cy="12" r="9"/><path d="M15 9.2c-.5-1-1.6-1.6-3-1.6-1.8 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.5 0-2.7-.7-3.1-1.8M12 6v1.6M12 16.6V18"/>',
   share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
   img: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
@@ -254,7 +255,7 @@ async function loadIncidents() {
 }
 const incText = m => (m || '').replace(/^\(\d+\/\d+\)\d+:\d+\s*/, '').replace(/\.$/, '');
 const incKind = t => /heavy traffic/i.test(t) ? 'Jam' : /accident/i.test(t) ? 'Accident' : /breakdown/i.test(t) ? 'Breakdown' : /road ?work/i.test(t) ? 'Roadworks' : t || 'Incident';
-async function loadLive(force) { await Promise.all([loadWeather(force), loadCams(), loadIncidents()]); if (place === 0 || place === 1) paintLive(); }
+async function loadLive(force) { await Promise.all([loadWeather(force), loadCams(), loadIncidents(), checkCommute(force).catch(() => {}), checkWetRides().catch(() => {})]); if (place === 0 || place === 1) paintLive(); }
 
 
 /* ================= screens: one big thing each, then only what you'd act on ================= */
@@ -272,39 +273,75 @@ function gaugeBlock(id, fs) {
 function wrapMonth() { const n = new Date(), d = new Date(n.getFullYear(), n.getMonth() - 1, 1); return { y: d.getFullYear(), m: d.getMonth(), key: `${d.getFullYear()}-${d.getMonth()}` }; }
 function wrapReady() { const w = wrapMonth(); return monthRides(w.y, w.m).length >= 3 && (window.PREVIEW || S.wrapSeen !== w.key || new Date().getDate() <= 7); }
 function homeHTML() {
-  const fs = fuelStats(), due = dueItems(), mr = monthRides(), mkm = mr.reduce((s, r) => s + (r.km || 0), 0), nr = nextRenewal();
-  const w = wrapMonth();
+  const fs = fuelStats(), w = wrapMonth(), nd = nextDue(), [m0, m1] = periodRange('month'), spent = costSummary(m0, m1).total;
+  const live = S.live || (S.openRide && Date.now() - S.openRide.t < 12 * 3600e3);
   return `<div class="hi"><div><h1>${esc(S.bike.name || 'Your bike')}</h1><small>${esc(S.bike.model || buildName())}${S.bike.plate ? ` <span class="plate">${esc(S.bike.plate)}</span>` : ''}</small></div></div>
-    <div class="hcol a"><div class="instr">${gaugeBlock('h', fs)}${estOdo() == null ? `<button type="button" class="odo blank" data-act="odo" aria-label="Add your odometer reading"><span class="lab">ODO</span>${odoHTML().replace('class="drums"', 'class="drums blank"')}<span class="lab">KM</span></button><span class="odohint">Tap to add your odometer</span>` : `<button type="button" class="odo tapodo" data-act="mydata" aria-label="Odometer readings"><span class="lab">ODO</span>${odoHTML()}<span class="lab">KM</span></button>`}${(() => { const oi = odoInfo(); return oi ? `<button type="button" class="odosince" data-act="mydata">${oi.since > 0 ? `<b>+${num(oi.since * oi.c, 1)} km</b> ridden since your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}` : `From your reading on ${fmtDs(todayISO(new Date(oi.la.t)))}`}</button>` : ''; })()}</div>
-    <div id="rideNow">${rideNowHTML()}</div>${alNudgeHTML()}</div>
-    <div class="hcol b">${newItemsHTML()}${scanQHTML()}${tripAskHTML()}${parkHTML()}<div class="alerts" id="alerts">${alertsHTML()}</div>
-    <div id="live0"></div>
-    <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span>${window.RADAR ? RADAR.ATTR : ''}</section>
+    <div class="hcol a"><div class="instr hgauge">${gaugeBlock('h', fs)}</div>
+    <div class="hstats"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L${fs.est ? ' · est' : ' avg'}</span></button>
+      <button type="button" data-act="costs"><b>${money(spent, 0)}</b><span>${new Date().toLocaleDateString('en-SG', { month: 'short' })} all-in</span></button>
+      <button type="button" ${nd ? `data-part="${nd.i.part}"` : 'data-tab="2"'}><b class="${nd ? nd.s.cls : ''}">${nd ? bigVal(nd.s) : '—'}</b><span>${nd ? esc(nd.i.name) : 'Next service'}</span></button></div>
+    <div id="rideNow">${live ? rideNowHTML() : `<button type="button" class="ridepill" data-act="startride">${ic('play', 2.6)}<span>Start ride</span></button>`}</div></div>
+    <div class="hcol b"><div class="now" id="alerts">${alertsHTML()}</div>${parkHTML()}
+    <section class="card rdhome" data-act="radar"><canvas id="rdh" aria-label="Rain radar, last hour"></canvas><div id="live0"></div><div class="rdtime"><b>Rain radar</b><span>Loading…</span></div><div class="rdload"><i></i><i></i><i></i></div><span class="rdexp">${ic('full', 2.2)}</span>${window.RADAR ? RADAR.ATTR : ''}</section>
+    <div id="cline">${commuteLine()}</div>
     <div class="cams" id="cams"></div>
     ${wrapReady() ? `<button type="button" class="wrapcta" data-act="wrap"><span class="wglow"></span><span class="wt"><small>Ride Wrap</small><b>Your ${new Date(w.y, w.m, 1).toLocaleDateString('en-SG', { month: 'long' })} is ready</b></span><span class="wplay">${ic('play', 2.6)}</span></button>` : ''}</div>`;
 }
+// the service item closest to due (the one worth a glance)
+function econSheet() {
+  const ew = econWatch(), seg = econSegments().slice(-6).reverse();
+  openSheet('Fuel economy', ew ? `Your last two tanks averaged ${num(ew.rec, 1)} km/L, ${ew.drop}% below your usual ${num(ew.med, 1)}. Usually it’s one of these:` : 'Your km/L tank by tank.', `
+    <div class="list">${seg.map(x => `<div class="li">${statusDot(ew && x.kpl < ew.med * .9 ? 'soon' : 'ok')}<span class="grow"><span class="t">${num(x.kpl, 1)} km/L</span><span class="s">tank ending ${fmtD(x.date)} · ${num(x.km)} km</span></span></div>`).join('')}</div>
+    ${ew ? `<ol class="gsteps"><li><b>Tyre pressure</b>: soft tyres cost the most. <button type="button" class="link" id="ecT">Log a check</button></li><li><b>Chain</b>: dry or too tight. When was it last cleaned and lubed?</li><li><b>Air filter</b>: a clogged one makes the engine work harder.</li><li><b>How you rode</b>: more jams, short trips or spirited riding all lower it, and that’s fine.</li></ol>
+    <div class="btns"><button type="button" class="btn ghost" id="ecOk">Got it, hide this</button></div>` : ''}`, sh => {
+    const t = $('#ecT', sh); if (t) t.onclick = () => tyreForm();
+    const o = $('#ecOk', sh); if (o) o.onclick = () => { S.econSeen = ew.rec.toFixed(2); save(); closeSheet(); refresh(); };
+  });
+}
+function nextDue() { return S.items.map(i => ({ i, s: itemStatus(i) })).filter(x => x.s.cls !== 'unset').sort((a, b) => a.s.frac - b.s.frac)[0] || null; }
+// set-up prompts live behind a dot on the settings button instead of on Home
+function inboxItems() { const out = [], a = S.al || {};
+  if (isIOS && S.relay && SHORTCUTS.start && S.intercom && S.intercom !== 'none' && !(a.start && a.end) && !a.dismiss) out.push(['autolog', 'head', 'Make rides log themselves', 'Finish auto-log setup']);
+  if (S.newItemsOffer && missingStd().some(d => NEW_V7.includes(d[0]))) out.push(['newitems', 'wrench', 'New service items', 'Review what Redline can now track']);
+  if (!S.commute) out.push(['roads', 'rain', 'Rain on your commute', 'Add home and work postal codes']);
+  if (!(S.tyres || []).length) out.push(['tyres', 'target', 'Tyre pressure', 'Log your first check']);
+  return out.filter(x => !(S.inboxSeen || []).includes(x[0] + ':' + x[2])); }
 // only what needs you now, most urgent first, never more than three
 const renWindow = r => /coe/i.test(r.name) ? 90 : 30;
-function alertsHTML() {
-  const fs = fuelStats(), due = dueItems(), out = [];
+let nowAll = false;
+function nowCards() {
+  const fs = fuelStats(), due = dueItems(), out = [], add = (p, html, label) => out.push({ p, html, label });
   const partCard = top => `<section class="card c-lemon alertc ${top.s.cls}" data-part="${top.i.part}">${ART.art(top.i.part, top.s.frac, top.s.cls, 68)}<div class="t"><span>${top.s.cls === 'over' ? '<em>OVERDUE</em>' : '<em class="soon">DUE SOON</em>'}${esc(top.i.name)}</span><b>${bigVal(top.s)}</b></div><button type="button" class="sqbtn" data-done="${top.i.id}" aria-label="Mark ${esc(top.i.name)} done today">${ic('check', 3)}</button></section>`;
-  if (S.needFull) out.push(`<section class="card c-lemon alertc ren" data-act="fullsvc"><span class="renic">${ic('wrench', 2.4)}</span><div class="t"><span>Last service unknown</span><b style="font-size:21px">Get a full service</b></div><span class="minibtn dark">Log it</span></section>`);
-  if (estOdo() == null) out.push(`<section class="card c-mint alertc ren" data-act="odo"><span class="renic">${ic('odo', 2.4)}</span><div class="t"><span>Odometer</span><b style="font-size:22px">Add a reading</b></div><span class="minibtn dark">Add</span></section>`);
-  if (fs.low) out.push(`<section class="card c-red alertc"><div class="t"><span>${fs.pastE ? 'Past E' : 'Low fuel'}</span><b>${fs.pastE ? 'Fill up now' : `${fs.range}<small>km left</small>`}</b></div><a class="cbtn" href="${isIOS ? 'https://maps.apple.com/?q=petrol%20station' : 'https://www.google.com/maps/search/petrol+station/'}" target="_blank" rel="noopener">${ic('pin')}<span>Find petrol</span></a></section>`);
-  const over = due.filter(x => x.s.cls === 'over'); if (over[0]) out.push(partCard(over[0]));
-  if (LIVE.inc && LIVE.inc[0]) { const x = LIVE.inc[0]; out.push(`<section class="card c-red incident" data-tab="1"><span class="incic ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${ic(incKind(x.Type) === 'Jam' ? 'odo' : 'alert')}</span><div><span>${incKind(x.Type)} on your road${LIVE.inc.length > 1 ? ` · +${LIVE.inc.length - 1} more` : ''}</span><b>${esc(incText(x.Message))}</b></div></section>`); }
+  const mini = (cls, icon, kick, title, act, btn) => `<section class="card alertc ren mini ${cls}" ${act ? `data-act="${act}"` : ''}><span class="renic">${ic(icon, 2.4)}</span><div class="t"><span>${kick}</span><b>${title}</b></div>${btn || ''}</section>`;
+  if (fs.low) add(1, `<section class="card c-red alertc"><div class="t"><span>${fs.pastE ? 'Past E' : 'Low fuel'}</span><b>${fs.pastE ? 'Fill up now' : `${fs.range}<small>km left</small>`}</b></div><a class="cbtn" href="${isIOS ? 'https://maps.apple.com/?q=petrol%20station' : 'https://www.google.com/maps/search/petrol+station/'}" target="_blank" rel="noopener">${ic('pin')}<span>Find petrol</span></a></section>`, 'low fuel');
+  if (estOdo() == null) add(2, mini('c-mint', 'odo', 'Odometer', 'Add a reading', 'odo', '<span class="minibtn dark">Add</span>'), 'odometer');
+  if (S.needFull) add(2.5, mini('c-lemon', 'wrench', 'Last service unknown', 'Get a full service', 'fullsvc', '<span class="minibtn dark">Log it</span>'), 'full service');
+  const over = due.filter(x => x.s.cls === 'over'); if (over[0]) add(2, partCard(over[0]), over[0].i.name.toLowerCase());
+  const cw = commuteWindow(), cr = COMMUTE.r; if (cw && cr && (cr.now.length || cr.wet.length)) add(1.5, mini('c-sky', 'rain', `Heading ${cw.to === "work" ? "to work" : "home"}`, cr.now.length ? `Raining near ${esc(cr.now[0])}` : `Rain near ${esc(cr.wet[0])}${cr.wet.length > 1 ? ` +${cr.wet.length - 1}` : ''}`, 'radar', '<span class="minibtn dark">Radar</span>'), 'rain on commute');
+  if (LIVE.inc && LIVE.inc[0]) { const x = LIVE.inc[0]; add(3, `<section class="card c-red incident" data-tab="1"><span class="incic ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${ic(incKind(x.Type) === 'Jam' ? 'odo' : 'alert')}</span><div><span>${incKind(x.Type)} on your road${LIVE.inc.length > 1 ? ` · +${LIVE.inc.length - 1} more` : ''}</span><b>${esc(incText(x.Message))}</b></div></section>`, 'traffic'); }
+  const tl = tyreLow(); if (tl) add(3, mini('c-red', 'target', 'Tyre pressure low', esc(tl[0]), 'tyres', '<span class="minibtn dark">Check</span>'), 'tyre pressure');
+  const wr = wetRide(); if (wr) add(3.5, mini('c-sky', 'rain', `Rode in the rain · ${fmtDs(todayISO(new Date(wr.r.end.t)))}`, 'Clean &amp; lube the chain', '', `<div class="tabtns">${wr.lube ? `<button type="button" class="minibtn dark" data-done="${wr.lube.id}" data-wet="${wr.r.id}">Done</button>` : ''}<button type="button" class="minibtn" data-act="wetx" data-i="${wr.r.id}">Later</button></div>`), 'rainy ride');
+  const tq = tripAskHTML(); if (tq) add(4, tq, 'trip question');
+  const sq = scanQHTML(); if (sq) add(4.5, sq, 'scan to save');
   S.renewals.filter(r => r.date).map(r => ({ r, s: renewStatus(r) })).filter(x => x.s.days <= renWindow(x.r)).sort((a, b) => a.s.days - b.s.days).slice(0, 1).forEach(({ r, s }) =>
-    out.push(`<section class="card ${s.days < 0 ? 'c-red' : 'c-mint'} alertc ren"><span class="renic">${ic('cal', 2.4)}</span><div class="t"><span>${esc(r.name)}${s.days < 0 ? ' · overdue' : ''}</span><b>${s.days < 0 ? -s.days + '<small>days late</small>' : s.days === 0 ? 'Today' : s.days + '<small>days</small>'}</b></div>
-      <div class="renbtns">${/road tax|coe|inspection/i.test(r.name) ? `<a class="minibtn" href="https://onemotoring.lta.gov.sg" target="_blank" rel="noopener">Renew</a>` : ''}<button type="button" class="minibtn dark" data-rdone="${r.id}">Done</button></div></section>`));
-  if (!over[0] && due[0]) out.push(partCard(due[0]));
-  return out.slice(0, 3).join('');
+    add(s.days < 0 ? 2.2 : 5, `<section class="card ${s.days < 0 ? 'c-red' : 'c-mint'} alertc ren"><span class="renic">${ic('cal', 2.4)}</span><div class="t"><span>${esc(r.name)}${s.days < 0 ? ' · overdue' : ''}</span><b>${s.days < 0 ? -s.days + '<small>days late</small>' : s.days === 0 ? 'Today' : s.days + '<small>days</small>'}</b></div>
+      <div class="renbtns">${/road tax|coe|inspection/i.test(r.name) ? `<a class="minibtn" href="https://onemotoring.lta.gov.sg" target="_blank" rel="noopener">Renew</a>` : ''}<button type="button" class="minibtn dark" data-rdone="${r.id}">Done</button></div></section>`, r.name.toLowerCase()));
+  const ew = econWatch(); if (ew && !(S.econSeen && S.econSeen === ew.rec.toFixed(2))) add(5.5, mini('c-cream', 'fuel', `Economy down ${ew.drop}%`, `${num(ew.rec, 1)} vs your usual ${num(ew.med, 1)} km/L`, 'econ', '<span class="minibtn dark">Why?</span>'), 'fuel economy');
+  if (!over[0] && due[0]) add(6, partCard(due[0]), due[0].i.name.toLowerCase());
+  const td = tyreDue(); if (td && !tl) add(7, mini('c-cream', 'target', 'Tyre pressure', `Last check ${td} days ago`, 'tyres', '<span class="minibtn dark">Log</span>'), 'tyre check');
+  const li = licenceInfo(); if (li && li.days != null && li.days <= 30 && li.days > -14) add(7.5, mini('c-mint', 'trophy', 'Licence', li.days > 0 ? `Class ${li.next} in ${li.days} days` : `You can go for Class ${li.next}`, 'licence', ''), 'licence');
+  const lr = odoReadings().pop(); if (lr && Date.now() - lr.t > 30 * DAY) add(8, mini('c-cream', 'odo', 'Odometer', `Last reading ${Math.floor((Date.now() - lr.t) / DAY)} days ago`, 'scan', '<span class="minibtn dark">Snap it</span>'), 'odometer reading');
+  return out.sort((a, b) => a.p - b.p);
+}
+function alertsHTML() {
+  const c = nowCards(); if (!c.length) return '';
+  const shown = nowAll ? c : c.slice(0, 3), rest = c.slice(3);
+  return shown.map(x => x.html).join('') + (rest.length ? `<button type="button" class="nowmore" data-act="nowmore">${nowAll ? 'Show less' : `<b>+${rest.length} more</b> · ${rest.map(x => x.label).slice(0, 3).join(', ')}${rest.length > 3 ? '…' : ''}`}${ic('chev')}</button>` : '');
 }
 function wxIcon(t) { const k = WX_ICON(t); return `<span class="wxi wx-${k}">${ic(k, 2.2)}${k === 'rain' || k === 'storm' ? '<i></i><i></i><i></i>' : ''}</span>`; }
 function liveHome() {
-  const w = LIVE.wx, inc = LIVE.inc; let h = '';
-  if (w && !w.err) h += `<button type="button" class="wxrow ${wet(w.text) ? 'wet' : ''}" data-act="radar">${wxIcon(w.text)}<div class="grow"><b>${esc(w.text.replace(/\s*\((Day|Night)\)/i, ''))}</b><span>${esc(w.area)}${w.until ? ' · till ' + w.until : ''}</span></div><span class="wxr"><span class="verdict">${wet(w.text) ? 'Rain gear' : 'Good to ride'}</span><span class="rdlink"><i class="sweep"></i>Radar</span></span></button>`;
-  else h += `<button type="button" class="wxrow" data-act="radar"><span class="wxi wx-cloud">${ic('cloud', 2.2)}</span><div class="grow"><b>Rain radar</b><span>The last hour, every 5 minutes</span></div><span class="rdlink"><i class="sweep"></i>Radar</span></button>`;
-  return h;
+  const w = LIVE.wx; if (!w || w.err) return '';
+  return `<div class="wxover ${wet(w.text) ? 'wet' : ''}">${wxIcon(w.text)}<span><b>${esc(w.text.replace(/\s*\((Day|Night)\)/i, ''))}</b><small>${esc(w.area)}${w.until ? ' · till ' + w.until : ''}</small></span><em>${wet(w.text) ? 'Rain gear' : 'Good to ride'}</em></div>`;
 }
 function abroadKm(r) { if (!r.path || r.path.length < 2 || !window.MAP) return 0; return (r.km || 0) * r.path.filter(([la, lo]) => !MAP.inSG(la, lo)).length / r.path.length; }
 function ridesHTML() {
@@ -315,49 +352,99 @@ function ridesHTML() {
       <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
       ${window.RADAR ? RADAR.ATTR : ''}<div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
     ${S.rides.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${S.rides.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
-    <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div></div>
+    <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div>
+    ${goalHTML()}</div>
     <div class="hcol b"><h2 class="sec">Road check</h2>
     <div class="roadchk"><div id="live1a"></div><div class="cams" id="cams"></div><div id="live1"></div></div>
-    <h2 class="sec">Journal</h2>
-    <section class="list2">${rides.length ? rides.slice(0, 40).map((r, i) => `<button type="button" class="rrow" data-focus="${r.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(r.start.t).getDate()}</b><small>${new Date(r.start.t).toLocaleDateString('en-SG', { month: 'short' })}</small></span>
+    <h2 class="sec">Journal <button type="button" class="link" data-act="allrides">All ${rides.length} rides ›</button></h2>
+    <section class="list2">${rides.length ? rides.slice(0, 5).map((r, i) => `<button type="button" class="rrow" data-focus="${r.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(r.start.t).getDate()}</b><small>${new Date(r.start.t).toLocaleDateString('en-SG', { month: 'short' })}</small></span>
         <span class="grow"><span class="t">${esc(r.title || 'Ride')}${abroadKm(r) > 1 ? ' <em class="flag">JB</em>' : ''}${r.photos && r.photos.length ? ` <em class="flag ph">${ic('img', 2.4)}${r.photos.length}</em>` : ''}</span><span class="s">${new Date(r.start.t).toLocaleDateString('en-SG', { weekday: 'short' })} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min${r.mood ? ' · ' + esc(r.mood) : ''}</span></span><span class="km">${num(r.km, 1)}<small>km</small></span></button>`).join('')
       : '<div class="empty">No rides yet. Tap Start ride on Home, or turn on auto-log in Settings.</div>'}</section></div>`;
 }
 function liveRoads() { const mine = myRoads();
   return `<button type="button" class="myroads" data-act="roads"><span>Watching</span>${mine.length ? mine.map(r => `<b class="${(S.roads || []).includes(r) ? '' : 'auto'}">${r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r}</b>`).join('') : '<i>Pick your roads</i>'}${ic('chev')}</button>`; }
+// traffic: your roads first (three at most), the rest of Singapore folded away
+let incAll = false;
+const incAge = m => { const x = (m || '').match(/^\((\d+)\/(\d+)\)(\d+):(\d+)/); if (!x) return ''; const n = new Date(), d = new Date(n.getFullYear(), +x[2] - 1, +x[1], +x[3], +x[4]); const mins = Math.round((n - d) / 6e4); return mins < 0 || mins > 1440 ? '' : mins < 60 ? `${mins} min ago` : `${Math.round(mins / 60)} h ago`; };
 function liveRides() {
-  const all = LIVE.all, mine = myRoads();
-  return `${all ? (all.length ? `<div class="incs">${all.slice(0, 8).map(x => { const m = x.roads.some(r => mine.includes(r)); return `<div class="inc ${m ? 'mine' : ''}"><span class="tag ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${incKind(x.Type)}</span><p>${esc(incText(x.Message))}</p></div>`; }).join('')}</div>` : '<div class="note">Expressways are clear right now.</div>')
-      : '<button type="button" class="note link" data-act="relay">Turn on live jams and accidents →</button>'}`;
+  const all = LIVE.all, mine = myRoads(); if (!all) return '<button type="button" class="note link" data-act="relay">Turn on live jams and accidents →</button>';
+  if (!all.length) return '<div class="note">Expressways are clear right now.</div>';
+  const my = all.filter(x => x.roads.some(r => mine.includes(r))), rest = all.filter(x => !my.includes(x));
+  const row = x => `<button type="button" class="inc1 ${my.includes(x) ? 'mine' : ''}" data-act="incx"><span class="tag ${incKind(x.Type) === 'Jam' ? 'jam' : ''}">${incKind(x.Type)}</span><span class="it">${esc(incText(x.Message))}</span><small>${incAge(x.Message)}</small></button>`;
+  return `<div class="incs">${my.length ? my.slice(0, incAll ? 99 : 3).map(row).join('') : `<div class="note">${mine.length ? 'Nothing on your roads right now.' : 'Pick your roads to see what matters to you first.'}</div>`}
+    ${incAll ? (my.length > 3 ? '' : '') + rest.map(row).join('') : ''}</div>
+    ${(my.length > 3 || rest.length) ? `<button type="button" class="nowmore" data-act="incall">${incAll ? 'Show less' : `<b>${rest.length + Math.max(0, my.length - 3)} more</b>${rest.length ? ' elsewhere in Singapore' : ' on your roads'}`}${ic('chev')}</button>` : ''}`;
+}
+function goalHTML() {
+  const ws = weekStart(), k = weekKm(ws), g = +S.goal || 0, st = streak();
+  return `<button type="button" class="goalbar" data-act="goal"><span class="gl"><b>${num(k, k < 100 ? 1 : 0)}${g ? `<small> / ${num(g)} km</small>` : '<small> km</small>'}</b><span>this week</span></span>
+    ${g ? `<span class="gtrack"><i style="width:${Math.min(100, k / g * 100)}%"></i></span>` : '<span class="gset">Set a goal</span>'}<span class="gs">${st ? `🔥 ${st}<small>wk</small>` : ''}</span></button>`;
+}
+// every ride: search, filter, grouped by month with a little calendar
+function ridesSheet() {
+  const F0 = { q: '', f: '' }, moods = [...new Set(S.rides.map(r => r.mood).filter(Boolean))];
+  const chips = [['', 'All'], ['gps', 'GPS tracked'], ['jb', 'JB'], ['ph', 'With photos'], ...moods.map(m => ['m:' + m, m])];
+  const match = r => { const f = F0.f; if (f === 'gps' && rideKind(r) !== 'gps') return false; if (f === 'jb' && !(abroadKm(r) > 1)) return false; if (f === 'ph' && !(r.photos || []).length) return false; if (f.startsWith('m:') && r.mood !== f.slice(2)) return false;
+    const q = F0.q.trim().toLowerCase(); return !q || [r.title, r.note, r.mood, ...(r.roads || []), fmtDT(r.start.t)].join(' ').toLowerCase().includes(q); };
+  const cal = (y, m, list) => { const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), off = (first.getDay() + 6) % 7, km = {};
+    list.forEach(r => { const d = new Date(r.start.t).getDate(); km[d] = (km[d] || 0) + (r.km || 0); }); const mx = Math.max(1, ...Object.values(km));
+    return `<div class="cal">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cw">${d}</span>`).join('')}${'<span></span>'.repeat(off)}${Array.from({ length: days }, (_, i) => { const k = km[i + 1]; return `<button type="button" class="cd ${k ? 'on' : ''}" ${k ? `data-day="${y}-${m}-${i + 1}" style="--a:${(.35 + .65 * k / mx).toFixed(2)}"` : 'disabled'}>${i + 1}</button>`; }).join('')}</div>`; };
+  const body = () => {
+    const list = [...S.rides].filter(match).sort((a, b) => b.start.t - a.start.t); if (!list.length) return '<div class="empty">No rides match.</div>';
+    const g = new Map(); list.forEach(r => { const d = new Date(r.start.t), k = d.getFullYear() + '-' + d.getMonth(); if (!g.has(k)) g.set(k, []); g.get(k).push(r); });
+    let i = 0; return [...g].map(([k, rs]) => { const [y, m] = k.split('-').map(Number), km = rs.reduce((s, r) => s + (r.km || 0), 0), jb = rs.filter(r => abroadKm(r) > 1).length, open = i++ < 1 || F0.q || F0.f;
+      return `<details class="mgrp" ${open ? 'open' : ''}><summary><b>${new Date(y, m, 1).toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })}</b><span>${rs.length} ride${rs.length > 1 ? 's' : ''} · ${num(km)} km${jb ? ` · ${jb} to JB` : ''}</span></summary>
+        ${!F0.q && !F0.f ? cal(y, m, rs) : ''}<div class="list">${rs.map(r => `<button type="button" class="li" data-id="${r.id}" data-d="${new Date(r.start.t).getDate()}"><i class="dot" style="background:${RIDE_KINDS[rideKind(r)][1]}"></i><span class="grow"><span class="t">${esc(r.title || 'Ride')}${(r.photos || []).length ? ` <em class="flag ph">${ic('img', 2.4)}${r.photos.length}</em>` : ''}</span><span class="s">${fmtDT(r.start.t)} · ${Math.round(Math.max(0, r.end.t - r.start.t) / 6e4)} min${r.mood ? ' · ' + esc(r.mood) : ''}</span></span><span class="r">${num(r.km, 1)}<small>KM</small></span></button>`).join('')}</div></details>`; }).join('');
+  };
+  openSheet('All rides', `${S.rides.length} rides · ${num(S.rides.reduce((s, r) => s + (r.km || 0), 0))} km`, `
+    <label class="srch">${ic('search', 2.2)}<input type="search" id="rq" placeholder="Search title, notes, road (PIE, AYE…)" autocomplete="off"></label>
+    <div class="fchips">${chips.map(([v, l]) => `<button type="button" data-f="${v}" class="${v === '' ? 'on' : ''}">${esc(l)}</button>`).join('')}</div><div id="rBody">${body()}</div>`, sh => {
+    const paint = () => { $('#rBody', sh).innerHTML = body(); wireB(); };
+    const wireB = () => { $$('#rBody .li', sh).forEach(b => b.onclick = () => rideForm(S.rides.find(r => r.id === b.dataset.id)));
+      $$('#rBody .cd.on', sh).forEach(c => c.onclick = () => { const grp = c.closest('.mgrp'), d = c.dataset.day.split('-')[2], was = c.classList.contains('sel');
+        $$('.cd', grp).forEach(x => x.classList.remove('sel')); $$('.li', grp).forEach(li => li.hidden = !was && li.dataset.d !== d); if (!was) c.classList.add('sel'); haptic(); }); };
+    $('#rq', sh).addEventListener('input', e => { F0.q = e.target.value; paint(); });
+    $$('[data-f]', sh).forEach(b => b.onclick = () => { F0.f = b.dataset.f; $$('[data-f]', sh).forEach(x => x.classList.toggle('on', x === b)); haptic(); paint(); });
+    wireB();
+  });
 }
 // the cams are built once per screen and only have their pictures swapped after that, so a swipe is never reset
 function paintLive() {
   const a = $('#live0'), ra = $('#live1a'), b = $('#live1'), cams = $('#cams'), al = $('#alerts');
-  if (a) a.innerHTML = liveHome(); if (ra) ra.innerHTML = liveRoads(); if (b) b.innerHTML = liveRides();
+  if (a) a.innerHTML = liveHome(); const cl = $('#cline'); if (cl) cl.innerHTML = commuteLine(); if (ra) ra.innerHTML = liveRoads(); if (b) b.innerHTML = liveRides();
   if (cams) { if (!cams.children.length) { cams.innerHTML = CAMSETS.map(camHTML).join(''); wireCams(cams); } else refreshCamImgs(cams); }
   if (al) { const h = alertsHTML(); if (al.dataset.h !== h) { al.innerHTML = h; al.dataset.h = h; } } }
 function partInfo(k) { const items = S.items.filter(i => i.part === k).map(i => ({ i, s: itemStatus(i) })), w = items.filter(x => x.s.cls !== 'unset').sort((a, b) => a.s.frac - b.s.frac)[0]; return { items, w, cls: w ? w.s.cls : 'unset', f: w ? w.s.frac : 0 }; }
 function garageHTML() {
   const st = S.items.map(itemStatus), over = st.filter(s => s.cls === 'over').length, soon = st.filter(s => s.cls === 'soon').length;
   const ks = PARTS.filter(([k]) => S.items.some(i => i.part === k)).map(([k, l]) => ({ k, l, ...partInfo(k) })).sort((a, b) => (a.cls === 'unset') - (b.cls === 'unset') || a.f - b.f);
-  const hero = ks[0];
-  return `<div class="hi"><div><h1>Garage</h1><small>${esc(buildName())} · ${estOdo() == null ? 'odometer not added' : num(estOdo()) + ' km'}</small></div></div>
+  const hero = ks[0], need = ks.slice(1).filter(p => p.cls === 'over' || p.cls === 'soon'), good = ks.slice(1).filter(p => !need.includes(p));
+  const have = (S.kit && S.kit.have) || {}, kl = kitItems().filter(x => !/passport|tng|cash|roam/.test(x[0])), got = kl.filter(x => have[x[0]]).length, ty = lastTyres();
+  const tile = (p, i, small) => `<button type="button" class="tile ${p.cls} ${small ? 'sm' : ''}" data-part="${p.k}" style="--d:${i * 40}ms">${ART.art(p.k, p.f, p.cls, small ? 54 : 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : `<small>${estOdo() == null ? 'Needs odometer' : 'Not tracked'}</small>`}</b>${small ? '' : `<span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span>`}</button>`;
+  return `<div class="hi"><div><h1>Garage</h1><small>${esc(buildName())}</small></div></div>
     <div class="hcol a">${hero ? `<section class="card ghero ${hero.cls}" data-part="${hero.k}">${ART.art(hero.k, hero.f, hero.cls, 150)}<div class="t"><span>${hero.cls === 'over' ? '<em>OVERDUE</em>' : hero.cls === 'soon' ? '<em class="soon">DUE SOON</em>' : '<em class="okk">NEXT UP</em>'}${esc(hero.w ? hero.w.i.name : hero.l)}</span><b>${hero.w ? bigVal(hero.w.s) : 'Not tracked'}</b>${hero.w ? `<button type="button" class="donebig" data-done="${hero.w.i.id}">${ic('check', 3)}<span>Done today</span></button>` : ''}</div></section>` : ''}
-    <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div>${kitCardHTML()}</div>
-    <div class="hcol b"><div class="tiles">${ks.slice(1).map((p, i) => `<button type="button" class="tile ${p.cls}" data-part="${p.k}" style="--d:${i * 50}ms">${ART.art(p.k, p.f, p.cls, 84)}<span class="nm">${esc(p.l)}</span><b>${p.w ? bigVal(p.w.s) : `<small>${estOdo() == null ? 'Needs odometer' : 'Not tracked'}</small>`}</b><span class="bar"><i style="width:${p.w ? Math.max(4, Math.round(p.f * 100)) : 0}%"></i></span></button>`).join('')}</div></div>`;
+    <div class="gsum"><b>${over ? `<span class="r">${over} overdue</span>` : ''}${over && soon ? ' · ' : ''}${soon ? `${soon} due soon` : ''}${!over && !soon ? 'Everything’s good' : ''}</b><button type="button" class="link" data-act="history">History</button><button type="button" class="link" data-act="service">Log service</button></div>
+    <div class="grows"><button type="button" class="mrow" data-act="kit"><span class="mi">${ic('wrench')}</span><span class="grow"><b>Essentials kit</b><span>${got ? `${got} of ${kl.length} ready` : 'What to carry'}${S.kit && S.kit.check ? ` · pre-ride check ${fmtDs(S.kit.check)}` : ''}</span></span>${ic('chev')}</button>
+      <button type="button" class="mrow" data-act="tyres"><span class="mi">${ic('target')}</span><span class="grow"><b>Tyre pressure</b><span>${ty ? `${ty.front} / ${ty.rear} psi · ${ago(ty.t)}` : 'Log a check'}</span></span>${ic('chev')}</button>
+      <button type="button" class="mrow" data-act="workshops"><span class="mi">${ic('pin')}</span><span class="grow"><b>Workshops</b><span>${workshops().length ? workshops().slice(0, 2).map(w => esc(w.name)).join(', ') : 'From your service history'}</span></span>${ic('chev')}</button></div></div>
+    <div class="hcol b">${need.length ? `<h2 class="sec">Needs attention</h2><div class="tiles">${need.map((p, i) => tile(p, i)).join('')}</div>` : ''}
+      ${good.length ? `<h2 class="sec">All good</h2><div class="tiles small">${good.map((p, i) => tile(p, i, true)).join('')}</div>` : ''}</div>`;
 }
 function fuelHTML() {
-  const fs = fuelStats(), now = new Date(), list = [...S.fuel].sort((a, b) => b.odo - a.odo);
-  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1); return { d, v: S.fuel.filter(f => { const x = new Date(f.date); return x.getMonth() === d.getMonth() && x.getFullYear() === d.getFullYear(); }).reduce((s, f) => s + fuelSgd(f), 0) }; });
-  const mmax = Math.max(40, ...months.map(x => x.v));
+  const fs = fuelStats(), now = new Date(), list = [...S.fuel].sort((a, b) => b.odo - a.odo), all = !!S.spendAll;
+  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1), c = costSummary(+d, +e); return { d, v: all ? c.total : (c.by.fuel || 0), by: c.by }; });
+  const mmax = Math.max(40, ...months.map(x => x.v)), y = costSummary(...periodRange('year')), bp = brandPrices(), jb = jbSavings();
   return `<div class="hi"><div><h1>Fuel</h1><small>${fs.tankFrac != null ? `${num(fs.tankFrac * S.bike.tank, 1)} of ${num(S.bike.tank)} L in the tank` : 'Log a full tank to start the gauge'}</small></div></div>
     <div class="hcol a"><div class="instr">${gaugeBlock('f', fs)}</div>
     <button type="button" class="bigbtn c-orange" data-act="fuel"><span class="nozzle">${ic('pump', 2.4)}</span><span>Log a fill-up</span></button>
-    <div class="stats tap"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L ⓘ</span></button><button type="button" data-stat="spend"><b>${money(months[5].v, 0)}</b><span>${now.toLocaleDateString('en-SG', { month: 'long' })} ⓘ</span></button><button type="button" data-stat="cpk"><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>per km ⓘ</span></button></div></div>
-    <div class="hcol b"><section class="card plain"><div class="ch"><b>Spend</b><span>last 6 months</span></div><div class="bars">${months.map(({ d, v }, i) => `<div class="bcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><i style="height:${Math.max(3, v / mmax * 100)}%;--d:${i * 70}ms"></i><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div></section>
-    ${costCardHTML()}
-    <h2 class="sec">Fill-ups</h2>
-    <section class="list2">${list.length ? list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
+    <div class="stats tap"><button type="button" data-stat="kpl"><b>${fs.kpl ? num(fs.kpl, 1) : '—'}</b><span>km/L ⓘ</span></button><button type="button" data-stat="spend"><b>${money(months[5].by.fuel || 0, 0)}</b><span>fuel, ${now.toLocaleDateString('en-SG', { month: 'short' })} ⓘ</span></button><button type="button" data-stat="cpk"><b>${fs.cpk ? '$' + num(fs.cpk, 2) : '—'}</b><span>fuel per km ⓘ</span></button></div></div>
+    <div class="hcol b"><section class="card plain spendcard"><div class="ch"><b>Spending</b><div class="segs sm"><button type="button" data-act="spendf" class="${all ? '' : 'on'}">Fuel</button><button type="button" data-act="spenda" class="${all ? 'on' : ''}">Everything</button></div></div>
+      <div class="sbars">${months.map(({ d, v, by }) => `<div class="sbcol"><span class="bv">${v ? '$' + Math.round(v) : ''}</span><div class="stack" style="height:${Math.max(2, v / mmax * 100)}%">${all ? COST_CATS.filter(([k]) => by[k] > 0).map(([k, , col]) => `<i style="flex:${by[k]};background:${col}"></i>`).join('') : `<i style="flex:1;background:var(--orange)"></i>`}</div><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div>
+      <div class="cc2"><div><b>${money(y.total, 0)}</b><span>all-in this year</span></div><div><b>${y.cpk ? '$' + num(y.cpk, 2) : '—'}</b><span>per km, all-in</span></div>${jb && jb.saved > 1 ? `<div><b class="mint">${money(jb.saved, 0)}</b><span>saved in JB</span></div>` : ''}</div>
+      <div class="ccb"><button type="button" class="minibtn" data-act="costs">All costs ›</button><button type="button" class="minibtn" data-act="expense">+ Expense</button><button type="button" class="minibtn" data-act="export">${ic('share', 2.4)} Export</button></div></section>
+    ${bp.length ? `<section class="card plain"><div class="ch"><b>What you’ve paid</b><span>S$ a litre · last 90 days</span></div><div class="bprices">${bp.map((b, i) => `<div><span>${esc(b.name)}</span><b class="${i === 0 && bp.length > 1 ? 'mint' : ''}">$${num(b.avg, 2)}</b><small>${b.n} fill-up${b.n > 1 ? 's' : ''}</small></div>`).join('')}</div></section>` : ''}
+    <h2 class="sec">Fill-ups${list.length > 5 ? ` <button type="button" class="link" data-act="allfuel">All ${list.length} ›</button>` : ''}</h2>
+    <section class="list2">${list.length ? list.slice(0, 5).map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
       return `<button type="button" class="rrow" data-fuel="${f.id}" style="--d:${Math.min(i, 10) * 40}ms"><span class="when"><b>${new Date(f.date).getDate()}</b><small>${new Date(f.date).toLocaleDateString('en-SG', { month: 'short' })}</small></span><span class="grow"><span class="t">${num(f.litres, 1)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="km">${f.cost ? costTxt(f) : ''}</span></button>`; }).join('') : '<div class="empty">Log fills with the odometer reading. Two full tanks unlock range and km/L.</div>'}</section></div>`;
 }
 const SCREENS = [homeHTML, ridesHTML, garageHTML, fuelHTML];
@@ -469,10 +556,10 @@ function gaugeFrac(fs) { return fs.range != null && fs.full ? clamp(fs.range / f
 function render(animate, dir = 0) {
   document.body.dataset.place = place;
   const pad = document.createElement('div'); pad.className = 'pad'; pad.innerHTML = SCREENS[place]();
-  pad.prepend($('#gear')); viewEl.className = 'view v' + place; viewEl.replaceChildren(pad);
+  pad.prepend($('#gear')); viewEl.className = 'view v' + place; viewEl.replaceChildren(pad); $('#gear').classList.toggle('dot', inboxItems().length > 0);
   navTo(place);
   const fs = fuelStats(), f = gaugeFrac(fs);
-  if (place === 0) { if (window.RADAR) RADAR.mountHome($('#rdh')); if (estOdo() == null) { gaugeSet('h', f, fs.full); if (animate) keyOn('h', f, fs.full); } else if (animate) { setOdo(0, false); setTimeout(() => setOdo(estOdo(), true), 260); keyOn('h', f, fs.full); } else { setOdo(estOdo(), false); gaugeSet('h', f, fs.full); } paintLive(); }
+  if (place === 0) { if (window.RADAR) RADAR.mountHome($('#rdh')); if (!$('#drums')) { gaugeSet('h', f, fs.full); if (animate) keyOn('h', f, fs.full); } else if (animate) { setOdo(0, false); setTimeout(() => setOdo(estOdo(), true), 260); keyOn('h', f, fs.full); } else { setOdo(estOdo(), false); gaugeSet('h', f, fs.full); } paintLive(); }
   if (place === 3) { if (animate) keyOn('f', f, fs.full); else gaugeSet('f', f, fs.full); }
   if (place === 1) { paintLive(); if (window.MAP) MAP.mount($('#mapcv'), animate); showFocus(); }
   if (animate && !RM) {
@@ -547,7 +634,7 @@ viewEl.addEventListener('click', e => {
   else if (d.ride) rideForm(S.rides.find(x => x.id === d.ride)); else if (d.fuel) fuelForm(S.fuel.find(x => x.id === d.fuel));
   else if (d.ren) renewalForm(S.renewals.find(x => x.id === d.ren));
   else if (d.rdone) renewedForm(S.renewals.find(x => x.id === d.rdone));
-  else if (d.done) { e.stopPropagation(); doneToday(S.items.find(x => x.id === d.done), b); }
+  else if (d.done) { e.stopPropagation(); if (d.wet) { const r = S.rides.find(x => x.id === d.wet); if (r) r.wetDone = true; } doneToday(S.items.find(x => x.id === d.done), b); }
   else if (d.edit) itemForm(S.items.find(x => x.id === d.edit)); else if (d.add) itemForm(null, d.add);
   else if (d.part) partSheet(d.part); else if (d.focus) focusRide(d.focus);
 });
@@ -847,8 +934,8 @@ function rideForm(r) {
       if (isNew) { const t0 = +new Date(v.date + 'T' + (v.time || '09:00')); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
       else { const t0 = v.date ? +new Date(v.date + 'T' + (v.time || '09:00')) : r.start.t, dur = v.mins != null ? v.mins * 6e4 : r.end.t - r.start.t, kmChanged = v.km !== r.km;
         Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); r.start.t = t0; r.end.t = t0 + dur; if (kmChanged) r.est = 'manual'; } },
-    extra: (!isNew ? `<div class="rphotos" id="rph"></div>` : '') + (!isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : ''),
-    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); if (!isNew) ridePhotos(r, $('#rph', sh)); },
+    extra: (!isNew ? `<div class="rphotos" id="rph"></div><button type="button" class="scanbtn" id="shRide">${ic('share', 2.2)}<span>Share this ride</span></button><div style="height:10px"></div>` : '') + (!isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : ''),
+    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); if (!isNew) { ridePhotos(r, $('#rph', sh)); $('#shRide', sh).onclick = async e => { const sp = $('span', e.currentTarget); sp.textContent = 'Making the image…'; await WRAP.shareRide(r); sp.textContent = 'Share this ride'; }; } },
     onDelete: !isNew && (() => S.rides = S.rides.filter(x => x !== r)), bin: !isNew && { list: 'rides', obj: r, label: r.title || `Ride of ${num(r.km, 1)} km` } });
 }
 // photos on a ride: shrunk on the phone and kept on the phone (IndexedDB), never uploaded
@@ -995,8 +1082,8 @@ function myDataSheet(tab = 'odo') {
     const l = [...S.rides].sort((a, b) => b.start.t - a.start.t);
     return l.length ? `<div class="list">${l.slice(0, 80).map(r => `<button type="button" class="li" data-src="ride" data-id="${r.id}"><i class="dot" style="background:${RIDE_KINDS[rideKind(r)][1]}"></i><span class="grow"><span class="t">${esc(r.title || 'Ride')} · ${num(r.km, 1)} km</span><span class="s">${fmtDT(r.start.t)} · ${Math.round((r.end.t - r.start.t) / 6e4)} min · ${RIDE_KINDS[rideKind(r)][0]}${r.est === 'estimate' ? ', straight line' : ''}</span></span>${ic('chev')}</button>`).join('')}</div>` : '<div class="empty">No rides yet.</div>';
   };
-  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><button type="button" class="btn ghost" id="mdRes">${ic('save', 2.2)} Restore something deleted${(S.bin || []).length ? ` (${S.bin.length})` : ''}</button>`, sh => {
-    $('#mdRes', sh).onclick = () => restoreSheet();
+  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><div class="btns"><button type="button" class="btn ghost" id="mdRes">Restore deleted${(S.bin || []).length ? ` (${S.bin.length})` : ''}</button><button type="button" class="btn ghost" id="mdBak">${ic('save', 2.2)} Backup</button></div>`, sh => {
+    $('#mdRes', sh).onclick = () => restoreSheet(); $('#mdBak', sh).onclick = () => backupSheet();
     const wireB = () => { $$('#mdBody .li', sh).forEach(b => b.onclick = () => { const id = b.dataset.id, src = b.dataset.src;
         if (src === 'fuel') fuelForm(S.fuel.find(x => x.id === id)); else if (src === 'service') serviceForm(S.services.find(x => x.id === id)); else if (src === 'ride') rideForm(S.rides.find(x => x.id === id)); else odoEditForm(S.odoLog.find(x => x.id === id)); });
       const a = $('#mdAdd', sh); if (a) a.onclick = () => odoForm(); };
@@ -1024,10 +1111,9 @@ function miniMap(lat, lon, w = 340, h = 150, z = 17) {
 const ago = t => { const m = Math.round((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const walkURL = p => isIOS ? `https://maps.apple.com/?daddr=${p.lat},${p.lon}&dirflg=w` : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=walking`;
 function parkHTML() {
-  const p = S.parked; if (!p || p.lat == null || S.openRide || S.live) return '';
-  return `<section class="card parkcard"><div class="pkmap" data-act="park">${miniMap(p.lat, p.lon, 760, 130)}</div>
-    <div class="pkrow"><div class="grow" data-act="park"><span>Your bike · parked ${ago(p.t)}</span><b>${p.note ? esc(p.note) : 'Add level or lot'}</b><small id="pkDist">${p.photo ? ic('img', 2.2) + ' photo saved · ' : ''}tap for distance</small></div>
-    <a class="minibtn dark walkbtn" href="${walkURL(p)}" target="_blank" rel="noopener">${ic('walk', 2.4)} Walk there</a></div></section>`;
+  const p = S.parked; if (!p || p.lat == null || S.openRide || S.live || Date.now() - p.t > DAY) return '';
+  return `<section class="card parkline"><button type="button" class="grow" data-act="park"><span class="pkic">${ic('bike', 2.4)}</span><span><b>Parked ${ago(p.t)}</b><small id="pkDist">${p.note ? esc(p.note) + ' · ' : ''}${p.photo ? 'photo saved · ' : ''}tap for map</small></span></button>
+    <a class="minibtn walkbtn" href="${walkURL(p)}" target="_blank" rel="noopener">${ic('walk', 2.4)} Walk</a></section>`;
 }
 async function parkDistance() { const el = $('#pkDist'); if (!el || !S.parked) return; el.textContent = 'Finding you…';
   try { const me = await here(), d = haversine(me, S.parked); el.innerHTML = `${S.parked.photo ? ic('img', 2.2) + ' photo saved · ' : ''}<b>${d < 1 ? Math.round(d * 1000) + ' m' : num(d, 1) + ' km'}</b> away · about ${Math.max(1, Math.round(d / 4.8 * 60))} min walk`; }
@@ -1054,17 +1140,24 @@ function expenseForm(e, preset) {
       { k: 'cur', l: 'Paid in', type: 'chips', o: [{ v: 'SGD', l: 'S$' }, { v: 'MYR', l: 'RM (JB)' }], v: e?.cur || 'SGD' },
       { k: 'fx', l: '1 RM = S$ (today’s rate, edit if needed)', type: 'number', v: e?.fx || (S.fx && S.fx.rate) || .3 },
       { k: 'cat', l: 'What for', type: 'chips', o: EXP_CATS.map(([v, l]) => ({ v, l })), v: e?.cat || preset || 'gear' },
-      { k: 'shop', l: 'What was it', v: e?.note, ph: 'New helmet visor, Shoei' }],
-    extra: e ? '' : scanBtn('service', 'Scan the receipt'), onOpen: sh => { wireScan(sh, 'service'); wireCur(sh); },
+      { k: 'shop', l: 'What was it', v: e?.note, ph: 'New helmet visor, Shoei' }, { k: 'warranty', l: 'Warranty until (optional)', type: 'date', v: e?.warranty || '' }],
+    extra: (e ? '' : scanBtn('service', 'Scan the receipt')) + `<div class="rcpt" id="rcpt"></div>`, onOpen: sh => { wireScan(sh, 'service'); wireCur(sh);
+      const box = $('#rcpt', sh), paint = async () => { const p = e && e.receipt ? await kv('get', e.receipt) : (sh._rc ? { src: sh._rc } : null);
+        box.innerHTML = p ? `<img src="${p.src}" alt="Receipt"><button type="button" class="minibtn" id="rcX">Remove receipt</button>` : `<button type="button" class="minibtn" id="rcAdd">${ic('img', 2.2)} Keep a photo of the receipt</button>`;
+        if ($('#rcAdd', box)) $('#rcAdd', box).onclick = async () => { const f = await pickImage(false); if (!f) return; sh._rc = await smallPhoto(f, 1400, .8); if (e) { const k = 'rc:' + e.id; await kv('put', k, { src: sh._rc }); e.receipt = k; save(); } paint(); };
+        if ($('#rcX', box)) $('#rcX', box).onclick = async () => { if (e && e.receipt) { await kv('del', e.receipt); delete e.receipt; save(); } sh._rc = null; paint(); }; };
+      paint(); },
     check: v => v.cost > 5000 ? `${money(v.cost)} is a lot for one expense. A typo?` : null,
-    onSave: v => { const x = { date: v.date, cost: v.cost, cur: v.cur || 'SGD', cat: v.cat || 'other', note: v.shop || '' };
+    onSave: v => { const x = { date: v.date, cost: v.cost, cur: v.cur || 'SGD', cat: v.cat || 'other', note: v.shop || '', warranty: v.warranty || undefined };
       if (x.cur === 'MYR') { x.fx = v.fx > .1 && v.fx < 1 ? v.fx : ((S.fx && S.fx.rate) || .3); x.costSgd = +(x.cost * x.fx).toFixed(2); }
-      if (e) Object.assign(e, x, x.cur === 'MYR' ? {} : { fx: undefined, costSgd: undefined }); else { S.expenses.push({ id: uid(), ...x, ts: Date.now() }); toast('Expense logged'); } },
+      if (e) Object.assign(e, x, x.cur === 'MYR' ? {} : { fx: undefined, costSgd: undefined });
+      else { const id = uid(), sh = sheetEl; if (sh._rc) { kv('put', 'rc:' + id, { src: sh._rc }); x.receipt = 'rc:' + id; } S.expenses.push({ id, ...x, ts: Date.now() }); toast(x.warranty ? `Logged · covered until ${fmtD(x.warranty)}` : 'Expense logged'); } },
     onDelete: e && (() => S.expenses = S.expenses.filter(x => x !== e)), bin: e && { list: 'expenses', obj: e, label: e.note || catOf(e.cat)[1] } });
 }
 const PERIODS = [['month', 'This month'], ['year', 'This year'], ['all', 'All time']];
 function periodRange(p) { const n = new Date(); return p === 'month' ? [+new Date(n.getFullYear(), n.getMonth(), 1), Date.now() + DAY] : p === 'year' ? [+new Date(n.getFullYear(), 0, 1), Date.now() + DAY] : [0, Date.now() + DAY]; }
 function costsSheet(period = 'month') {
+  const F0 = { q: '', c: '' };
   const body = () => {
     const [a, b] = periodRange(period), c = costSummary(a, b), cats = COST_CATS.filter(([k]) => c.by[k] > 0).sort((x, y) => c.by[y[0]] - c.by[x[0]]);
     const now = new Date(), months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return { d, s: costSummary(+d, +e) }; });
@@ -1076,14 +1169,22 @@ function costsSheet(period = 'month') {
       <div class="bl">Last 6 months</div>
       <div class="sbars">${months.map(({ d, s: m }) => `<div class="sbcol"><span class="bv">${m.total ? '$' + Math.round(m.total) : ''}</span><div class="stack" style="height:${Math.max(2, m.total / mmax * 100)}%">${COST_CATS.filter(([k]) => m.by[k] > 0).map(([k, , col]) => `<i style="flex:${m.by[k]};background:${col}"></i>`).join('')}</div><span>${d.toLocaleDateString('en-SG', { month: 'short' })}</span></div>`).join('')}</div>
       ${fixed.length ? `<p class="gnote">Yearly fixed costs from Renewals: ${fixed.map(r => `${esc(r.name)} ${money(r.cost, 0)}`).join(' · ')}. Tap <b>Done</b> on a renewal and enter what you paid, and it’s counted here.</p>` : ''}
+      ${(() => { const u = upcomingCosts(90); return u.list.length ? `<div class="bl">Coming up · next 3 months</div><div class="upc">${u.list.slice(0, 6).map(x => `<div><span>${esc(x.name)}</span><small>${x.days < 0 ? 'overdue' : x.days === 0 ? 'today' : x.days < 14 ? `in ${x.days} days` : `in ~${Math.round(x.days / 7)} weeks`}</small><b>${x.cost ? money(x.cost, 0) : '<i>?</i>'}</b></div>`).join('')}<div class="upt"><span>Expected</span><b>${money(u.total, 0)}${u.unknown ? `<small> + ${u.unknown} unknown</small>` : ''}</b></div></div><p class="gnote">From what you paid last time (only services that were just that item count) and your renewals.</p>` : ''; })()}
+      ${(() => { const j = jbSavings(a); return j && j.saved > 1 ? `<div class="jbsave">${ic('fuel', 2.2)}<span>Filling up in JB saved you about <b>${money(j.saved, 0)}</b> ${period === 'month' ? 'this month' : period === 'year' ? 'this year' : 'so far'} (${j.n} fill-up${j.n > 1 ? 's' : ''} at ~$${num(j.jb, 2)}/L vs your usual $${num(j.sg, 2)}/L).</span></div>` : ''; })()}
       <div class="bl">Spending</div>
-      ${c.items.length ? `<div class="list">${c.items.slice(0, 60).map(x => { const [, l, col] = catOf(x.cat); return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}"><i class="dot" style="background:${col}"></i><span class="grow"><span class="t">${esc(x.label)}</span><span class="s">${fmtD(x.date)} · ${l}</span></span><span class="r">${x.cur === 'MYR' ? `RM ${num(x.amt, 2)}<small class="fx">≈ ${money(x.sgd)}</small>` : money(x.sgd)}</span></button>`; }).join('')}</div>` : ''}`;
+      <label class="srch">${ic('search', 2.2)}<input type="search" id="cq" placeholder="Search what you bought or where" value="${esc(F0.q)}" autocomplete="off"></label>
+      <div class="fchips">${[['', 'All'], ...COST_CATS.filter(([k]) => c.by[k] > 0).map(([k, l]) => [k, l])].map(([v, l]) => `<button type="button" data-cc="${v}" class="${v === F0.c ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
+      ${c.items.length ? `<div class="list">${c.items.filter(x => (!F0.c || x.cat === F0.c) && (!F0.q || (x.label + ' ' + catOf(x.cat)[1]).toLowerCase().includes(F0.q.toLowerCase()))).slice(0, 80).map(x => { const [, l, col] = catOf(x.cat); return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}"><i class="dot" style="background:${col}"></i><span class="grow"><span class="t">${esc(x.label)}</span><span class="s">${fmtD(x.date)} · ${l}</span></span><span class="r">${x.cur === 'MYR' ? `RM ${num(x.amt, 2)}<small class="fx">≈ ${money(x.sgd)}</small>` : money(x.sgd)}</span></button>`; }).join('')}</div>` : ''}`;
   };
   openSheet('Costs', 'Everything your bike costs, in S$: fuel, servicing and the rest. RM is converted at the rate you paid.', `
     <div class="segs">${PERIODS.map(([k, l]) => `<button type="button" data-per="${k}" class="${k === period ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div id="cBody">${body()}</div>
-    <div class="btns"><button type="button" class="btn ghost" id="cExp">${ic('share', 2.2)} Export</button><button type="button" class="btn" id="cAdd">+ Expense</button></div>`, sh => {
-    const wireB = () => $$('#cBody .li', sh).forEach(b => b.onclick = () => { const id = b.dataset.id, src = b.dataset.src; if (src === 'fuel') fuelForm(S.fuel.find(x => x.id === id)); else if (src === 'service') serviceForm(S.services.find(x => x.id === id)); else expenseForm(S.expenses.find(x => x.id === id)); });
+    <div class="btns"><button type="button" class="btn ghost" id="cExp">${ic('share', 2.2)} Export</button><button type="button" class="btn" id="cAdd">+ Expense</button></div>
+    <button type="button" class="mrow" id="cWar"><span class="mi">${ic('save')}</span><span class="grow"><b>Warranties &amp; receipts</b><span>${warranties().filter(w => w.left >= 0).length} still covered</span></span>${ic('chev')}</button>`, sh => {
+    $('#cWar', sh).onclick = () => warrantySheet();
+    const wireB = () => { $$('#cBody .li', sh).forEach(b => b.onclick = () => { const id = b.dataset.id, src = b.dataset.src; if (src === 'fuel') fuelForm(S.fuel.find(x => x.id === id)); else if (src === 'service') serviceForm(S.services.find(x => x.id === id)); else expenseForm(S.expenses.find(x => x.id === id)); });
+      $$('[data-cc]', sh).forEach(b => b.onclick = () => { F0.c = b.dataset.cc; $('#cBody', sh).innerHTML = body(); wireB(); haptic(); });
+      const q = $('#cq', sh); q.oninput = () => { F0.q = q.value; const pos = q.selectionStart; $('#cBody', sh).innerHTML = body(); wireB(); const n = $('#cq', sh); n.focus(); n.setSelectionRange(pos, pos); }; };
     $$('[data-per]', sh).forEach(b => b.onclick = () => { period = b.dataset.per; $$('[data-per]', sh).forEach(x => x.classList.toggle('on', x === b)); $('#cBody', sh).innerHTML = body(); wireB(); haptic(); });
     $('#cAdd', sh).onclick = () => expenseForm(); $('#cExp', sh).onclick = () => exportSheet(); wireB();
   });
@@ -1114,7 +1215,9 @@ function exportSheet() {
   openSheet('Export', 'Your data as a proper document. Good for your own records, a workshop, or when you sell the bike.', `
     <button type="button" class="choice" data-x="xlsx">${ic('list')}<span class="grow"><b>Excel spreadsheet</b><span class="s">Summary, maintenance, service history, costs by month, fuel, rides and renewals, each on its own sheet</span></span></button>
     <button type="button" class="choice" data-x="pdf">${ic('save')}<span class="grow"><b>PDF service record</b><span class="s">A clean record of every service, what’s due, and running costs. Ready to print or send</span></span></button>
+    <button type="button" class="choice" data-x="link">${ic('link')}<span class="grow"><b>Share service record link</b><span class="s">A web page a buyer or workshop can open on any phone. The record travels inside the link; nothing is uploaded. No locations or rides are included</span></span></button>
     <p class="gnote">The first export downloads a small helper, so you need to be online.</p>`, sh => $$('[data-x]', sh).forEach(b => b.onclick = async () => {
+    if (b.dataset.x === 'link') { shareRecord(); return; }
     const kind = b.dataset.x, lab = $('b', b), old = lab.textContent; lab.textContent = 'Making it…'; b.disabled = true;
     try { const D = exportData();
       if (kind === 'xlsx') { await loadJS('js/vendor/exceljs.min.js'); const buf = await REXPORT.xlsx(window.ExcelJS, D); saveFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '.xlsx'); }
@@ -1167,10 +1270,25 @@ function historySheet() {
     sh => $$('.li', sh).forEach(b => b.onclick = () => serviceForm(S.services.find(x => x.id === b.dataset.id))));
 }
 function fuelHistSheet() {
-  const list = [...S.fuel].sort((a, b) => b.odo - a.odo), fs = fuelStats();
-  openSheet('Fill-ups', `${list.length} fill-ups · ${money(fs.cost, 0)} total${fs.kpl ? ' · ' + num(fs.kpl, 1) + ' km/L' : ''}`, list.length ? `<div class="list">${list.map((f, i) => { const prev = list[i + 1], d = prev ? f.odo - prev.odo : null, k = f.full && prev && d > 0 && f.litres ? d / f.litres : null;
-    return `<button type="button" class="li" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${fmtD(f.date)} · ${num(f.odo)} km${d ? ` · +${num(d)} km` : ''}${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? costTxt(f) : ''}</span></button>`; }).join('')}</div>` : '<div class="empty">Log fills with the odometer reading. Or say “Hey Siri, log fuel” at the pump once auto-log is set up.</div>',
-    sh => $$('.li', sh).forEach(b => b.onclick = () => fuelForm(S.fuel.find(x => x.id === b.dataset.id))));
+  const F0 = { q: '', f: '' }, stations = [...new Set(S.fuel.map(f => f.station).filter(Boolean))];
+  const chips = [['', 'All'], ['full', 'Full tank'], ['part', 'Partial'], ['rm', 'RM (JB)'], ...stations.filter(x => x !== 'Malaysia').map(x => ['s:' + x, x])];
+  const asc = [...S.fuel].sort((a, b) => a.odo - b.odo), kplOf = f => { const i = asc.indexOf(f), p = asc[i - 1], d = p ? f.odo - p.odo : 0; return f.full && d > 0 && f.litres ? d / f.litres : null; };
+  const match = f => { const x = F0.f; if (x === 'full' && !f.full) return false; if (x === 'part' && f.full) return false; if (x === 'rm' && f.cur !== 'MYR') return false; if (x.startsWith('s:') && f.station !== x.slice(2)) return false;
+    const q = F0.q.trim().toLowerCase(); return !q || [f.station, f.note, fmtD(f.date), f.cur === 'MYR' ? 'rm jb malaysia' : ''].join(' ').toLowerCase().includes(q); };
+  const body = () => { const list = S.fuel.filter(match).sort((a, b) => b.odo - a.odo); if (!list.length) return '<div class="empty">No fill-ups match.</div>';
+    const g = new Map(); list.forEach(f => { const d = new Date(f.date), k = d.getFullYear() + '-' + d.getMonth(); if (!g.has(k)) g.set(k, []); g.get(k).push(f); });
+    let i = 0; return [...g].map(([k, fs]) => { const [y, m] = k.split('-').map(Number), L = fs.reduce((s, f) => s + (+f.litres || 0), 0), c = fs.reduce((s, f) => s + fuelSgd(f), 0), ks = fs.map(kplOf).filter(Boolean);
+      return `<details class="mgrp" ${i++ < 2 || F0.q || F0.f ? 'open' : ''}><summary><b>${new Date(y, m, 1).toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })}</b><span>${fs.length} fill-up${fs.length > 1 ? 's' : ''} · ${num(L, 1)} L · ${money(c, 0)}${ks.length ? ` · ${num(ks.reduce((a, b) => a + b, 0) / ks.length, 1)} km/L` : ''}</span></summary>
+        <div class="list">${fs.map(f => { const k = kplOf(f); return `<button type="button" class="li" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L${f.station ? ' · ' + esc(f.station) : ''}</span><span class="s">${fmtD(f.date)} · ${num(f.odo)} km${k ? ` · ${num(k, 1)} km/L` : ''}${f.full ? '' : ' · partial'}${f.cost && f.litres ? ` · $${num(fuelSgd(f) / f.litres, 2)}/L` : ''}</span></span><span class="r">${f.cost ? costTxt(f) : ''}</span></button>`; }).join('')}</div></details>`; }).join(''); };
+  const fs = fuelStats();
+  openSheet('Fill-ups', `${S.fuel.length} fill-ups · ${money(fs.cost, 0)} total${fs.kpl ? ' · ' + num(fs.kpl, 1) + ' km/L' : ''}`, `
+    <label class="srch">${ic('search', 2.2)}<input type="search" id="fq" placeholder="Search station, date or notes" autocomplete="off"></label>
+    <div class="fchips">${chips.map(([v, l]) => `<button type="button" data-f="${v}" class="${v === '' ? 'on' : ''}">${esc(l)}</button>`).join('')}</div><div id="fBody">${body()}</div>`, sh => {
+    const paint = () => { $('#fBody', sh).innerHTML = body(); wireB(); }, wireB = () => $$('#fBody .li', sh).forEach(b => b.onclick = () => fuelForm(S.fuel.find(x => x.id === b.dataset.id)));
+    $('#fq', sh).addEventListener('input', e => { F0.q = e.target.value; paint(); });
+    $$('[data-f]', sh).forEach(b => b.onclick = () => { F0.f = b.dataset.f; $$('[data-f]', sh).forEach(x => x.classList.toggle('on', x === b)); haptic(); paint(); });
+    wireB();
+  });
 }
 function journalSheet() {
   const rides = [...S.rides].sort((a, b) => b.start.t - a.start.t), total = rides.reduce((s, r) => s + (r.km || 0), 0);
@@ -1295,6 +1413,7 @@ function autoLogSheet() {
     </ol>`;
   openSheet('Auto-log rides', `When your ${dev} connects, a ride starts. When it disconnects, the ride ends and Redline maps it. Nothing opens on your phone.`, `
   <div class="gstat ${ready ? 'ok' : ''}">${ready ? `${ic('check', 3)}<div><b>Relay connected</b><span>Your rider code: <b class="mono">${code}</b></span></div>` : `${ic('alert', 2.4)}<div><b>First, a relay</b><span>Your phone drops each ride there and Redline picks it up when you open it. Have an address from a friend? Paste it. Otherwise it takes about 10 minutes to make your own.</span></div><button type="button" class="btn sm" id="gRelay">Set up</button>`}</div>
+  ${ready ? `<button type="button" class="mrow actrow" id="toRly2"><span class="mi">${ic('link')}</span><span class="grow"><b>Advanced: relay</b><span>${esc(S.relay.replace(/^https:\/\//, ''))}</span></span>${ic('chev')}</button>` : ''}
   ${ready ? `<button type="button" class="mrow actrow" id="toAct"><span class="mi">${ic('list')}</span><span class="grow"><b>Activity</b><span>What arrived from your ${dev} and OwnTracks, minute by minute</span></span>${ic('chev')}</button>` : ''}
   ${ready && SHORTCUTS.start ? `
   <p class="glede">Three steps. Each one ticks itself when Redline sees it working.</p>
@@ -1349,7 +1468,7 @@ function autoLogSheet() {
       <li>Made the older version with ${ui('Save File')} and ${ui('Open URLs')}? Delete those two automations: swipe left on each in the Automation tab.</li></ul></div>` : ''}`, sh => {
     if ($('#gAdded', sh)) $('#gAdded', sh).onclick = () => { S.al = Object.assign({}, S.al, { added: Date.now() }); save(); haptic(); autoLogSheet(); };
     $$('[data-sc]', sh).forEach(b => b.addEventListener('click', () => { S.al = Object.assign({}, S.al, { ['tap_' + b.dataset.sc]: 1 }); if (S.al.tap_start && S.al.tap_end && !S.al.added) S.al.added = Date.now(); save(); }));
-    const ta = $('#toAct', sh); if (ta) ta.onclick = () => activitySheet();
+    const ta = $('#toAct', sh); if (ta) ta.onclick = () => activitySheet(); const tr = $('#toRly2', sh); if (tr) tr.onclick = () => relaySheet();
     sh._alRefresh = async () => { const before = JSON.stringify(S.al || {}); await pullLog(true); const a = S.al || {}; if ((a.start || a.end) && !a.added) a.added = Date.now(); if (JSON.stringify(a) !== before && sheetEl.classList.contains('on') && $('.chk', sheetEl)) { save(); const y = sheetEl.scrollTop; autoLogSheet(); sheetEl.scrollTop = y; if (a.start && a.end) { toast('Auto-log is set up. Ride safe!'); celebrate(); } } };
     $$('[data-sc]', sh).forEach(b => b.onclick = async () => { try { await navigator.clipboard.writeText(code); } catch (e) {} haptic(); toast('Rider code copied. Paste it when Shortcuts asks.'); setTimeout(() => window.open(SHORTCUTS[b.dataset.sc], '_blank'), 350); });
     $$('[data-copy]', sh).forEach(b => b.onclick = async () => { const el = $('#' + b.dataset.copy, sh); try { await navigator.clipboard.writeText(el.textContent); b.textContent = 'Copied'; haptic(); setTimeout(() => b.textContent = 'Copy', 1600); } catch (e) { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Selected'; } });
@@ -1443,7 +1562,7 @@ function plusSheet() {
     <div class="plus2"><button type="button" class="mrow" data-go="parkhere"><span class="mi">${ic('park')}</span><span class="grow"><b>Find my bike</b><span>Where you parked, or save it now</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="expense"><span class="mi">${ic('coin')}</span><span class="grow"><b>Expense</b><span>Gear, parts, parking, washes, road tax</span></span>${ic('chev')}</button><button type="button" class="mrow scanrow2" data-go="scan"><span class="mi">${ic('cam')}</span><span class="grow"><b>Scan a photo</b><span>Odometer, pump or receipt. Redline fills in the form</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="wrap"><span class="mi">${ic('play')}</span><span class="grow"><b>Ride Wrap</b><span>Your month as a story</span></span>${ic('chev')}</button><button type="button" class="mrow" data-go="spots"><span class="mi">${ic('pin')}</span><span class="grow"><b>Marked spots</b><span>Places you saved mid-ride</span></span>${ic('chev')}</button></div>`,
     sh => $$('[data-go]', sh).forEach(b => b.onclick = () => ACTIONS[b.dataset.go]()));
 }
-const ACTIONS = { park: b => (b && b.closest && b.closest('.pkrow') && $('#pkDist') && /distance/.test($('#pkDist').textContent) ? parkDistance() : parkSheet()), parkhere: () => parkSheet(), expense: () => expenseForm(), costs: () => costsSheet(), export: () => exportSheet(), newitems: () => newItemsSheet(), scan: () => scanAny(), quickscan: () => quickScanSheet(), scansave: b => saveScan(b.dataset.i, true), scancheck: b => saveScan(b.dataset.i, false), scanx: b => { S.scanQ = (S.scanQ || []).filter(x => String(x.t) !== b.dataset.i); save(); refresh(); }, fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
+const ACTIONS = { licence: () => licenceForm(), workshops: () => workshopsSheet(), allfuel: () => fuelHistSheet(), spendf: () => { S.spendAll = false; save(); refresh(); }, spenda: () => { S.spendAll = true; save(); refresh(); }, incall: () => { incAll = !incAll; const b = $('#live1'); if (b) b.innerHTML = liveRides(); }, incx: b => b.classList.toggle('open'), allrides: () => ridesSheet(), goal: () => goalForm(), park: () => parkSheet(), nowmore: () => { nowAll = !nowAll; const al = $('#alerts'); if (al) { al.innerHTML = alertsHTML(); al.dataset.h = al.innerHTML; } }, wetx: b => { const r = S.rides.find(x => x.id === b.dataset.i); if (r) r.wetDone = true; save(); refresh(); }, econ: () => econSheet(), tyres: () => tyreSheet(), parkhere: () => parkSheet(), expense: () => expenseForm(), costs: () => costsSheet(), export: () => exportSheet(), newitems: () => newItemsSheet(), scan: () => scanAny(), quickscan: () => quickScanSheet(), scansave: b => saveScan(b.dataset.i, true), scancheck: b => saveScan(b.dataset.i, false), scanx: b => { S.scanQ = (S.scanQ || []).filter(x => String(x.t) !== b.dataset.i); save(); refresh(); }, fullsvc: () => serviceForm(null, S.items.map(i => i.id)), kit: () => kitSheet(), preride: () => preRide(), mydata: () => myDataSheet('odo'), ridemenu: () => rideMenu(), autolog: () => autoLogSheet(), aldismiss: () => { S.al = Object.assign({}, S.al, { dismiss: 1 }); save(); refresh(); toast('Hidden. It’s in Settings → Auto-log rides any time.'); }, startride: startRide, endride: endRide, fuel: () => fuelForm(), ride: () => rideForm(), service: () => serviceForm(), odo: odoForm, history: historySheet, spots: spotsSheet, renewals: () => renewalsSheet(), wrap: () => { closeSheet(); WRAP.open(); },
   light: fuelLight, radar: () => RADAR.open(), roads: () => trafficSheet(), relay: () => relaySheet() };
 
 /* ================= renewals: renewed it? set the new date and it goes quiet again ================= */
@@ -1460,7 +1579,8 @@ function routeFinder() { return `<div class="finder"><div class="two">${F({ k: '
 function wireFinder(root) {
   $('#findRoads', root).onclick = async e => { const v = read(root), b = e.currentTarget; if (!v.hpc || !v.wpc) { toast('Add both postal codes', 'over'); return; }
     b.disabled = true; b.lastChild.textContent = ' Finding…';
-    try { const [h, w] = await Promise.all([postalPoint(String(v.hpc)), postalPoint(String(v.wpc))]); const r = await routeKm([h, w]); S.homePC = v.hpc; S.workPC = v.wpc; S.home = h;
+    try { const [h, w] = await Promise.all([postalPoint(String(v.hpc)), postalPoint(String(v.wpc))]); const r = await routeKm([h, w]); S.homePC = v.hpc; S.workPC = v.wpc; S.home = h; S.work = w;
+      if (r.path && r.path.length > 1) { const st = Math.max(1, Math.floor(r.path.length / 30)); S.commute = r.path.filter((_, i) => i % st === 0).concat([r.path[r.path.length - 1]]); } save(); checkCommute(true).then(() => paintLive && paintLive());
       const found = r.roads || []; $$('.roadchips .chipbtn', root).forEach(c => { if (found.includes(c.dataset.v)) { c.setAttribute('aria-pressed', 'true'); c.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 400 }); } });
       toast(found.length ? `Found ${found.length} expressway${found.length > 1 ? 's' : ''} on your commute` : 'Your commute stays off the expressways'); }
     catch (err) { toast('Couldn’t look that up. Pick your roads instead.', 'over'); }
@@ -1475,7 +1595,9 @@ function trafficSheet() {
     ${(S.roadDrop || []).length ? `<button type="button" class="link" id="undrop">Bring back ${S.roadDrop.length} removed road${S.roadDrop.length > 1 ? 's' : ''}</button>` : ''}`; };
   openSheet('Your roads', 'Jams and accidents on these show up on Home.', `<form id="tf">${roadChips(S.roads || [])}
     <div id="learnBox">${learnBox()}</div>
-    <div class="sep"></div><div class="bl">Or let Redline find them</div>${routeFinder()}
+    <div class="sep"></div><div class="bl">Your commute</div><p class="gnote">Add home and work: Redline finds the expressways on the way, and checks for rain along the route around the times you usually leave.</p>${routeFinder()}
+    <div class="two">${F({ k: 'am', l: 'Usually leave for work', type: 'time', v: (S.commuteTimes || {}).am || '08:00' })}${F({ k: 'pm', l: 'Usually head home', type: 'time', v: (S.commuteTimes || {}).pm || '18:00' })}</div>
+    ${S.commute ? `<p class="gnote">${ic('check', 2.4)} Rain check is on for your ${S.homePC} → ${S.workPC} route.</p>` : ''}
     <div class="btns"><button class="btn">Save</button></div></form>
     <div class="sep"></div><button type="button" class="mrow" id="toRelay"><span class="mi">${ic('alert')}</span><span class="grow"><b>Live alerts</b><span>${S.relay ? 'On · from LTA' : 'Off · free one-time setup'}</span></span>${ic('chev')}</button>`, sh => {
     wire(sh); wireFinder(sh);
@@ -1484,33 +1606,39 @@ function trafficSheet() {
       $$('[data-drop]', lb).forEach(b => b.onclick = () => { S.roadDrop = [...new Set([...(S.roadDrop || []), b.dataset.drop])]; save(); haptic(); lb.innerHTML = learnBox(); wireL(); });
       const u = $('#undrop', lb); if (u) u.onclick = () => { S.roadDrop = []; save(); lb.innerHTML = learnBox(); wireL(); }; };
     wireL(true);
-    $('#tf', sh).onsubmit = e => { e.preventDefault(); S.roads = read(e.target).roads; save(); closeSheet(); loadLive(true); toast(S.roads.length ? `Watching ${S.roads.length} road${S.roads.length > 1 ? 's' : ''}` : 'No roads picked'); };
+    $('#tf', sh).onsubmit = e => { e.preventDefault(); const tv = read(e.target); S.commuteTimes = { am: tv.am || '08:00', pm: tv.pm || '18:00' }; S.roads = tv.roads; save(); closeSheet(); loadLive(true); toast(S.roads.length ? `Watching ${S.roads.length} road${S.roads.length > 1 ? 's' : ''}` : 'No roads picked'); };
     $('#toRelay', sh).onclick = () => relaySheet();
   });
 }
 
 /* ================= settings ================= */
-function settingsSheet() {
-  const nr = nextRenewal(), earned = BADGES.filter(b => badgeState(b).tier > 0).length;
-  const rows = [
-    ['bike', 'bike', 'Bike', `${esc(S.bike.name || 'Your bike')} · ${buildName()}`],
-    ['renewals', 'cal', 'Renewals', nr ? `${nr.r.name} in ${nr.s.days} days` : 'Add your dates'],
-    ['autolog', 'head', 'Auto-log rides', S.relay ? (S.intercom && S.intercom !== 'none' ? `${S.intercom} · set up in Shortcuts` : 'Set up in Shortcuts') : 'Needs a relay first'],
-    ['activity', 'list', 'Activity', 'What arrived from your shortcuts and OwnTracks'],
-    ['relay', 'link', 'Relay', S.relay ? S.relay.replace(/^https:\/\//, '') : 'Not connected'],
-    ['roads', 'alert', 'Traffic', `${myRoads().length ? myRoads().map(r => r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r).join(', ') : 'Pick your roads'} · ${S.relay ? 'alerts on' : 'alerts off'}`],
-    ['quickscan', 'cam', 'Quick scan', 'Snap the odometer or pump without opening Redline'],
-    ['costs', 'coin', 'Costs', 'Everything the bike costs you'],
-    ['export', 'share', 'Export', 'Excel spreadsheet or PDF service record'],
-    ['mydata', 'list', 'My data', 'Fix any reading, fill-up, service or ride · restore'],
-    ['badges', 'trophy', 'Badges', `${earned} of ${BADGES.length} earned`],
-    ['sound', 'spk', 'Sound', [S.prefs.sound ? 'Tap sounds on' : 'Tap sounds off', S.prefs.music ? 'music on' : ''].filter(Boolean).join(' · ')],
-    ['backup', 'save', 'Backup', S.stats.exports ? `${S.stats.exports} backups made` : 'Not backed up yet'],
-  ];
-  if (window.PREVIEW) rows.push(['demo', 'play', 'Preview tools', 'Try low fuel or a traffic alert']);
-  openSheet('Settings', '', `<div class="mlist">${rows.map(([k, i, t, sub]) => `<button type="button" class="mrow" data-more="${k}"><span class="mi">${ic(i)}</span><span class="grow"><b>${t}</b><span>${sub}</span></span>${ic('chev')}</button>`).join('')}</div>`,
-    sh => $$('[data-more]', sh).forEach(b => b.onclick = () => MORE[b.dataset.more]()));
+// a sheet that's just a short list of rows, each opening something (keeps Settings to six rows)
+function hubSheet(title, lede, rows) {
+  openSheet(title, lede, `<div class="mlist">${rows.filter(Boolean).map(([k, i, t, sub]) => `<button type="button" class="mrow" data-more="${k}"><span class="mi">${ic(i)}</span><span class="grow"><b>${t}</b><span>${sub}</span></span>${ic('chev')}</button>`).join('')}</div>`,
+    sh => { $$('[data-more]', sh).forEach(b => b.onclick = () => MORE[b.dataset.more]()); const n = title === 'Settings' ? inboxItems().length : 0; $$('.mrow', sh).slice(0, n).forEach(r => r.classList.add('todo')); });
 }
+function settingsSheet() {
+  const nr = nextRenewal(), earned = BADGES.filter(b => badgeState(b).tier > 0).length, inbox = inboxItems();
+  hubSheet('Settings', inbox.length ? `<span class="inboxh">${ic('alert', 2.4)} To do</span>` : '', [...inbox.map(([k, i, t, sub]) => [k, i, t, sub]),
+    ['bikehub', 'bike', 'Bike', `${esc(S.bike.name || 'Your bike')} · renewals${nr ? ` (${nr.r.name} in ${nr.s.days} days)` : ''}, licence, tyres, workshops`],
+    ['autolog', 'head', 'Auto-log & tracking', S.relay ? `${S.intercom && S.intercom !== 'none' ? S.intercom + ' · ' : ''}OwnTracks · activity` : 'Needs a relay first'],
+    ['roads', 'alert', 'Traffic & commute', `${myRoads().length ? myRoads().slice(0, 4).map(r => r === 'WDL' ? 'Causeway' : r === 'TUAS' ? '2nd Link' : r).join(', ') : 'Pick your roads'}${S.work ? ' · commute rain check on' : ''}`],
+    ['costs', 'coin', 'Costs & export', 'Everything the bike costs · Excel and PDF'],
+    ['mydata', 'list', 'My data', 'Fix entries · restore deleted · backup'],
+    ['apphub', 'gear', 'App', `Sound · ${earned} of ${BADGES.length} badges · quick scan`],
+  ]);
+}
+function bikeHub() { const nr = nextRenewal(), lic = licenceInfo(), ty = lastTyres();
+  hubSheet('Bike', '', [['bike', 'bike', 'Bike details', `${esc(S.bike.model || buildName())}${S.bike.tank ? ` · ${S.bike.tank} L tank` : ''}`],
+    ['renewals', 'cal', 'Renewals', nr ? `${nr.r.name} in ${nr.s.days} days` : 'Add your dates'],
+    ['licence', 'trophy', 'Licence', lic ? lic.short : 'Add your class and pass date'],
+    ['tyres', 'target', 'Tyre pressure', ty ? `Checked ${ago(ty.t)} · ${ty.front}/${ty.rear} psi` : 'Log your first check'],
+    ['workshops', 'wrench', 'Workshops', `${workshops().length || 'No'} workshop${workshops().length === 1 ? '' : 's'} from your services`],
+    ['warranties', 'save', 'Warranties & receipts', `${warranties().filter(w => w.left >= 0).length} active`]]); }
+function appHub() { const earned = BADGES.filter(b => badgeState(b).tier > 0).length;
+  hubSheet('App', '', [['sound', 'spk', 'Sound', [S.prefs.sound ? 'Tap sounds on' : 'Tap sounds off', S.prefs.music ? 'music on' : ''].filter(Boolean).join(' · ')],
+    ['badges', 'trophy', 'Badges', `${earned} of ${BADGES.length} earned`], ['goals', 'target', 'Weekly goal', S.goal ? `${S.goal} km a week` : 'Set a weekly km goal'],
+    ['quickscan', 'cam', 'Quick scan', 'Snap the odometer or pump without opening Redline'], window.PREVIEW && ['demo', 'play', 'Preview tools', 'Try low fuel or a traffic alert']]); }
 function soundSheet() {
   openSheet('Sound', '', `${F({ k: 's', l: 'Tap sounds', type: 'toggle', v: S.prefs.sound })}${F({ k: 'm', l: 'Background music', type: 'toggle', v: S.prefs.music })}
     <div class="btns"><button type="button" class="btn ghost" id="pick">${Snd.own ? 'Back to the built-in music' : 'Use my own track'}</button></div>
@@ -1718,7 +1846,7 @@ function demoSheet() {
     $('#dSetup', sh).onclick = () => { closeSheet(); S = fresh(); save(); startSetup(); };
   });
 }
-const MORE = { activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
+const MORE = { newitems: () => newItemsSheet(), bikehub: () => bikeHub(), apphub: () => appHub(), licence: () => licenceForm(), tyres: () => tyreSheet(), workshops: () => workshopsSheet(), warranties: () => warrantySheet(), goals: () => goalForm(), activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
 
 function applyLite() {}
 /* ================= audio: off by default ================= */

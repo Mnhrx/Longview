@@ -154,7 +154,7 @@ function save(){
   }catch(e){ return false; }
 }
 function adopt(cur){
-  cur.settings=Object.assign({},DEF,cur.settings||{}); if(!Array.isArray(cur.history)) cur.history=[]; if(cur.active===undefined) cur.active=null; if(!cur.payslips) cur.payslips={}; if(!cur.paid) cur.paid={}; if(!cur.celebrated) cur.celebrated={}; if(!cur.templates) cur.templates={}; if(!cur.classes) cur.classes=null;
+  cur.settings=Object.assign({},DEF,cur.settings||{}); if(!Array.isArray(cur.history)) cur.history=[]; if(cur.active===undefined) cur.active=null; if(cur.active&&cur.active.in%60000) cur.active.in=Math.floor(cur.active.in/60000)*60000; if(!cur.payslips) cur.payslips={}; if(!cur.paid) cur.paid={}; if(!cur.celebrated) cur.celebrated={}; if(!cur.templates) cur.templates={}; if(!cur.classes) cur.classes=null;
   state=cur; loadedAt=cur.savedAt||0;
   try{ refreshAll(); }catch(e){}
 }
@@ -166,6 +166,9 @@ const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none
 let state=load()||{}; loadedAt=state.savedAt||0;
 if(!Array.isArray(state.history)) state.history=[];
 if(state.active===undefined) state.active=null;
+// the punch machine only records the minute: 7:42:37 counts as 7:42
+const flMin=ts=>Math.floor(ts/60000)*60000;
+if(state.active&&state.active.in%60000) state.active.in=flMin(state.active.in);
 const firstRun=!state.settings;
 // first-time setup walks through the sections one at a time; it survives a reload until it's finished
 if(firstRun) state.setup={step:0};
@@ -808,7 +811,7 @@ function showIdle(animate){
 let busy=false;
 function startDay(ts,fromEl){
   if(busy) return;
-  state.active={in:ts,celebrated:Date.now()>=ts+SHIFT()}; save();
+  ts=flMin(ts); state.active={in:ts,celebrated:Date.now()>=ts+SHIFT()}; save();
   world&&world.travel(true);
   if(!ANIM){ showActive(false); return; }
   busy=true;
@@ -835,7 +838,7 @@ function hideToast(){ $('toast').classList.remove('show'); undoData=null; toastF
 $('toastAct').onclick=()=>{ const f=toastFn; clearTimeout(toastTimer); hideToast(); f&&f(); };
 function clockOut(){
   if(busy||!state.active) return;
-  const out=Date.now();
+  const out=flMin(Date.now());
   const rec=priceRec({in:state.active.in,out,shift:SHIFT(),rate:rates()}), e=rec.earn??null;
   undoData={active:state.active};
   state.history.unshift(rec); sortHist();
@@ -1667,21 +1670,23 @@ $('yearCv').addEventListener('pointerdown',e=>{
   const ts=new Date(yYear,m,d,12).getTime(), rec=yMap[isoDate(ts)], name=PH[isoDate(ts)];
   let what;
   if(rec){ const t=typeOf(rec);
-    if(t==='work') what=rec.out?`worked ${dur(rec.out-rec.in)}${rec.otMs?`, ${dur(rec.otMs)} OT`:''}`:'clocked in, no clock-out';
+    if(t==='work') what=rec.out?`worked ${dur(rec.out-rec.in)}${rec.otMs?` · ${dur(rec.otMs)} OT`:''}`:'clocked in, no clock-out';
     else if(t==='ph') what=rec.name||name||'Public holiday';
     else what=typeLabel(rec); }
-  else what=name?`${name} (weekend)`:ts>Date.now()?'upcoming':isWorkday(ts)?'nothing recorded':'weekend';
-  { const cl=typeof clsOn==='function'?clsOn(ts):[]; if(cl.length) what+=` · class ${cl.map(s=>`${s.name.split(' ')[0]} ${fmtHM(s.start)}`).join(', ')}`; }
+  else what=name?`${name} (weekend)`:ts>Date.now()?'Upcoming':isWorkday(ts)?'Nothing recorded':'Weekend';
+  what=what.charAt(0).toUpperCase()+what.slice(1);
+  // classes that night, one line per module with its times grouped: "Class TEE3506 · 6:00 pm, 8:30 pm"
+  let cls=[]; { const cl=typeof clsOn==='function'?clsOn(ts):[], g={}; cl.forEach(c=>{ const n=c.name.split(' ')[0]; (g[n]=g[n]||[]).push(fmtHM(c.start)); }); cls=Object.keys(g).map(n=>`Class ${n} · ${g[n].join(', ')}`); }
   const tip=$('yTip'), cr=$('yCard').getBoundingClientRect();
-  tip.textContent=`${new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}: ${what}`;
-  tip.hidden=false;
-  // the bubble may slide to stay on screen, but its pointer stays on the tapped dot
-  const dotX=r.left-cr.left+lw+colW*(d-.5), below=m<2, tw=tip.offsetWidth;
-  const minX=tw/2+6-cr.left, maxX=innerWidth-cr.left-tw/2-6, tx=Math.min(Math.max(dotX,minX),maxX);
+  tip.innerHTML=`<b>${new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}</b>${[what].concat(cls).map(l=>`<span>${esc(l)}</span>`).join('')}`;
+  tip.hidden=false; if(G) G.set(tip,{clearProps:'transform'});
+  // placed in plain pixels and kept 12px inside the screen; the pointer stays on the tapped dot
+  const dotX=r.left-cr.left+lw+colW*(d-.5), below=m<2, tw=tip.offsetWidth, th=tip.offsetHeight;
+  const minL=12-cr.left, maxL=innerWidth-12-cr.left-tw, L=Math.max(minL,Math.min(dotX-tw/2,maxL));
   tip.classList.toggle('below',below);
-  tip.style.left=tx+'px'; tip.style.top=(below?r.top-cr.top+3+rowH*(m+1)+6:r.top-cr.top+3+rowH*m-4)+'px';
-  tip.style.setProperty('--ax',(Math.min(Math.max(dotX-tx+tw/2,12),tw-12))+'px');
-  if(G){ G.set(tip,{xPercent:-50,yPercent:below?0:-100}); if(ANIM) G.fromTo(tip,{opacity:0,y:below?-6:6},{opacity:1,y:0,duration:.3,ease:'back.out(2.5)'}); else G.set(tip,{opacity:1,y:0}); }
+  tip.style.left=L+'px'; tip.style.top=(below?r.top-cr.top+3+rowH*(m+1)+6:r.top-cr.top+3+rowH*m-4-th)+'px';
+  tip.style.setProperty('--ax',(Math.min(Math.max(dotX-L,12),tw-12))+'px');
+  if(G){ if(ANIM) G.fromTo(tip,{opacity:0,y:below?-6:6},{opacity:1,y:0,duration:.3,ease:'back.out(2.5)'}); else G.set(tip,{opacity:1,y:0}); }
   yHi={m,d,t0:performance.now()}; kickYear();
   clearTimeout(tipTimer); tipTimer=setTimeout(()=>{ tip.hidden=true; yHi=null; },2600);
 });
