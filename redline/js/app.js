@@ -10,12 +10,12 @@ const buildName = () => `${(DRIVES.find(d => d[0] === (S.bike.drive || 'chain'))
 const haptic = () => navigator.vibrate && navigator.vibrate(8);
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ui = t => `<b class="ui">${t}</b>`; // a highlighted button name inside guide text
-// iPhone home-screen apps (black status bar, recent iOS) can report a screen a little shorter than the real one, leaving a strip
-// at the bottom. Measure it and stretch every full-screen layer down by exactly that much, so the bar sits on the real bottom edge.
+// iPhone home-screen apps can be handed an area a little shorter than the screen (taps don't reach the strip below it).
+// When that happens, the bar sits inside the area with only a small margin, and the strip below is painted the bar's colour.
 (function fitBottom() { const html = document.documentElement;
   const f = () => { const portrait = innerHeight >= innerWidth, sh = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
     const gap = Math.round(sh - innerHeight), sa = matchMedia('(display-mode: standalone)').matches || navigator.standalone, on = !!sa && gap > 12 && gap < 120;
-    html.classList.toggle('gapfix', on); html.style.setProperty('--gap', (on ? gap : 0) + 'px'); };
+    html.classList.toggle('short', on); };
   f(); addEventListener('resize', f); addEventListener('orientationchange', () => setTimeout(f, 300)); })();
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -356,7 +356,7 @@ function ridesHTML() {
   return `<div class="hi"><div><h1>Rides</h1></div></div>
     <div class="hcol a"><section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
       <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
-      ${window.RADAR ? RADAR.ATTR : ''}<div class="mfocus" id="mfocus" hidden></div><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
+      ${window.RADAR ? RADAR.ATTR : ''}<div class="mfocus" id="mfocus" hidden></div><button type="button" class="mfs" id="mfs" aria-label="Full-screen map">${ic('full', 2.6)}</button><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
     ${S.rides.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${S.rides.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
     <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div>
     ${goalHTML()}</div>
@@ -406,7 +406,7 @@ function ridesSheet() {
     <label class="srch">${ic('search', 2.2)}<input type="search" id="rq" placeholder="Search title, notes, road (PIE, AYE…)" autocomplete="off"></label>
     <div class="fchips">${chips.map(([v, l]) => `<button type="button" data-f="${v}" class="${v === '' ? 'on' : ''}">${esc(l)}</button>`).join('')}</div><div id="rBody">${body()}</div>`, sh => {
     const paint = () => { $('#rBody', sh).innerHTML = body(); wireB(); };
-    const wireB = () => { $$('#rBody .li', sh).forEach(b => b.onclick = () => rideForm(S.rides.find(r => r.id === b.dataset.id)));
+    const wireB = () => { $$('#rBody .li', sh).forEach(b => b.onclick = () => showOnMap(b.dataset.id));
       $$('#rBody .cd.on', sh).forEach(c => c.onclick = () => { const grp = c.closest('.mgrp'), d = c.dataset.day.split('-')[2], was = c.classList.contains('sel');
         $$('.cd', grp).forEach(x => x.classList.remove('sel')); $$('.li', grp).forEach(li => li.hidden = !was && li.dataset.d !== d); if (!was) c.classList.add('sel'); haptic(); }); };
     $('#rq', sh).addEventListener('input', e => { F0.q = e.target.value; paint(); });
@@ -583,7 +583,7 @@ function adoptOdo() {
 }
 function refresh() { adoptOdo(); syncWorld(); const y = viewEl.scrollTop; render(false); viewEl.scrollTop = y; }
 let going = false;
-function go(i) {
+function go(i) { if (document.body.classList.contains('mapfs')) mapFull(false);
   if (i === place) { viewEl.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (going) return; going = true; haptic(); Snd.click && Snd.click(1);
   if (window.MAP && place === 1) MAP.focus(null);
@@ -597,6 +597,22 @@ function navTo(i) {
 }
 addEventListener('resize', () => navTo(place));
 function syncWorld() { if (window.MAP) MAP.setRides(S.rides.map(r => ({ id: r.id, t: r.start.t, path: r.path, kind: rideKind(r), gps: r.gps }))); }
+// open a ride on the Rides map (from All rides, a ride's mini map…)
+function showOnMap(id, full) { closeSheet(); const go2 = () => { if (window.MAP && MAP.focused !== id) focusRide(id); viewEl.scrollTo({ top: 0, behavior: 'smooth' }); if (full) setTimeout(() => mapFull(true), 450); };
+  if (place !== 1) { go(1); setTimeout(go2, 650); } else go2(); }
+// the Rides map, full screen: pinch, drag, double-tap to zoom
+function mapFull(on) { document.body.classList.toggle('mapfs', on); const b = $('#mfs'); if (b) b.innerHTML = ic(on ? 'x' : 'full', 2.6); dispatchEvent(new Event('resize')); haptic(); }
+// a small picture of one ride's route, drawn on the same map outline as the Rides map
+function miniRoute(cv, r) { if (!cv || !window.MAP || !r.path || r.path.length < 2) return;
+  const dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight; cv.width = w * dpr; cv.height = h * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  let b = null; for (const [la, lo] of r.path) { if (!b) b = [lo, la, lo, la]; b = [Math.min(b[0], lo), Math.min(b[1], la), Math.max(b[2], lo), Math.max(b[3], la)]; }
+  const p = .004; b = [b[0] - p, b[1] - p, b[2] + p, b[3] + p]; const cam = MAP.fit(b, 18, w, h); MAP.land(g, w, h, cam);
+  const P = (lo, la) => [(lo - cam.x) * MAP.K * cam.z + w / 2, (cam.y - la) * cam.z + h / 2], col = RIDE_KINDS[rideKind(r)][1];
+  const line = () => { g.beginPath(); r.path.forEach(([la, lo], i) => { const [x, y] = P(lo, la); i ? g.lineTo(x, y) : g.moveTo(x, y); }); };
+  g.lineCap = g.lineJoin = 'round'; line(); g.strokeStyle = col + '44'; g.lineWidth = 9; g.stroke(); if (rideKind(r) === 'guess') g.setLineDash([6, 5]); line(); g.strokeStyle = col; g.lineWidth = 2.6; g.stroke(); g.setLineDash([]);
+  (r.gps || []).forEach(([la, lo]) => { const [x, y] = P(lo, la); g.fillStyle = 'rgba(69,224,162,.9)'; g.beginPath(); g.arc(x, y, 2.2, 0, 7); g.fill(); });
+  [r.path[0], r.path[r.path.length - 1]].forEach(([la, lo], i) => { const [x, y] = P(lo, la); g.fillStyle = i ? '#FF6A2B' : '#FFF8F0'; g.beginPath(); g.arc(x, y, 4.5, 0, 7); g.fill(); });
+}
 function focusRide(id) {
   if (!window.MAP) return; if (MAP.focused === id) id = null;
   MAP.focus(id); $$('.rrow[data-focus]', viewEl).forEach(x => x.classList.toggle('sel', x.dataset.focus === id)); showFocus();
@@ -629,6 +645,7 @@ $('#nav').addEventListener('click', e => { const b = e.target.closest('button');
 $('#gear').addEventListener('click', e => { haptic(); e.currentTarget.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(120deg)' }], { duration: 500, easing: 'cubic-bezier(.2,1.3,.4,1)' }); settingsSheet(); });
 viewEl.addEventListener('mapmoved', e => { const b = $('#mre'); if (b) { b.hidden = !e.detail; if (e.detail && !RM) b.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,1.4,.4,1)' }); } });
 viewEl.addEventListener('click', e => {
+  if (e.target.closest('#mfs')) { mapFull(!document.body.classList.contains('mapfs')); return; }
   if (e.target.closest('#mre')) { haptic(); MAP.recentre(); return; }
   const trb = e.target.closest('[data-trip]'); if (trb) { haptic(); trb.disabled = true; answerTrip(trb.dataset.trip, !!trb.dataset.yes).then(r => { if (r) showResults([r]); else { toast('Got it, not a bike trip'); refresh(); } }); return; }
   const rtb = e.target.closest('[data-route]'); if (rtb) { haptic(); routePicker(S.rides.find(x => x.id === rtb.dataset.route)); return; }
@@ -940,8 +957,8 @@ function rideForm(r) {
       if (isNew) { const t0 = +new Date(v.date + 'T' + (v.time || '09:00')); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
       else { const t0 = v.date ? +new Date(v.date + 'T' + (v.time || '09:00')) : r.start.t, dur = v.mins != null ? v.mins * 6e4 : r.end.t - r.start.t, kmChanged = v.km !== r.km;
         Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); r.start.t = t0; r.end.t = t0 + dur; if (kmChanged) r.est = 'manual'; } },
-    extra: (!isNew ? `<div class="rphotos" id="rph"></div><button type="button" class="scanbtn" id="shRide">${ic('share', 2.2)}<span>Share this ride</span></button><div style="height:10px"></div>` : '') + (!isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : ''),
-    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); if (!isNew) { ridePhotos(r, $('#rph', sh)); $('#shRide', sh).onclick = async e => { const sp = $('span', e.currentTarget); sp.textContent = 'Making the image…'; await WRAP.shareRide(r); sp.textContent = 'Share this ride'; }; } },
+    extra: (!isNew && r.path && r.path.length > 1 ? `<button type="button" class="rmini" id="rmini" aria-label="Show this ride on the map"><canvas></canvas><span>${ic('full', 2.4)} Map</span></button>` : '') + (!isNew ? `<div class="rphotos" id="rph"></div><button type="button" class="scanbtn" id="shRide">${ic('share', 2.2)}<span>Share this ride</span></button><div style="height:10px"></div>` : '') + (!isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : ''),
+    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); if (!isNew) { const mm = $('#rmini', sh); if (mm) { requestAnimationFrame(() => miniRoute($('canvas', mm), r)); mm.onclick = () => showOnMap(r.id, true); } ridePhotos(r, $('#rph', sh)); $('#shRide', sh).onclick = async e => { const sp = $('span', e.currentTarget); sp.textContent = 'Making the image…'; await WRAP.shareRide(r); sp.textContent = 'Share this ride'; }; } },
     onDelete: !isNew && (() => S.rides = S.rides.filter(x => x !== r)), bin: !isNew && { list: 'rides', obj: r, label: r.title || `Ride of ${num(r.km, 1)} km` } });
 }
 // photos on a ride: shrunk on the phone and kept on the phone (IndexedDB), never uploaded
@@ -1072,6 +1089,20 @@ function restoreSheet() {
       : '<div class="empty">All the standard items are in your list.</div>'}</div>`,
     sh => { $$('[data-bin]', sh).forEach(b => b.onclick = () => restoreBin(b.dataset.bin)); $$('[data-std]', sh).forEach(b => b.onclick = () => addStd(b.dataset.std)); });
 }
+/* ---------- import entries: add services, expenses and workshops from a file (e.g. your old invoices) without touching anything else ---------- */
+function importEntries(d) {
+  if (!d || d.redlineImport !== 1) throw new Error('That file isn’t a Redline import file');
+  const seen = new Set([...S.services, ...(S.expenses || [])].map(x => x.ref).filter(Boolean)); let ns = 0, ne = 0, ni = 0;
+  const itemId = name => { let it = S.items.find(i => i.name.toLowerCase() === String(name).toLowerCase());
+    if (!it) { const def = ITEM_DEFS.find(x => x[0].toLowerCase() === String(name).toLowerCase()); if (!def) return null;
+      it = { id: uid(), name: def[0], part: def[1], km: def[2], months: def[3], lastOdo: null, lastDate: null }; S.items.push(it); S.skipStd = (S.skipStd || []).filter(n => n !== def[0]); ni++; }
+    return it.id; };
+  for (const v of d.services || []) { if (v.ref && seen.has(v.ref)) continue; const items = (v.items || []).map(itemId).filter(Boolean);
+    S.services.push({ id: uid(), date: v.date, odo: v.odo ?? null, items, cost: v.cost ?? null, shop: v.shop || '', notes: v.notes || '', ref: v.ref, ts: Date.now() }); ns++; }
+  for (const x of d.expenses || []) { if (x.ref && seen.has(x.ref)) continue; S.expenses.push({ id: uid(), date: x.date, cost: x.cost, cur: x.cur || 'SGD', cat: x.cat || 'other', note: x.note || '', ref: x.ref, ts: Date.now() }); ne++; }
+  S.shops = Object.assign({}, S.shops || {}, d.shops || {}); syncItems(); save();
+  return { ns, ne, ni };
+}
 function myDataSheet(tab = 'odo') {
   const tabs = [['odo', 'Odometer'], ['fuel', 'Fill-ups'], ['service', 'Services'], ['ride', 'Rides']];
   const body = () => {
@@ -1088,8 +1119,11 @@ function myDataSheet(tab = 'odo') {
     const l = [...S.rides].sort((a, b) => b.start.t - a.start.t);
     return l.length ? `<div class="list">${l.slice(0, 80).map(r => `<button type="button" class="li" data-src="ride" data-id="${r.id}"><i class="dot" style="background:${RIDE_KINDS[rideKind(r)][1]}"></i><span class="grow"><span class="t">${esc(r.title || 'Ride')} · ${num(r.km, 1)} km</span><span class="s">${fmtDT(r.start.t)} · ${Math.round((r.end.t - r.start.t) / 6e4)} min · ${RIDE_KINDS[rideKind(r)][0]}${r.est === 'estimate' ? ', straight line' : ''}</span></span>${ic('chev')}</button>`).join('')}</div>` : '<div class="empty">No rides yet.</div>';
   };
-  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><div class="btns"><button type="button" class="btn ghost" id="mdRes">Restore deleted${(S.bin || []).length ? ` (${S.bin.length})` : ''}</button><button type="button" class="btn ghost" id="mdBak">${ic('save', 2.2)} Backup</button></div>`, sh => {
+  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><div class="btns"><button type="button" class="btn ghost" id="mdRes">Restore deleted${(S.bin || []).length ? ` (${S.bin.length})` : ''}</button><button type="button" class="btn ghost" id="mdBak">${ic('save', 2.2)} Backup</button></div><div class="btns"><button type="button" class="btn ghost" id="mdImp">${ic('share', 2.2)} Import entries</button></div>`, sh => {
     $('#mdRes', sh).onclick = () => restoreSheet(); $('#mdBak', sh).onclick = () => backupSheet();
+    $('#mdImp', sh).onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json';
+      i.onchange = () => { const f = i.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const r = importEntries(JSON.parse(rd.result)); closeSheet(); refresh(); celebrate();
+        toast(r.ns || r.ne ? `Added ${r.ns} service${r.ns === 1 ? '' : 's'} and ${r.ne} expense${r.ne === 1 ? '' : 's'}${r.ni ? ` (+${r.ni} new item${r.ni > 1 ? 's' : ''})` : ''}` : 'Already imported, nothing new'); } catch (e) { toast(e.message || 'Couldn’t read that file', 'over'); } }; rd.readAsText(f); }; i.click(); };
     const wireB = () => { $$('#mdBody .li', sh).forEach(b => b.onclick = () => { const id = b.dataset.id, src = b.dataset.src;
         if (src === 'fuel') fuelForm(S.fuel.find(x => x.id === id)); else if (src === 'service') serviceForm(S.services.find(x => x.id === id)); else if (src === 'ride') rideForm(S.rides.find(x => x.id === id)); else odoEditForm(S.odoLog.find(x => x.id === id)); });
       const a = $('#mdAdd', sh); if (a) a.onclick = () => odoForm(); };

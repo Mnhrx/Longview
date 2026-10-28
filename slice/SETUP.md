@@ -59,11 +59,13 @@ After any PayNow, double-tap the back of your phone, type the amount and what it
 - **Everyday** counts toward your $750 allowance, from any account.
 - **Planned** is tracked but outside the allowance: parents, school fees, insurance, big one-offs.
 - **Transfer** is your own money moving between accounts and isn't counted.
-- The $200 to your parents repeats automatically on the 1st as Planned. Manage repeats in Settings.
-- The **Month** tab shows what to move to POSB Surplus, and how your card bill splits between salary (everyday) and savings (planned).
+- The $200 to your parents repeats automatically on the 28th, after payday, as Planned. Manage repeats in Settings.
+- The **Month** tab follows your actual flow: salary in, the move to JumpStart, paying the SC card from JumpStart, and what's left to move to POSB Surplus.
 
 ## Good to know
 
 - Data lives on your phone. Settings → **Backup** after each statement, and keep the file in iCloud Drive.
-- Settings → **Upload SC card statement** checks your logged card spending against the PDF on-device.
+- Settings → **Upload statement** reads SC card and JumpStart PDFs on your phone. It confirms what's logged, fixes amounts and adds anything missed. Re-uploading the same statement never creates duplicates.
+- The POSB transaction-history PDF from the app is just pictures of the page, so it can't be read. A POSB monthly eStatement PDF (from digibank) or a CSV export should work; send one over to get a POSB reader added.
+- **Money in:** tap + then **Received**. Mark it *Payback* when a friend pays you back, and pick the meal it's for. That meal then only counts your share.
 - Change a merchant's category once and Slice remembers it.

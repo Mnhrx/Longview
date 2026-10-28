@@ -775,11 +775,8 @@ em.flag.ph{display:inline-flex;align-items:center;gap:3px;background:var(--panel
 
 /* v7.2 docked bottom bar. --nb = room for the home bar; set to a few px by app.js when iPhone already keeps that area out of the app */
 :root{--nb:max(6px,var(--sb));--gap:0px} html{background:#1B161F} body{background:var(--bg)}
-/* gapfix: the page is stretched down over the strip iPhone left out (measured in app.js) */
-html.gapfix .view,html.gapfix .shade,html.gapfix .story,html.gapfix .setup,html.gapfix .crop{bottom:calc(-1 * var(--gap))}
-html.gapfix .setup,html.gapfix .crop{padding-bottom:calc(14px + var(--sb))}
-html.gapfix body:not(.wide) .nav{bottom:calc(-1 * var(--gap))}
-html.gapfix:not(.kb) body:not(.wide) .sheet{bottom:calc(-1 * var(--gap));padding-bottom:var(--sb)}
+/* short: iPhone already keeps the home-bar area out of the app, so don't pad for it again */
+html.short{--nb:6px}
 body:not(.wide) .nav{left:0;right:0;bottom:0;transform:none;width:100%;max-width:none;height:calc(58px + var(--nb));padding:5px max(8px,calc(50% - 252px)) var(--nb);align-items:start;border-radius:22px 22px 0 0;background:rgba(27,22,31,.9);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 -1px 0 rgba(255,255,255,.07),0 -10px 26px rgba(0,0,0,.3)}
 body:not(.wide) .nav button{height:46px} body:not(.wide) .navind{height:46px}
 body:not(.wide) .nav .plus{width:52px;height:52px;border-radius:18px;margin-top:-10px;box-shadow:0 0 0 4px #1B161F,0 8px 18px rgba(255,106,43,.3)}
@@ -834,6 +831,15 @@ details.mgrp summary b{font:800 17px var(--disp)} details.mgrp summary span{font
 .grows{display:flex;flex-direction:column;gap:8px;width:100%}
 .tiles.small{grid-template-columns:repeat(3,1fr)} .tile.sm{padding:10px 8px} .tile.sm .nm{font-size:12px} .tile.sm b{font-size:15px} .tile.sm b small{font-size:11px}
 body > .wimg{position:fixed;z-index:60}
+/* v7.4 ride maps */
+.mfs{position:absolute;right:12px;top:40px;z-index:4;width:40px;height:40px;border:0;border-radius:13px;background:rgba(22,18,25,.85);color:var(--cream);display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.4)} .mfs svg{width:18px;height:18px}
+.mapcard .mre{top:88px}
+body.mapfs .mapcard{position:fixed;inset:0;z-index:20;height:auto!important;border-radius:0;margin:0}
+body.mapfs .mapcard .mo{top:calc(12px + var(--st))} body.mapfs .mapcard .omattr{top:calc(10px + var(--st))} body.mapfs .mapcard .mre{top:calc(88px + var(--st))}
+body.mapfs .mapcard .mfs{top:calc(40px + var(--st))}
+body.mapfs .mapcard .mfocus{bottom:calc(12px + var(--sb))} body.mapfs .nav,body.mapfs #gear{visibility:hidden}
+.rmini{position:relative;display:block;width:100%;height:150px;border:0;padding:0;border-radius:18px;overflow:hidden;background:#0F0C12;margin:0 0 12px} .rmini canvas{width:100%;height:100%;display:block}
+.rmini span{position:absolute;right:10px;bottom:10px;display:flex;align-items:center;gap:5px;background:rgba(22,18,25,.85);color:var(--cream);font:700 13px var(--disp);padding:6px 9px;border-radius:10px} .rmini span svg{width:14px;height:14px}
 </style>
 </head>
 <body data-place="0">
