@@ -16,8 +16,6 @@ const ui = t => `<b class="ui">${t}</b>`; // a highlighted button name inside gu
   const f = () => { const portrait = innerHeight >= innerWidth, sh = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
     const gap = Math.round(sh - innerHeight), sa = matchMedia('(display-mode: standalone)').matches || navigator.standalone, on = !!sa && gap > 12 && gap < 120;
     html.classList.toggle('short', on); };
-  // Screen fit test (Settings → App → Screen fit): A = as is, B = page slightly taller than the screen (like a normal scrolling page), C = B, sized to the full screen
-  const m = (S.prefs && S.prefs.fit) || 'a'; html.classList.toggle('fitB', m === 'b' || m === 'c'); html.classList.toggle('fitC', m === 'c');
   f(); addEventListener('resize', f); addEventListener('orientationchange', () => setTimeout(f, 300)); })();
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -1121,7 +1119,7 @@ function myDataSheet(tab = 'odo') {
     const l = [...S.rides].sort((a, b) => b.start.t - a.start.t);
     return l.length ? `<div class="list">${l.slice(0, 80).map(r => `<button type="button" class="li" data-src="ride" data-id="${r.id}"><i class="dot" style="background:${RIDE_KINDS[rideKind(r)][1]}"></i><span class="grow"><span class="t">${esc(r.title || 'Ride')} · ${num(r.km, 1)} km</span><span class="s">${fmtDT(r.start.t)} · ${Math.round((r.end.t - r.start.t) / 6e4)} min · ${RIDE_KINDS[rideKind(r)][0]}${r.est === 'estimate' ? ', straight line' : ''}</span></span>${ic('chev')}</button>`).join('')}</div>` : '<div class="empty">No rides yet.</div>';
   };
-  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><div class="btns"><button type="button" class="btn ghost" id="mdRes">Restore deleted${(S.bin || []).length ? ` (${S.bin.length})` : ''}</button><button type="button" class="btn ghost" id="mdBak">${ic('save', 2.2)} Backup</button></div><div class="btns"><button type="button" class="btn ghost" id="mdImp">${ic('share', 2.2)} Import entries</button></div>`, sh => {
+  openSheet('My data', 'Everything Redline counts from. Fix a wrong number here and every stat updates.', `<div class="segs">${tabs.map(([k, l]) => `<button type="button" data-tab2="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div><div id="mdBody">${body()}</div><div class="mlist mdacts">${[['mdRes', 'save', 'Restore deleted', (S.bin || []).length ? `${S.bin.length} item${S.bin.length > 1 ? 's' : ''} you can bring back` : 'Anything deleted in the last 30 days'], ['mdBak', 'share', 'Backup', 'Save everything to a file, or restore one'], ['mdImp', 'list', 'Import entries', 'Add services and expenses from a file (e.g. old invoices)']].map(([id, i, t, sub]) => `<button type="button" class="mrow" id="${id}"><span class="mi">${ic(i)}</span><span class="grow"><b>${t}</b><span>${sub}</span></span>${ic('chev')}</button>`).join('')}</div>`, sh => {
     $('#mdRes', sh).onclick = () => restoreSheet(); $('#mdBak', sh).onclick = () => backupSheet();
     $('#mdImp', sh).onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json';
       i.onchange = () => { const f = i.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const r = importEntries(JSON.parse(rd.result)); closeSheet(); refresh(); celebrate();
@@ -1166,7 +1164,7 @@ function parkSheet() {
     ${p ? `<div class="pkbig">${miniMap(p.lat, p.lon, 760, 220, 18)}</div>` : ''}
     <form id="pkF">${F({ k: 'note', l: 'Level, lot or landmark', v: p && p.note, ph: 'Level 3, Lot 124, near lift B' })}
       <div class="pkph" id="pkPh"></div>
-      <div class="btns"><button type="button" class="btn ghost" id="pkPhoto">${ic('cam', 2.2)} ${p && p.photo ? 'Retake photo' : 'Photo of the sign'}</button><button class="btn">Save</button></div></form>
+      <div class="btns"><button type="button" class="btn ghost" id="pkPhoto">${ic('cam', 2.2)} ${p && p.photo ? 'Retake photo' : 'Sign photo'}</button><button class="btn">Save</button></div></form>
     <div class="btns">${p ? `<a class="btn ghost" href="${walkURL(p)}" target="_blank" rel="noopener">${ic('walk', 2.2)} Walk there</a>` : ''}<button type="button" class="btn ghost" id="pkHere">${ic('pin', 2.2)} I parked here</button></div>`, async sh => {
     if (p && p.photo) { const ph = await kv('get', 'parkphoto'); if (ph && ph.t === p.t) $('#pkPh', sh).innerHTML = `<img src="${ph.src}" alt="Photo of where you parked">`; }
     $('#pkF', sh).onsubmit = e => { e.preventDefault(); if (!S.parked) { toast('Tap I parked here first', 'over'); return; } S.parked.note = read(e.target).note || ''; save(); closeSheet(); refresh(); toast('Saved'); };
@@ -1677,28 +1675,10 @@ function bikeHub() { const nr = nextRenewal(), lic = licenceInfo(), ty = lastTyr
     ['tyres', 'target', 'Tyre pressure', ty ? `Checked ${ago(ty.t)} · ${ty.front}/${ty.rear} psi` : 'Log your first check'],
     ['workshops', 'wrench', 'Workshops', `${workshops().length || 'No'} workshop${workshops().length === 1 ? '' : 's'} from your services`],
     ['warranties', 'save', 'Warranties & receipts', `${warranties().filter(w => w.left >= 0).length} active`]]); }
-// test screen: live numbers about how much screen iPhone gives Redline, and three ways to fill it
-function fitSheet() {
-  const probe = () => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden'; document.body.appendChild(d); const cs = getComputedStyle(d), r = [parseFloat(cs.paddingTop), parseFloat(cs.paddingBottom)]; d.remove(); return r; };
-  const nums = () => { const [st, sb] = probe(), vv = window.visualViewport, sh = Math.max(screen.height, screen.width), sa = matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
-    const ios = (navigator.userAgent.match(/OS (\d+)_(\d+)/) || []).slice(1).join('.');
-    return [['Mode', (S.prefs.fit || 'a').toUpperCase()], ['Opened from home screen', sa ? 'yes' : 'no'], ['iOS', ios || '—'], ['Real screen height', sh], ['Height given to Redline', innerHeight], ['Visible height', vv ? Math.round(vv.height) : '—'], ['Page height', document.documentElement.clientHeight], ['Missing strip', Math.round(sh - innerHeight)], ['Status bar area', Math.round(st)], ['Home bar area', Math.round(sb)]]; };
-  const table = () => `<div class="fitnums">${nums().map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
-  openSheet('Screen fit (test)', 'Try each one. If nothing changes after switching, close Redline fully and reopen it, then come back here. When the strip is gone, tap Keep this and send me a screenshot of this screen.', `
-    <div class="segs">${[['a', 'A · as is'], ['b', 'B · scroll page'], ['c', 'C · full height']].map(([k, l]) => `<button type="button" data-fit="${k}" class="${(S.prefs.fit || 'a') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <div id="fitN">${table()}</div>
-    <div class="btns"><button type="button" class="btn" id="fitKeep">Keep this</button></div>`, sh => {
-    const redo = () => setTimeout(() => { const n = $('#fitN', sh); if (n) n.innerHTML = table(); }, 350);
-    $$('[data-fit]', sh).forEach(b => b.onclick = () => { const k = b.dataset.fit; S.prefs.fit = k; save(); const h = document.documentElement; h.classList.toggle('fitB', k !== 'a'); h.classList.toggle('fitC', k === 'c');
-      $$('[data-fit]', sh).forEach(x => x.classList.toggle('on', x === b)); dispatchEvent(new Event('resize')); haptic(); redo(); });
-    $('#fitKeep', sh).onclick = () => { save(); toast(`Keeping ${(S.prefs.fit || 'a').toUpperCase()}. Send Claude a screenshot of the numbers`); };
-    if (window.visualViewport) visualViewport.addEventListener('resize', redo); addEventListener('resize', redo);
-  });
-}
 function appHub() { const earned = BADGES.filter(b => badgeState(b).tier > 0).length;
   hubSheet('App', '', [['sound', 'spk', 'Sound', [S.prefs.sound ? 'Tap sounds on' : 'Tap sounds off', S.prefs.music ? 'music on' : ''].filter(Boolean).join(' · ')],
     ['badges', 'trophy', 'Badges', `${earned} of ${BADGES.length} earned`], ['goals', 'target', 'Weekly goal', S.goal ? `${S.goal} km a week` : 'Set a weekly km goal'],
-    ['quickscan', 'cam', 'Quick scan', 'Snap the odometer or pump without opening Redline'], ['fit', 'full', 'Screen fit (test)', `Fix for the strip at the bottom · ${(S.prefs.fit || 'a').toUpperCase()}`], window.PREVIEW && ['demo', 'play', 'Preview tools', 'Try low fuel or a traffic alert']]); }
+    ['quickscan', 'cam', 'Quick scan', 'Snap the odometer or pump without opening Redline'], window.PREVIEW && ['demo', 'play', 'Preview tools', 'Try low fuel or a traffic alert']]); }
 function soundSheet() {
   openSheet('Sound', '', `${F({ k: 's', l: 'Tap sounds', type: 'toggle', v: S.prefs.sound })}${F({ k: 'm', l: 'Background music', type: 'toggle', v: S.prefs.music })}
     <div class="btns"><button type="button" class="btn ghost" id="pick">${Snd.own ? 'Back to the built-in music' : 'Use my own track'}</button></div>
@@ -1906,7 +1886,7 @@ function demoSheet() {
     $('#dSetup', sh).onclick = () => { closeSheet(); S = fresh(); save(); startSetup(); };
   });
 }
-const MORE = { fit: () => fitSheet(), newitems: () => newItemsSheet(), bikehub: () => bikeHub(), apphub: () => appHub(), licence: () => licenceForm(), tyres: () => tyreSheet(), workshops: () => workshopsSheet(), warranties: () => warrantySheet(), goals: () => goalForm(), activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
+const MORE = { newitems: () => newItemsSheet(), bikehub: () => bikeHub(), apphub: () => appHub(), licence: () => licenceForm(), tyres: () => tyreSheet(), workshops: () => workshopsSheet(), warranties: () => warrantySheet(), goals: () => goalForm(), activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
 
 function applyLite() {}
 /* ================= audio: off by default ================= */

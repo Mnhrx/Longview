@@ -52,15 +52,26 @@ The card name decides the account: anything with POSB or DBS goes to Salary, Jum
    - `date` → **Current Date**
 5. iPhone **Settings → Accessibility → Touch → Back Tap → Double Tap** → choose `Log PayNow`.
 
-After any PayNow, double-tap the back of your phone, type the amount and what it was for, done. It lands in Slice as POSB Salary, tagged New. The PayNow button in the app's nav bar does the same thing in-app.
+After any PayNow, double-tap the back of your phone, type the amount and what it was for, done. It lands in Slice as POSB Salary, tagged New. In the app, tap + and pick **Salary** under "Paid from".
 
 ## How Slice counts money
 
-- **Everyday** counts toward your $750 allowance, from any account.
-- **Planned** is tracked but outside the allowance: parents, school fees, insurance, big one-offs.
-- **Transfer** is your own money moving between accounts and isn't counted.
-- The $200 to your parents repeats automatically on the 28th, after payday, as Planned. Manage repeats in Settings.
-- The **Month** tab follows your actual flow: salary in, the move to JumpStart, paying the SC card from JumpStart, and what's left to move to POSB Surplus.
+Every spend lands in one of four buckets:
+
+- **Day-to-day** counts toward your $750, from any account: food, groceries, petrol, transport, shopping, fun, PayNow to friends, cash withdrawals.
+- **Fixed** is outside the $750: bills and subscriptions, vehicle costs (road tax, servicing, bike insurance), insurance, instalments, parents, school.
+- **One-off** is outside the $750: clinic and optical, trips, big purchases.
+- **Transfer** is your own money moving between accounts and isn't counted at all.
+
+**Teaching it.** Open any transaction and change its category or bucket. An "Always do this for ..." switch appears. Leave it on and every past and future transaction from that merchant follows, including Apple Pay taps, PayNows and statement imports. Settings → **Rules** lists everything it has learned; delete a rule there to stop it.
+
+- The $200 to your parents repeats automatically on the 28th, after payday, as Fixed. Manage repeats in Settings.
+- The **Month** tab shows your $750 picture, the Fixed and One-off lists, and your money moves. When a month ends under budget, a **Move to Surplus** button logs the transfer for you.
+- The **Accounts** tab shows how money flowed through the month, an estimated balance for each account, the SC card bill and due date, and how much has gone into Surplus.
+
+## Balances
+
+Slice can't see your bank. Each balance starts from the last known figure (a statement, or one you typed in) and adds everything logged since, so it's labelled "est.". To correct one, tap the account on the Accounts tab and type what your bank app shows. Uploading a JumpStart or SC card statement updates that account's balance and the card bill automatically.
 
 ## Good to know
 
@@ -68,4 +79,3 @@ After any PayNow, double-tap the back of your phone, type the amount and what it
 - Settings → **Upload statement** reads SC card and JumpStart PDFs on your phone. It confirms what's logged, fixes amounts and adds anything missed. Re-uploading the same statement never creates duplicates.
 - The POSB transaction-history PDF from the app is just pictures of the page, so it can't be read. A POSB monthly eStatement PDF (from digibank) or a CSV export should work; send one over to get a POSB reader added.
 - **Money in:** tap + then **Received**. Mark it *Payback* when a friend pays you back, and pick the meal it's for. That meal then only counts your share.
-- Change a merchant's category once and Slice remembers it.

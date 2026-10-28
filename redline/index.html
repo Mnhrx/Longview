@@ -774,13 +774,13 @@ em.flag.ph{display:inline-flex;align-items:center;gap:3px;background:var(--panel
 .why{display:inline-block;margin-top:4px;font-weight:700} .why.gps{color:var(--mint)} .why.guess{color:var(--amber)}
 
 /* v7.2 docked bottom bar. --nb = room for the home bar; set to a few px by app.js when iPhone already keeps that area out of the app */
-:root{--nb:max(6px,var(--sb));--gap:0px} html{background:#1B161F} body{background:var(--bg)}
+:root{--nb:max(6px,calc(var(--sb) - 16px))} html{background:#1B161F} body{background:var(--bg)}
 /* short: iPhone already keeps the home-bar area out of the app, so don't pad for it again */
 html.short{--nb:6px}
-body:not(.wide) .nav{left:0;right:0;bottom:0;transform:none;width:100%;max-width:none;height:calc(58px + var(--nb));padding:5px max(8px,calc(50% - 252px)) var(--nb);align-items:start;border-radius:22px 22px 0 0;background:rgba(27,22,31,.9);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 -1px 0 rgba(255,255,255,.07),0 -10px 26px rgba(0,0,0,.3)}
-body:not(.wide) .nav button{height:46px} body:not(.wide) .navind{height:46px}
-body:not(.wide) .nav .plus{width:52px;height:52px;border-radius:18px;margin-top:-10px;box-shadow:0 0 0 4px #1B161F,0 8px 18px rgba(255,106,43,.3)}
-body:not(.wide) .pad{padding-bottom:calc(80px + var(--nb))}
+body:not(.wide) .nav{left:0;right:0;bottom:0;transform:none;width:100%;max-width:none;height:calc(54px + var(--nb));padding:5px max(8px,calc(50% - 252px)) var(--nb);align-items:start;border-radius:22px 22px 0 0;background:rgba(27,22,31,.9);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 -1px 0 rgba(255,255,255,.07),0 -10px 26px rgba(0,0,0,.3)}
+body:not(.wide) .nav button{height:44px} body:not(.wide) .navind{height:44px}
+body:not(.wide) .nav .plus{width:50px;height:50px;border-radius:18px;margin-top:-10px;box-shadow:0 0 0 4px #1B161F,0 8px 18px rgba(255,106,43,.3)}
+body:not(.wide) .pad{padding-bottom:calc(74px + var(--nb))}
 /* the odometer, back as one quiet line under the gauge */
 .odoline span{display:inline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0} .odoline b{display:inline} .odoline{max-width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border:0;background:none;color:var(--muted);font:600 14px var(--disp);padding:2px 8px} .odoline b{color:var(--cream);font:800 16px var(--inst);letter-spacing:.04em} .odoline svg{width:15px;height:15px}
 
@@ -840,10 +840,14 @@ body.mapfs .mapcard .mfs{top:calc(40px + var(--st))}
 body.mapfs .mapcard .mfocus{bottom:calc(12px + var(--sb))} body.mapfs .nav,body.mapfs #gear{visibility:hidden}
 .rmini{position:relative;display:block;width:100%;height:150px;border:0;padding:0;border-radius:18px;overflow:hidden;background:#0F0C12;margin:0 0 12px} .rmini canvas{width:100%;height:100%;display:block}
 .rmini span{position:absolute;right:10px;bottom:10px;display:flex;align-items:center;gap:5px;background:rgba(22,18,25,.85);color:var(--cream);font:700 13px var(--disp);padding:6px 9px;border-radius:10px} .rmini span svg{width:14px;height:14px}
-/* screen fit test: B = the page is a little taller than the screen (normal scrolling page), C = sized to the full screen */
-html.fitB,html.fitB body{height:auto;overflow:visible} html.fitB body{min-height:calc(100vh + 2px)}
-html.fitC body{min-height:calc(100vh + env(safe-area-inset-top,0px) + env(safe-area-inset-bottom,0px) + 2px)}
+/* full screen on iPhone home-screen apps: a page exactly one screen tall gets a layout box 47 pt short (the status bar),
+   leaving a strip at the bottom. A page a touch taller than the screen is sized properly. Everything visible is fixed, so nothing moves. */
+html,body{height:auto;overflow:visible} body{min-height:calc(100vh + 2px)}
 .fitnums{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0} .fitnums div{background:var(--panel2);border-radius:12px;padding:8px 10px} .fitnums span{display:block;font:600 11px var(--disp);color:var(--muted)} .fitnums b{font:800 18px var(--disp)}
+/* buttons: icon + label on one line, icons never blow up */
+.btn,.minibtn{display:inline-flex;align-items:center;justify-content:center;gap:7px;text-align:center} .btn svg{width:18px;height:18px;flex:none} .minibtn svg{width:15px;height:15px;flex:none}
+.btns .btn{min-width:0} .rcpt .minibtn{width:100%;padding:12px;background:var(--panel2);color:var(--cream)}
+.mdacts{margin-top:14px}
 </style>
 </head>
 <body data-place="0">
