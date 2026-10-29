@@ -82,7 +82,8 @@ Slice can't see your bank. Each balance starts from the last known figure (a sta
 
 Every screen is made of shards. A shard's size is its share of the money. Tap a shard to zoom in, and tap the pill at the top left to zoom back out.
 
-- **Home**: this month's day-to-day spending by category, plus what's left of your $750. The bars hide after a few seconds. Tap the handle at the bottom, or swipe in from an edge, to bring them back.
+- **Home**: this month's day-to-day spending by category, plus what's left of your $750. Both bars hide after a few seconds. Tap the handle at the bottom, or swipe in from an edge, to bring them back. When you're over budget, the edges and the cracks between shards pulse red.
+- On **Activity, Month and Accounts** only the bottom nav hides, so the numbers at the top stay on screen. The + floats in the corner while the nav is hidden.
 - **Activity**: one day at a time. Each day of the week is a slanted strip, and the colours show what you spent. Tap a strip, or swipe across the shards, to change day. Swipe the strip to jump a week. Repeat payments at one place group into one shard (for example "Work canteen ×3"); tap it to see each payment. The magnifier opens search.
 - **Month**: the month split into Day-to-day, Fixed and One-off, then into categories. The arrows compare each group with last month. Swipe sideways to change month. The pill on the right shows your day-to-day total against $750. When a month ends under budget, a **Move to Surplus** pill logs the transfer.
 - **Accounts**: each account sized by its balance. The card is the red striped shard (what you owe). Tap an account to see where its money went this month:
@@ -92,3 +93,7 @@ Every screen is made of shards. A shard's size is its share of the money. Tap a 
   - POSB Surplus: the last six months of moves.
   - Cash: withdrawn compared with logged.
 - **+**: type the amount, then pick where you spent it. Your most frequent places are the biggest shards; pick **Elsewhere** to choose a category instead. The pills at the top switch Today or Yesterday and the account. **More** opens the full form for splits, notes and repeats. To undo a payment you just logged, tap the confirmation message.
+
+## Updates
+
+The home-screen app checks GitHub for a newer version each time you open it or switch back to it. If there is one, it reloads once and shows "Slice updated". Your data isn't touched. This works by comparing the `slice-build` number near the top of `index.html`, so every new version I send you has a new number. If you edit the file yourself, change that number too.
