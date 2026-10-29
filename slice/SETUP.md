@@ -66,8 +66,6 @@ Every spend lands in one of four buckets:
 **Teaching it.** Open any transaction and change its category or bucket. An "Always do this for ..." switch appears. Leave it on and every past and future transaction from that merchant follows, including Apple Pay taps, PayNows and statement imports. Settings → **Rules** lists everything it has learned; delete a rule there to stop it.
 
 - The $200 to your parents repeats automatically on the 28th, after payday, as Fixed. Manage repeats in Settings.
-- The **Month** tab shows your $750 picture, the Fixed and One-off lists, and your money moves. When a month ends under budget, a **Move to Surplus** button logs the transfer for you.
-- The **Accounts** tab shows how money flowed through the month, an estimated balance for each account, the SC card bill and due date, and how much has gone into Surplus.
 
 ## Balances
 
@@ -79,3 +77,18 @@ Slice can't see your bank. Each balance starts from the last known figure (a sta
 - Settings → **Upload statement** reads SC card and JumpStart PDFs on your phone. It confirms what's logged, fixes amounts and adds anything missed. Re-uploading the same statement never creates duplicates.
 - The POSB transaction-history PDF from the app is just pictures of the page, so it can't be read. A POSB monthly eStatement PDF (from digibank) or a CSV export should work; send one over to get a POSB reader added.
 - **Money in:** tap + then **Received**. Mark it *Payback* when a friend pays you back, and pick the meal it's for. That meal then only counts your share.
+
+## The screens
+
+Every screen is made of shards. A shard's size is its share of the money. Tap a shard to zoom in, and tap the pill at the top left to zoom back out.
+
+- **Home**: this month's day-to-day spending by category, plus what's left of your $750. The bars hide after a few seconds. Tap the handle at the bottom, or swipe in from an edge, to bring them back.
+- **Activity**: one day at a time. Each day of the week is a slanted strip, and the colours show what you spent. Tap a strip, or swipe across the shards, to change day. Swipe the strip to jump a week. Repeat payments at one place group into one shard (for example "Work canteen ×3"); tap it to see each payment. The magnifier opens search.
+- **Month**: the month split into Day-to-day, Fixed and One-off, then into categories. The arrows compare each group with last month. Swipe sideways to change month. The pill on the right shows your day-to-day total against $750. When a month ends under budget, a **Move to Surplus** pill logs the transfer.
+- **Accounts**: each account sized by its balance. The card is the red striped shard (what you owe). Tap an account to see where its money went this month:
+  - POSB Salary: transfers to JumpStart, then day-to-day, fixed and one-off.
+  - JumpStart: how much is free and how much is held for the card bill.
+  - SC card: the card spending by bucket, plus **Mark paid**.
+  - POSB Surplus: the last six months of moves.
+  - Cash: withdrawn compared with logged.
+- **+**: type the amount, then pick where you spent it. Your most frequent places are the biggest shards; pick **Elsewhere** to choose a category instead. The pills at the top switch Today or Yesterday and the account. **More** opens the full form for splits, notes and repeats. To undo a payment you just logged, tap the confirmation message.

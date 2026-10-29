@@ -44,13 +44,49 @@ i.ti{line-height:1;display:inline-block}
 
 /* ---------- home: full-screen shards ---------- */
 #home{position:fixed;inset:0;overflow:hidden;background:var(--ink)}
-#shardSvg{position:absolute;inset:0;width:100%;height:100%;display:block}
-#shardSvg polygon{cursor:pointer;transition:filter .2s}
-#shardSvg polygon:active{filter:brightness(1.15)}
-.slab{position:absolute;transform:translate(-50%,-50%);text-align:center;pointer-events:none;white-space:nowrap;color:var(--fg)}
-.slab i{display:block;margin:0 auto 2px}
-.slab .a{font-family:var(--display);font-weight:800;line-height:1.05;letter-spacing:-.03em}
-.slab .n{font-size:12px;font-weight:700;opacity:.85;margin-top:2px}
+.stage{position:fixed;inset:0;overflow:hidden;background:var(--ink);touch-action:pan-y}
+.mroot{position:absolute;inset:0;overflow:hidden}
+.mroot>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.mroot .cell{cursor:pointer;transition:filter .2s;-webkit-tap-highlight-color:transparent}
+.mroot .cell:active{filter:brightness(1.15)}
+.mroot .terr{fill:none;pointer-events:none}
+.mlabs{position:absolute;inset:0;pointer-events:none}
+.lb{position:absolute;transform:translate(-50%,-50%);text-align:center;white-space:nowrap;will-change:left,top}
+.lb i{display:block;margin:0 auto 2px}
+.lb .a{font-family:var(--display);font-weight:800;line-height:1.05;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.lb .n{font-size:12px;font-weight:700;opacity:.85;margin-top:2px;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.tag{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px;height:26px;padding:0 12px;background:#100C1C;color:#fff;font-size:12px;font-weight:800;white-space:nowrap;
+  clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.tag .up{color:#FF8A8A}.tag .dn{color:#3DDC84}
+/* top pills per screen */
+.tleft,.tright{display:flex;align-items:center;gap:8px;pointer-events:auto}
+.vpill{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 16px;background:rgba(16,12,28,.86);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-weight:800;font-size:13px;color:var(--tx);white-space:nowrap}
+.vpill i{font-size:17px}
+.vpill.red{background:var(--red);color:#fff}
+.vpill.ok{background:var(--green);color:#06301A}
+#vpL{max-width:62vw;overflow:hidden;text-overflow:ellipsis}
+#vpL:not(.tap){cursor:default}
+/* activity: week strip + day mosaic */
+#vAct{display:flex;flex-direction:column;padding-top:calc(var(--safe-t) + 62px)}
+#actWeek{display:flex;gap:4px;height:86px;padding:0 10px;flex:none}
+#actWeek .sl{flex:1;position:relative;background:var(--s1);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);transition:flex-grow .35s var(--spring),background .3s;overflow:hidden;color:var(--tx2)}
+#actWeek .sl.sel{flex-grow:2.6;background:var(--s3);color:var(--tx)}
+#actWeek .sl.fut{opacity:.3}
+#actWeek .fill{position:absolute;left:0;right:0;bottom:0;top:0;display:flex;flex-direction:column-reverse}
+#actWeek .fill div{flex:none;animation:growUp .45s var(--spring) both;transform-origin:bottom}
+@keyframes growUp{from{transform:scaleY(0)}}
+#actWeek .lb2{position:absolute;left:0;right:0;top:8px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+#actWeek .lb2 b{display:block;font-family:var(--display);font-size:17px;letter-spacing:-.02em}
+#actRoot{position:relative;flex:1;margin-top:8px;margin-bottom:calc(var(--safe-b) + 88px)}
+#monthRoot,#accRoot{bottom:calc(var(--safe-b) + 88px)}
+/* + flow overlay */
+#vAdd{z-index:40}
+#addRoot{top:calc(var(--safe-t) + 62px)}
+#addPills{position:absolute;left:0;right:0;top:0;padding:calc(var(--safe-t) + 10px) 14px 0;display:flex;align-items:center;gap:8px}
+#addPills .grow{flex:1}
+#addPills .vpill{padding:0 13px}
+body.adding .topbar,body.adding .nav,body.adding .ffab,body.adding .handle,body.adding .newpill{visibility:hidden}
+#movePill{top:calc(var(--safe-t) + 62px)}
 #home.over::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 4px var(--red);animation:overPulse 1.4s ease-in-out infinite}
 @keyframes overPulse{0%,100%{opacity:.4}50%{opacity:1}}
 @keyframes shake{0%,100%{transform:none}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
@@ -65,12 +101,12 @@ input::-webkit-calendar-picker-indicator{display:none!important}
 .mpill{display:flex;align-items:center;background:rgba(16,12,28,.86);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);height:44px;padding:0 4px}
 .mpill button{width:36px;height:44px;display:grid;place-items:center;font-size:18px;color:var(--tx2)}
 .mpill button:disabled{opacity:.25}
-.mpill b{font-weight:800;font-size:14px;min-width:96px;text-align:center}
+.mpill b{font-weight:800;font-size:14px;min-width:96px;text-align:center;white-space:nowrap}
 .ibtn{width:44px;height:44px;display:grid;place-items:center;background:rgba(16,12,28,.86);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-size:20px}
 .newpill{position:fixed;left:50%;top:calc(var(--safe-t) + 64px);transform:translateX(-50%);z-index:19;display:flex;align-items:center;gap:8px;height:36px;padding:0 16px;background:var(--lime);color:#14200A;font-weight:800;font-size:13px;animation:dropIn .5s var(--spring) both}
 @keyframes dropIn{from{transform:translate(-50%,-30px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
-.nav{position:fixed;left:50%;bottom:calc(var(--safe-b) + 12px);transform:translateX(-50%);z-index:20;display:grid;grid-template-columns:56px 56px 64px 56px 56px;align-items:center;height:64px;background:rgba(16,12,28,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);padding:0 6px}
+.nav{position:fixed;left:10px;right:10px;bottom:calc(var(--safe-b) + 12px);z-index:20;display:grid;grid-template-columns:1fr 1fr 64px 1fr 1fr;align-items:center;height:64px;background:rgba(16,12,28,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);padding:0 6px}
 .nbtn{height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--tx3);transition:color .25s}
 .nbtn i{font-size:22px;transition:transform .3s var(--spring)}
 .nbtn[aria-current="page"]{color:var(--tx)}
@@ -87,7 +123,7 @@ body.has-over .newpill:not(.over){top:calc(var(--safe-t) + 110px)}
 body.has-over.chrome-off .newpill:not(.over){top:calc(var(--safe-t) + 58px)}
 body.chrome-off .topbar{transform:translateY(-140%);opacity:0}
 body.chrome-off .topbar>*{pointer-events:none}
-body.chrome-off .nav{transform:translate(-50%,160%);opacity:0;pointer-events:none}
+body.chrome-off .nav{transform:translateY(160%);opacity:0;pointer-events:none}
 body.chrome-off .newpill{top:calc(var(--safe-t) + 12px)}
 .ffab{position:fixed;right:16px;bottom:calc(var(--safe-b) + 16px);z-index:21;width:56px;height:56px;display:grid;place-items:center;background:var(--pink);color:#fff;font-size:28px;
   box-shadow:0 0 0 5px var(--ink);transform:scale(0) rotate(-90deg);pointer-events:none;transition:transform .45s var(--spring)}
@@ -293,25 +329,33 @@ input[type=date].input{-webkit-appearance:none;appearance:none;line-height:48px}
 </div>
 
 <!-- home -->
-<section id="home" aria-label="This month's spending">
-  <svg id="shardSvg" aria-hidden="true"></svg>
-  <div id="shardLabels"></div>
+<section id="home" class="stage mroot" aria-label="This month's spending"><svg aria-hidden="true"></svg><div class="mlabs"></div></section>
+<section id="vAct" class="stage hidden" aria-label="Activity">
+  <div id="actWeek"></div>
+  <div id="actRoot" class="mroot"><svg aria-hidden="true"></svg><div class="mlabs"></div></div>
+</section>
+<section id="vMonth" class="stage hidden" aria-label="Month"><div id="monthRoot" class="mroot"><svg aria-hidden="true"></svg><div class="mlabs"></div></div></section>
+<section id="vAcc" class="stage hidden" aria-label="Accounts"><div id="accRoot" class="mroot"><svg aria-hidden="true">
+  <defs><pattern id="debt" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)"><rect width="14" height="14" fill="#C8102E"/><rect width="6" height="14" fill="#E0314B"/></pattern></defs>
+  </svg><div class="mlabs"></div></div></section>
+<section id="vAdd" class="stage hidden" aria-label="Log spending">
+  <div id="addRoot" class="mroot"><svg aria-hidden="true"></svg><div class="mlabs"></div></div>
+  <div id="addPills"></div>
 </section>
 
-<section id="pgActivity" class="page hidden"><div class="inner" id="activityInner"></div></section>
-<section id="pgWrap" class="page hidden"><div class="inner" id="wrapInner"></div></section>
-<section id="pgAcc" class="page hidden"><div class="inner" id="accInner"></div></section>
-
 <header class="topbar">
-  <div class="mpill cut-btn">
+  <div class="tleft"><button class="vpill cut-btn hidden" id="vpL"></button>
+  <div class="mpill cut-btn" id="mpill">
     <button id="mPrev" aria-label="Previous month"><i class="ti ti-chevron-left"></i></button>
     <b id="mLabel"></b>
     <button id="mNext" aria-label="Next month"><i class="ti ti-chevron-right"></i></button>
-  </div>
-  <button class="ibtn cut-btn" id="btnSettings" aria-label="Settings"><i class="ti ti-settings"></i></button>
+  </div></div>
+  <div class="tright"><span id="vpR" style="display:flex;gap:8px"></span>
+  <button class="ibtn cut-btn" id="btnSettings" aria-label="Settings"><i class="ti ti-settings"></i></button></div>
 </header>
 <button id="overPill" class="newpill over cut-btn hidden"></button>
 <button id="newPill" class="newpill cut-btn hidden"></button>
+<button id="movePill" class="newpill cut-btn hidden" style="background:var(--green);color:#06301A"></button>
 
 <nav class="nav cut-btn">
   <button class="nbtn" data-view="home" aria-current="page"><i class="ti ti-chart-treemap"></i>Home</button>
@@ -589,58 +633,22 @@ function monthStats(k){
 }
 
 /* =================================================================
-   SHARD ENGINE — power-diagram mosaic, areas match spend exactly
+   SHARD ENGINE — one engine drives every screen
+   A power-diagram mosaic: each shard's area matches its value.
+   Layouts are solved off-screen first, so shards are born where they
+   live. Speed: shares ease 30% per frame, shapes may change up to 9% of
+   the screen and move up to 24px per frame. Labels sit on their shard.
    ================================================================= */
-const SH = {sites:{}, shown:{}, target:{}, polys:{}, els:{}, labs:{}, keys:[], launchAt:0, running:false, t0:performance.now()};
 const NS='http://www.w3.org/2000/svg';
+const ENG={ease:.3, cap:.09, kidCap:.06, mv:24, count:.35};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const hashK=k=>{ let h=0; for(const c of String(k)) h=(h*31+c.charCodeAt(0))%997; return h/97; };
 function clipPoly(p,a,b,c){const o=[];for(let i=0;i<p.length;i++){const P=p[i],Q=p[(i+1)%p.length],fp=a*P[0]+b*P[1]-c,fq=a*Q[0]+b*Q[1]-c;
   if(fp<=0)o.push(P);if((fp<0&&fq>0)||(fp>0&&fq<0)){const t=fp/(fp-fq);o.push([P[0]+t*(Q[0]-P[0]),P[1]+t*(Q[1]-P[1])]);}}return o;}
 function pArea(p){let s=0;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];s+=a[0]*b[1]-b[0]*a[1];}return Math.abs(s)/2;}
 function pCen(p){let x=0,y=0,A=0;for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length],f=a[0]*b[1]-b[0]*a[1];x+=(a[0]+b[0])*f;y+=(a[1]+b[1])*f;A+=f;}
   if(Math.abs(A)<1e-9)return p.length?p[0]:[0,0];A/=2;return[x/(6*A),y/(6*A)];}
-const SHARD_LEFT={n:'left',i:'ti-wallet',c:'#241D42',fg:'#FFFFFF'};
-
-const SHARD_MORE={n:'Others',i:'ti-dots',c:'#D9D2F5',fg:'#1A1230'};
-const LEFT_CAP=0.40, MIN_F=0.065, MAX_CATS=6;
-function shardTargets(launch){
-  const st=monthStats(ym), t={};
-  const cats=Object.entries(st.byCat).filter(([k,v])=>v>0.004).sort((a,b)=>b[1]-a[1]);
-  SH.moreList=[];
-  if(cats.length>MAX_CATS){
-    cats.slice(0,MAX_CATS-1).forEach(([k,v])=>t[k]=v);
-    const rest=cats.slice(MAX_CATS-1); SH.moreList=rest; t.more=rest.reduce((a,[,v])=>a+v,0);
-  } else cats.forEach(([k,v])=>t[k]=v);
-  if(st.left>0) t.left=st.left;
-  SH.over=st.left<0;
-  const W=innerWidth,H=innerHeight;
-  Object.keys(t).forEach((k,i)=>{
-    if(!SH.sites[k]||launch){ const a=i*2.39996+0.6;
-      SH.sites[k]={x:W/2+(k==='left'?0:Math.cos(a)*W*.22),y:H/2+(k==='left'?0:Math.sin(a)*H*.22),w:0}; }
-    if(SH.shown[k]==null||launch) SH.shown[k]= launch ? (k==='left'?S.allowance:0.01) : 0.01;
-  });
-  // shards that disappear shrink out
-  Object.keys(SH.shown).forEach(k=>{ if(!(k in t)) t[k]=0; });
-  SH.target=t; SH.keys=Object.keys(t);
-  if(launch) SH.launchAt=performance.now();
-  if(SH.labs.left) SH.labs.left.querySelector('.n').textContent=`left of ${money(S.allowance,0)}`;
-  $('#home').classList.toggle('over',SH.over);
-  const op=$('#overPill'), showOver=SH.over&&view==='home';
-  op.classList.toggle('hidden',!showOver); document.body.classList.toggle('has-over',showOver);
-  op.innerHTML=`<i class="ti ti-alert-triangle"></i>${money(-st.left,0)} over ${money(S.allowance,0)}`;
-}
-// the part of the screen not covered by the bars right now
-function shardBand(H){ const cs=getComputedStyle(document.documentElement);
-  const st=parseFloat(cs.getPropertyValue('--safe-t-px'))||0, sb=parseFloat(cs.getPropertyValue('--safe-b-px'))||0;
-  return document.body.classList.contains('chrome-off') ? [st+8, H-sb-8] : [st+64, H-sb-88]; }
-function shardHomes(W,H,t,frac){
-  const rank=SH.keys.slice().sort((a,b)=>(frac[b]||0)-(frac[a]||0)), h={}, [top,bot]=shardBand(H), cy=(top+bot)/2, bh=bot-top;
-  rank.forEach((k,r)=>{ const wob=5*Math.sin(t*0.9+r*1.9);
-    if(r===0){h[k]=[W/2+wob,cy+wob];return;}
-    const ang=r*2.39996+0.6, rad=0.30+0.04*(r%2);
-    h[k]=[W/2+Math.cos(ang)*W*rad+wob,cy+Math.sin(ang)*bh*rad+wob]; });
-  return h;
-}
-// best spot for a label: centre of the largest circle that fits in a convex polygon
+// centre of the largest circle that fits a convex polygon -> how big a label can be
 function pole(p){
   if(p.length<3) return [0,0,0];
   let sgn=0; for(let i=0;i<p.length;i++){ const a=p[i],b=p[(i+1)%p.length]; sgn+=a[0]*b[1]-b[0]*a[1]; } sgn=sgn>0?1:-1;
@@ -648,96 +656,387 @@ function pole(p){
   const dist=(x,y)=>{ let m=Infinity; for(const [ax,ay,ux,uy] of E){ const d=sgn*(ux*(y-ay)-uy*(x-ax)); if(d<m) m=d; } return m; };
   const xs=p.map(q=>q[0]), ys=p.map(q=>q[1]); let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
   let best=[(x0+x1)/2,(y0+y1)/2,-Infinity];
-  for(let pass=0;pass<3;pass++){ const n=7, sx=(x1-x0)/n, sy=(y1-y0)/n;
+  for(let pass=0;pass<3;pass++){ const n=6, sx=(x1-x0)/n, sy=(y1-y0)/n;
     for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const x=x0+(i+.5)*sx, y=y0+(j+.5)*sy, d=dist(x,y); if(d>best[2]) best=[x,y,d]; }
     x0=best[0]-sx; x1=best[0]+sx; y0=best[1]-sy; y1=best[1]+sy; }
   return best;
 }
-function shardFrame(ts){
-  if(!SH.running) return;
-  const W=innerWidth,H=innerHeight,t=(ts-SH.t0)/1000;
-  const svg=$('#shardSvg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
-  // ease shown values toward targets (staggered on launch)
-  SH.keys.forEach((k,i)=>{
-    let tg=SH.target[k]||0;
-    if(SH.launchAt){ const el=ts-SH.launchAt;
-      if(k==='left') tg=S.allowance+(tg-S.allowance)*Math.min(Math.max((el-150)/1300,0),1);
-      else { let e=Math.min(Math.max((el-250-170*i)/900,0),1); e=1-Math.pow(1-e,3); tg*=e; } }
-    SH.shown[k]+=(tg-SH.shown[k])*0.12;
-  });
-  const live=SH.keys.filter(k=>SH.shown[k]>0.02 || (SH.target[k]||0)>0);
-  // ---- screen share for each shard ----
-  const cats=live.filter(k=>k!=='left'), hasLeft=live.includes('left');
-  const g=k=>Math.min(Math.max(SH.shown[k]/Math.max(SH.target[k]||SH.shown[k],0.01),0),1); // 0→1 while growing in
-  const catSum=cats.reduce((a,k)=>a+Math.max(SH.shown[k],0),0);
-  const G=cats.length?cats.reduce((a,k)=>a+g(k),0)/cats.length:0;
-  const leftRaw=hasLeft?Math.max(SH.shown.left,0):0;
-  const realF=hasLeft?(catSum+leftRaw>0?leftRaw/(catSum+leftRaw):1):0;
-  const leftF=cats.length?realF*(1-G)+Math.min(realF,LEFT_CAP)*G:realF;   // cap "left" once categories have grown in
-  const frac={}; if(hasLeft) frac.left=leftF;
-  cats.forEach(k=>frac[k]=catSum>0?(1-leftF)*Math.max(SH.shown[k],0)/catSum:(1-leftF)/cats.length);
-  let under=0, room=0; const fl={};
-  cats.forEach(k=>{ fl[k]=MIN_F*g(k); if(frac[k]<fl[k]){ under+=fl[k]-frac[k]; frac[k]=fl[k]; } else room+=frac[k]-fl[k]; });
-  if(under>0){ if(room>0) cats.forEach(k=>{ if(frac[k]>fl[k]) frac[k]-=Math.min(under,room)*(frac[k]-fl[k])/room; });
-    if(under>room && hasLeft) frac.left=Math.max(frac.left-(under-room),0.05); }
-  // no single shard takes more than about half the screen
-  const MAX_F=0.5; for(let pass=0;pass<2;pass++){ let ex=0, rest=0;
-    live.forEach(k=>{ if((frac[k]||0)>MAX_F){ ex+=frac[k]-MAX_F; frac[k]=MAX_F; } else rest+=frac[k]||0; });
-    if(ex>0&&rest>0) live.forEach(k=>{ if((frac[k]||0)<MAX_F) frac[k]+=ex*(frac[k]||0)/rest; }); }
-  const tgt={}; let tot=0;
-  live.forEach((k,i)=>{ const d=Math.max(frac[k]||0,0.0005)*(1+0.03*Math.sin(t*1.4+i*1.3)); tgt[k]=d; tot+=d; });
-  // ---- power-diagram solve ----
-  const hm=shardHomes(W,H,t,frac), polys={};
-  for(let it=0;it<2;it++){
-    live.forEach(k=>{ const s=SH.sites[k]; let poly=[[0,0],[W,0],[W,H],[0,H]];
-      live.forEach(j=>{ if(j===k||!poly.length) return; const q=SH.sites[j];
-        poly=clipPoly(poly,2*(q.x-s.x),2*(q.y-s.y),(q.x*q.x+q.y*q.y)-(s.x*s.x+s.y*s.y)-q.w+s.w); });
-      polys[k]=poly; });
-    live.forEach(k=>{ const s=SH.sites[k], A=pArea(polys[k]), T=tgt[k]/tot*W*H; s.w+=(T-A)*0.35;
-      if(polys[k].length){ const c=pCen(polys[k]); s.x+=(c[0]-s.x)*0.3; s.y+=(c[1]-s.y)*0.3; }
-      s.x+=(hm[k][0]-s.x)*0.035; s.y+=(hm[k][1]-s.y)*0.035; });
-    for(let r=0;r<2;r++) live.forEach(a=>live.forEach(b=>{ if(a===b) return; const p=SH.sites[a],q=SH.sites[b];
-      const d2=(p.x-q.x)**2+(p.y-q.y)**2; if(p.w-q.w>d2*2.5){ const ex=(p.w-q.w-d2*2.5)/2; p.w-=ex; q.w+=ex; } }));
-    const mn=Math.min(...live.map(k=>SH.sites[k].w)); live.forEach(k=>SH.sites[k].w-=mn);
-  }
-  SH.polys=polys;
-  // ---- draw ----
-  SH.keys.slice().forEach(k=>{ if(!live.includes(k)){ if(SH.els[k]){ SH.els[k].remove(); SH.labs[k].remove(); delete SH.els[k]; delete SH.labs[k]; }
-    delete SH.sites[k]; delete SH.shown[k]; delete SH.target[k]; SH.keys=SH.keys.filter(x=>x!==k); } });
-  const [bt,bb]=shardBand(H), off=document.body.classList.contains('chrome-off');
-  const sb=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b-px'))||0;
-  live.forEach(k=>{
-    const st=k==='left'?SHARD_LEFT:k==='more'?SHARD_MORE:cat(k), p=polys[k]||[];
-    if(!SH.els[k]){
-      const gEl=document.createElementNS(NS,'polygon'); gEl.setAttribute('fill',st.c); gEl.setAttribute('stroke','#100C1C');
-      gEl.setAttribute('stroke-width','6'); gEl.setAttribute('stroke-linejoin','round');
-      gEl.addEventListener('click',()=>{ SH.sites[k].w+=pArea(SH.polys[k]||[])*0.25; setTimeout(()=>k==='left'?openLeftSheet():k==='more'?openMoreSheet():openCatSheet(k),180); });
-      $('#shardSvg').appendChild(gEl); SH.els[k]=gEl;
-      const d=document.createElement('div'); d.className='slab'; d.style.setProperty('--fg',st.fg);
-      d.innerHTML=`<i class="ti ${st.i}"></i><div class="a num"></div><div class="n">${k==='left'?`left of ${money(S.allowance,0)}`:st.n}</div>`;
-      $('#shardLabels').appendChild(d); SH.labs[k]=d;
-    }
-    SH.els[k].setAttribute('points',p.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' '));
-    // label goes in the visible part: not under the bars, not under the floating + button
-    let vis=clipPoly(p,0,-1,-bt); vis=clipPoly(vis,0,1,bb);
-    if(off) vis=clipPoly(vis,1,1,W+H-sb-150);
-    const [px,py,r]=pole(vis), L=SH.labs[k];
-    if(L._x==null){ L._x=px; L._y=py; } L._x+=(px-L._x)*0.3; L._y+=(py-L._y)*0.3;
-    L.style.left=L._x+'px'; L.style.top=L._y+'px'; L.style.opacity=r>14?1:0;
-    L.querySelector('i').style.fontSize=Math.max(14,Math.min(30,r*0.38))+'px';
-    const a=L.querySelector('.a'); a.textContent=money(Math.max(k==='left'?SH.shown[k]:SH.shown[k],0),0);
-    a.style.fontSize=(k==='left'?Math.max(18,Math.min(60,r*0.52)):Math.max(14,Math.min(36,r*0.44)))+'px';
-    a.style.display=r>24?'block':'none';
-    L.querySelector('.n').style.display=r>50?'block':'none';
-  });
-  requestAnimationFrame(shardFrame);
+function cellsOf(L,region){ const P={}; L.forEach(it=>{ let p=region.slice(); L.forEach(o=>{ if(o===it||!p.length) return;
+  p=clipPoly(p,2*(o.x-it.x),2*(o.y-it.y),(o.x*o.x+o.y*o.y)-(it.x*it.x+it.y*it.y)-o.w+it.w); }); P[it.k]=p; }); return P; }
+function balanceW(L){ L.forEach(a=>L.forEach(b=>{ if(a===b) return; const d2=(a.x-b.x)**2+(a.y-b.y)**2; if(a.w-b.w>d2*2.5){ const ex=(a.w-b.w-d2*2.5)/2; a.w-=ex; b.w+=ex; } }));
+  const mn=Math.min(...L.map(it=>it.w)); L.forEach(it=>it.w-=mn); }
+function floorVals(o,f){ let s=0; for(const k in o) s+=o[k]; const r={}; let t=0; for(const k in o){ r[k]=Math.max(o[k]/(s||1),f); t+=r[k]; } for(const k in r) r[k]/=t; return r; }
+// solve the final layout off-screen. Small groups crack in a Y (or a diagonal pair) so cuts meet at angles.
+function settle(region,vals,anchors,relax){
+  relax=relax==null?.3:relax;
+  const keys=Object.keys(vals).sort((a,b)=>vals[b]-vals[a]); let T=0; keys.forEach(k=>T+=vals[k]);
+  const RA=pArea(region), c=pCen(region), xs=region.map(q=>q[0]), ys=region.map(q=>q[1]), rw=Math.max(...xs)-Math.min(...xs), rh=Math.max(...ys)-Math.min(...ys);
+  const few=!anchors&&keys.length>=2&&keys.length<=4, rot=keys.length===2?-.75:-1.57;
+  const S=keys.map((k,i)=>{ const a=few?rot+i*2*Math.PI/keys.length:i*2.39996+.6, r=few?.3:(i?.34:0);
+    let an=anchors&&anchors[k]; if(few) an=[c[0]+Math.cos(a)*rw*r,c[1]+Math.sin(a)*rh*r];
+    return {k,x:an?an[0]:c[0]+Math.cos(a)*rw*r,y:an?an[1]:c[1]+Math.sin(a)*rh*r,w:0,pin:!!an}; });
+  let P={};
+  for(let n=0;n<200;n++){ P=cellsOf(S,region);
+    S.forEach(s=>{ const A=pArea(P[s.k]); s.w+=(vals[s.k]/T*RA-A)*.3; if(!s.pin&&P[s.k].length){ const cc=pCen(P[s.k]); s.x+=(cc[0]-s.x)*relax; s.y+=(cc[1]-s.y)*relax; } });
+    balanceW(S); }
+  const out={}; S.forEach(s=>out[s.k]={x:s.x,y:s.y,poly:P[s.k]||[]}); return out;
 }
-function shardsStart(){ if(SH.running) return; SH.running=true; requestAnimationFrame(shardFrame); }
-function shardsStop(){ SH.running=false; }
+function stepLayout(L,region,targetOf,homeOf,pullOf,cap,mv){
+  const RA=pArea(region), tg={}; let TT=0; L.forEach(it=>{ tg[it.k]=targetOf(it); TT+=tg[it.k]; }); if(TT<=0) TT=1;
+  for(let n=0;n<2;n++){ const P=cellsOf(L,region);
+    L.forEach(it=>{ const A=pArea(P[it.k]), dw=(tg[it.k]/TT*RA-A)*.3; it.w+=clamp(dw,-cap,cap);
+      const hm=homeOf(it), hp=pullOf(it); it.x+=(hm[0]-it.x)*hp; it.y+=(hm[1]-it.y)*hp; });
+    balanceW(L); }
+  L.forEach(it=>{ const dx=it.x-it.px, dy=it.y-it.py, d=Math.hypot(dx,dy); if(d>mv){ it.x=it.px+dx/d*mv; it.y=it.py+dy/d*mv; } it.px=it.x; it.py=it.y; });
+  return cellsOf(L,region);
+}
+const pts = p => p.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ');
+
+class Mosaic{
+  constructor(root,opt={}){ this.root=root; this.svg=root.querySelector('svg'); this.labs=root.querySelector('.mlabs'); this.opt=opt;
+    this.T={}; this.els={}; this.lb={}; this.tg={}; this.tr={}; this.view=null; this.t0=performance.now(); this.running=false; this.spec=null; ENGINES.push(this); }
+  size(){ return [this.root.clientWidth, this.root.clientHeight]; }
+  band(H){ return this.opt.band?this.opt.band(H):[0,H]; }
+  // spec.items: [{k, v, raw, fill, fg, label(r,val,node), tag, onTap, fast, bump, fixed:[x,y], still, kids:[{k,v,raw,fill,fg,label,onTap}]}]
+  set(spec){
+    this.spec=spec; this.view=spec.zoom||null;
+    const [W,H]=this.size(); if(!W||!H){ this.pending=true; this.start(); return; }
+    const R=[[0,0],[W,0],[W,H],[0,H]];
+    const items=spec.items.filter(i=>i.v>0), vals={}; items.forEach(i=>vals[i.k]=i.v);
+    const fv=items.length?floorVals(vals,spec.floor??.05):{};
+    const anchors={}; items.forEach(i=>{ if(i.fixed) anchors[i.k]=i.fixed; else if(spec.anchors&&spec.anchors[i.k]) anchors[i.k]=[spec.anchors[i.k][0]*W,spec.anchors[i.k][1]*H]; });
+    const top=items.length?settle(R,fv,Object.keys(anchors).length?anchors:null,.3):{};
+    Object.values(this.T).forEach(B=>{ B.v=0; Object.values(B.kids).forEach(K=>K.v=0); });
+    items.forEach(it=>{
+      const s=top[it.k]; let B=this.T[it.k];
+      if(!B) B=this.T[it.k]={k:it.k,x:s.x,y:s.y,px:s.x,py:s.y,w:0,kids:{},cnt:0,shown:(spec.init&&spec.init[it.k]!=null)?spec.init[it.k]:0};
+      Object.assign(B,{v:fv[it.k],raw:it.raw!=null?it.raw:it.v,sx:s.x,sy:s.y,A0:Math.max(pArea(s.poly),1),sp:it,fixed:!!it.fixed});
+      if(it.still&&!B.stillKeep) B.stillPos=null;
+      if(it.kids){
+        const kl=it.kids.filter(k=>k.v>0), kv={}; kl.forEach(k=>kv[k.k]=k.v);
+        const region=this.view===it.k?R:s.poly, cv=kl.length?floorVals(kv,spec.kidFloor??.1):{};
+        const inner=kl.length?settle(region,cv,null,.04):{}, cc=pCen(region), sc=Math.sqrt(B.A0/Math.max(pArea(region),1));
+        kl.forEach(kd=>{ const q=inner[kd.k]; let K=B.kids[kd.k];
+          if(!K) K=B.kids[kd.k]={k:kd.k,x:q.x,y:q.y,px:q.x,py:q.y,w:0,shown:0,cnt:0};
+          Object.assign(K,{v:cv[kd.k],raw:kd.raw!=null?kd.raw:kd.v,rx:(q.x-cc[0])*sc,ry:(q.y-cc[1])*sc,sp:kd}); });
+      }
+    });
+    this.start();
+  }
+  start(){ this.running=true; } stop(){ this.running=false; }
+  cell(id,fill,stroke,onTap,fast,node){
+    let g=this.els[id];
+    if(!g){ g=document.createElementNS(NS,'polygon'); g.setAttribute('class','cell'); g.setAttribute('stroke','#100C1C'); g.setAttribute('stroke-linejoin','round');
+      const fire=e=>{ const n=g._node; if(!n||!n.sp) return; if(n.sp.bump) n.bump=1; if(n.sp.onTap) n.sp.onTap(n); };
+      if(fast) g.addEventListener('pointerdown',e=>{ e.preventDefault(); fire(e); }); else g.addEventListener('click',fire);
+      this.svg.insertBefore(g,this.svg.querySelector('.terr')); this.els[id]=g; }
+    g._node=node; g.setAttribute('fill',fill); g.setAttribute('stroke-width',stroke); return g;
+  }
+  label(id,poly,node,H,parentShown){
+    const sp=node.sp; let L=this.lb[id];
+    if(!L){ L=document.createElement('div'); L.className='lb'; this.labs.appendChild(L); this.lb[id]=L; }
+    const [bt,bb]=this.band(H); let vis=clipPoly(poly,0,-1,-bt); vis=clipPoly(vis,0,1,bb);
+    const pl=vis.length>2?pole(vis):null, r=pl?pl[2]:0;
+    if(pl&&r>3){
+      let tx,ty; if(sp.still){ if(!node.stillPos) node.stillPos=pCen(vis); [tx,ty]=node.stillPos; } else [tx,ty]=pCen(vis);
+      if(L._x==null||sp.still){ L._x=tx; L._y=ty; } L._x+=(tx-L._x)*.6; L._y+=(ty-L._y)*.6;
+      const hw=(L._w||0)/2+4, W=this.root.clientWidth; L.style.left=clamp(L._x,hw,W-hw).toFixed(1)+'px'; L.style.top=L._y.toFixed(1)+'px'; }
+    L.style.opacity=(node.v>0&&parentShown?clamp((r-10)/14,0,1):0).toFixed(2);
+    L.style.color=sp.fg||'#fff';
+    node.cnt+= (node.raw-node.cnt)*ENG.count; if(Math.abs(node.raw-node.cnt)<.005) node.cnt=node.raw;
+    const html=sp.label?sp.label(r,sp.noCount?node.raw:node.cnt,node):'';
+    if(L._h!==html){ L.innerHTML=html; L._h=html; L._w=L.offsetWidth; }
+  }
+  drop(id){ if(this.els[id]){ this.els[id].remove(); delete this.els[id]; } if(this.lb[id]){ this.lb[id].remove(); delete this.lb[id]; } }
+  frame(ts){
+    const [W,H]=this.size(); if(!W||!H) return;
+    if(this.pending){ this.pending=false; this.set(this.spec); return; }
+    const tt=(ts-this.t0)/1000, R=[[0,0],[W,0],[W,H],[0,H]]; this.svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+    const Bs=Object.values(this.T); let SV=0; Bs.forEach(B=>SV+=B.v);
+    Bs.forEach(B=>{ B.goal=this.view?(B.k===this.view?1:0):(SV?B.v/SV:0); B.shown+=(B.goal-B.shown)*ENG.ease;
+      if(B.bump){ B.bump*=.72; if(B.bump<.02) B.bump=0; } });
+    const live=Bs.filter(B=>B.shown>.004||B.goal>0);
+    Bs.forEach(B=>{ if(live.includes(B)) return;
+      const ids=[B.k,...Object.keys(B.kids).map(k=>B.k+'/'+k)];
+      if(B.v===0){ ids.forEach(id=>this.drop(id)); if(this.tr[B.k]){ this.tr[B.k].remove(); this.tg[B.k].remove(); delete this.tr[B.k]; delete this.tg[B.k]; } delete this.T[B.k]; }
+      else { ids.forEach(id=>{ if(this.els[id]) this.els[id].setAttribute('points',''); if(this.lb[id]) this.lb[id].style.opacity=0; });
+        if(this.tr[B.k]) this.tr[B.k].setAttribute('points',''); if(this.tg[B.k]) this.tg[B.k].style.opacity=0; } });
+    if(!live.length) return;
+    const still=!!this.view;
+    const TP=stepLayout(live,R,
+      B=>Math.max(B.shown,.0002)*(1+(B.bump||0)*.3)*((B.fixed||still)?1:(1+(B.sp.kids?.02:.03)*Math.sin(tt*1.3+hashK(B.k)))),
+      B=>{ if(B.fixed) return [B.sx,B.sy]; if(this.view===B.k) return [W/2,H/2]; const wob=B.sp.kids?0:4*Math.sin(tt*.9+hashK(B.k)); return [B.sx+wob,B.sy+wob*.7]; },
+      B=>B.fixed?.3:.2, W*H*ENG.cap, ENG.mv);
+    live.forEach(B=>{
+      const region=TP[B.k]||[];
+      if(region.length<3){ return; }
+      if(!B.sp.kids){
+        const g=this.cell(B.k,B.sp.fill,B.sp.stroke||5,null,B.sp.fast,B); g.setAttribute('points',pts(region));
+        this.label(B.k,region,B,H,true); return; }
+      const A=pArea(region), sc=Math.sqrt(A/B.A0), c=pCen(region);
+      const kids=Object.values(B.kids); kids.forEach(K=>K.shown+=(K.v-K.shown)*ENG.ease);
+      const kl=kids.filter(K=>K.shown>.002||K.v>0);
+      kids.forEach(K=>{ if(!kl.includes(K)){ this.drop(B.k+'/'+K.k); delete B.kids[K.k]; } });
+      if(kl.length){
+        const KP=stepLayout(kl,region,K=>Math.max(K.shown,.0001)*(still?1:(1+.03*Math.sin(tt*1.4+hashK(K.k)))),K=>[c[0]+K.rx*sc,c[1]+K.ry*sc],()=>.3,A*ENG.kidCap,ENG.mv);
+        kl.forEach(K=>{ const id=B.k+'/'+K.k, p=KP[K.k]||[]; if(!K.sp.onTap&&B.sp.onTap) K.sp.onTap=()=>B.sp.onTap(B);
+          const g=this.cell(id,K.sp.fill,3,null,false,K); g.setAttribute('points',pts(p)); this.label(id,p,K,H,true); });
+      }
+      let tp=this.tr[B.k]; if(!tp){ tp=document.createElementNS(NS,'polygon'); tp.setAttribute('class','terr'); tp.setAttribute('stroke','#100C1C'); tp.setAttribute('stroke-width','10'); tp.setAttribute('stroke-linejoin','round'); this.svg.appendChild(tp); this.tr[B.k]=tp; }
+      tp.setAttribute('points',pts(region));
+      let tg=this.tg[B.k]; if(!tg){ tg=document.createElement('div'); tg.className='tag'; this.labs.appendChild(tg); this.tg[B.k]=tg; }
+      const th=B.sp.tag||''; if(tg._h!==th){ tg.innerHTML=th; tg._h=th; }
+      const [bt]=this.band(H), vr=clipPoly(region,0,-1,-(bt+4)), src=vr.length>2?vr:region;
+      const topY=Math.min(...src.map(q=>q[1])), strip=clipPoly(clipPoly(src,0,-1,-(topY+8)),0,1,topY+40);
+      let bx=strip.length>2?pCen(strip)[0]:c[0]; if(strip.length>2){ const xs=strip.map(q=>q[0]); bx=clamp(bx,Math.min(...xs)+70,Math.max(...xs)-70); }
+      bx=clamp(bx,78,W-78); const ty=Math.max(topY+22,bt+20);
+      if(tg._x==null){ tg._x=bx; tg._y=ty; } tg._x+=(bx-tg._x)*.5; tg._y+=(ty-tg._y)*.5;
+      tg.style.left=tg._x.toFixed(1)+'px'; tg.style.top=tg._y.toFixed(1)+'px';
+      tg.style.opacity=(this.view||!th?0:clamp(A/(W*H*.06),0,1)).toFixed(2);
+    });
+  }
+}
+const ENGINES=[];
+(function loop(ts){ ENGINES.forEach(m=>{ if(m.running) m.frame(ts); }); requestAnimationFrame(loop); })(performance.now());
+
+// one label recipe for every shard: icon, amount, name; sizes follow the shard
+function shardLabel(icon,amt,name,opt={}){
+  return (r,val)=>{ const a=typeof amt==='function'?amt(val):amt;
+    return `<i class="ti ${icon}" style="font-size:${Math.round(clamp(r*.36,8,opt.iconMax||32))}px"></i>`+
+      (r>20&&a?`<div class="a" style="font-size:${Math.round(clamp(r*(opt.big?.5:.38),8,opt.big?58:36))}px">${a}</div>`:'')+
+      (r>36&&name?`<div class="n">${name}</div>`:''); };
+}
+const m0 = v => money(v,0);
 
 /* =================================================================
    VIEWS
    ================================================================= */
+// visible band (not under the bars) for each screen
+function shardBand(H){ const cs=getComputedStyle(document.documentElement);
+  const st=parseFloat(cs.getPropertyValue('--safe-t-px'))||0, sb=parseFloat(cs.getPropertyValue('--safe-b-px'))||0;
+  return document.body.classList.contains('chrome-off') ? [st+8, H-sb-8] : [st+64, H-sb-88]; }
+const pageBand = H => { const st=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-t-px'))||0; return [st+62, H-4]; };
+const actBand = H => [4, H-4];
+
+/* ---------- Home: this month's day-to-day spending ---------- */
+const SHARD_LEFT={n:'left',i:'ti-wallet',c:'#241D42',fg:'#FFFFFF'};
+const SHARD_MORE={n:'Others',i:'ti-dots',c:'#D9D2F5',fg:'#1A1230'};
+const LEFT_CAP=0.40, MAX_CATS=6;
+let HOME_MORE=[];
+const home=new Mosaic($('#home'),{band:shardBand});
+function renderHome(launch){
+  const st=monthStats(ym);
+  const cats=Object.entries(st.byCat).filter(([,v])=>v>0.004).sort((a,b)=>b[1]-a[1]);
+  let list=cats; HOME_MORE=[];
+  if(cats.length>MAX_CATS){ list=cats.slice(0,MAX_CATS-1); HOME_MORE=cats.slice(MAX_CATS-1); }
+  const catSum=cats.reduce((a,[,v])=>a+v,0), left=Math.max(st.left,0);
+  const leftF=catSum? Math.min(left/(left+catSum),LEFT_CAP) : 1;
+  const sh={}; list.forEach(([k,v])=>sh[k]=(1-leftF)*v/(catSum||1));
+  if(HOME_MORE.length) sh.more=(1-leftF)*HOME_MORE.reduce((a,[,v])=>a+v,0)/(catSum||1);
+  // no shard over half the screen
+  for(let pass=0;pass<2;pass++){ let ex=0,rest=0; Object.keys(sh).forEach(k=>{ if(sh[k]>.5){ ex+=sh[k]-.5; sh[k]=.5; } else rest+=sh[k]; });
+    if(ex>0&&rest>0) Object.keys(sh).forEach(k=>{ if(sh[k]<.5) sh[k]+=ex*sh[k]/rest; }); }
+  const items=list.map(([k,v])=>{ const C=cat(k); return {k,v:sh[k],raw:v,fill:C.c,fg:C.fg,label:shardLabel(C.i,val=>m0(val),C.n),onTap:()=>openCatSheet(k)}; });
+  if(HOME_MORE.length){ const tot=HOME_MORE.reduce((a,[,v])=>a+v,0); items.push({k:'more',v:sh.more,raw:tot,fill:SHARD_MORE.c,fg:SHARD_MORE.fg,label:shardLabel(SHARD_MORE.i,val=>m0(val),SHARD_MORE.n),onTap:openMoreSheet}); }
+  if(left>0) items.push({k:'left',v:leftF,raw:left,fill:SHARD_LEFT.c,fg:SHARD_LEFT.fg,label:shardLabel(SHARD_LEFT.i,val=>m0(val),`left of ${m0(S.allowance)}`,{big:1}),onTap:openLeftSheet});
+  home.set({items,floor:.065,init:launch?{left:1}:null});
+  const over=st.left<0;
+  $('#home').classList.toggle('over',over);
+  const op=$('#overPill'); op.classList.toggle('hidden',!over||view!=='home'); document.body.classList.toggle('has-over',over&&view==='home');
+  op.innerHTML=`<i class="ti ti-alert-triangle"></i>${m0(-st.left)} over ${m0(S.allowance)}`;
+}
+
+/* ---------- Activity: one day as shards, week strip on top ---------- */
+let actDay=TODAY;
+const addDays=(d,n)=>{ const x=new Date(d+'T00:00'); x.setDate(x.getDate()+n); return iso(x); };
+const weekStart=d=>{ const x=new Date(d+'T00:00'); x.setDate(x.getDate()-((x.getDay()+6)%7)); return iso(x); };
+const dayOuts=d=>S.txs.filter(t=>t.date===d&&!isIn(t)&&t.kind==='everyday');
+const act=new Mosaic($('#actRoot'),{band:actBand});
+function dayGroups(d){
+  const g={}; dayOuts(d).forEach(t=>{ const k='g:'+(mKey(t.merchant)||t.merchant); const e=g[k]||(g[k]={k,name:t.merchant,cat:t.category,amt:0,txs:[]}); e.amt+=counted(t); e.txs.push(t); });
+  return Object.values(g).filter(e=>e.amt>0.004).sort((a,b)=>b.amt-a.amt);
+}
+function renderActivity(){
+  // week strip
+  const ws=weekStart(actDay), days=[...Array(7)].map((_,i)=>addDays(ws,i));
+  const tots=days.map(d=>dayOuts(d).reduce((a,t)=>a+counted(t),0)), max=Math.max(...tots,1);
+  const DN=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  $('#actWeek').innerHTML=days.map((d,i)=>{ const fut=d>TODAY, byc={}; dayOuts(d).forEach(t=>byc[t.category]=(byc[t.category]||0)+counted(t));
+    const fill=Object.entries(byc).sort((a,b)=>b[1]-a[1]).map(([k,v],j)=>`<div style="height:${(v/max*82).toFixed(1)}%;background:${cat(k).c};animation-delay:${i*40+j*30}ms"></div>`).join('');
+    return `<button class="sl${d===actDay?' sel':''}${fut?' fut':''}" data-d="${d}" ${fut?'disabled':''}><div class="fill">${fill}</div><div class="lb2">${DN[i]}<b>${+d.slice(8)}</b></div></button>`; }).join('');
+  $$('#actWeek .sl').forEach(b=>b.onclick=()=>{ if(b.dataset.d===actDay) return; actDay=b.dataset.d; renderActivity(); });
+  // day mosaic
+  const groups=dayGroups(actDay); let items;
+  if(!groups.length) items=[{k:'none',v:1,raw:0,fill:'#241D42',fg:'#FFFFFF',noCount:1,label:shardLabel('ti-mood-smile','','Nothing spent'),onTap:()=>{}}];
+  else {
+    let shown=groups, rest=[];
+    if(groups.length>8){ shown=groups.slice(0,7); rest=groups.slice(7); }
+    items=shown.map(e=>{ const C=cat(e.cat), n=e.txs.length;
+      return {k:e.k,v:e.amt,raw:e.amt,fill:C.c,fg:C.fg,label:shardLabel(C.i,val=>money(val),esc(e.name)+(n>1?` ×${n}`:'')),
+        onTap:()=>n===1?openEditor(e.txs[0]):openGroupSheet(e.name,e.txs)}; });
+    if(rest.length){ const tot=rest.reduce((a,e)=>a+e.amt,0); items.push({k:'more',v:tot,raw:tot,fill:SHARD_MORE.c,fg:SHARD_MORE.fg,
+      label:shardLabel('ti-dots',val=>money(val),`+${rest.length} more`),onTap:()=>openGroupSheet(`${rest.length} more`,rest.flatMap(e=>e.txs))}); }
+  }
+  act.set({items,floor:.07});
+  const tot=groups.reduce((a,e)=>a+e.amt,0);
+  setPills(`<i class="ti ti-calendar"></i>${new Date(actDay+'T00:00').toLocaleDateString('en-SG',{weekday:'short',day:'numeric',month:'short'})} · ${money(tot)}`,
+    (actDay!==TODAY?`<button class="vpill cut-btn" id="toToday"><i class="ti ti-arrow-back-up"></i>Today</button>`:'')+`<button class="vpill cut-btn" id="openSearch" aria-label="Search"><i class="ti ti-search"></i></button>`);
+  const tt=$('#toToday'); if(tt) tt.onclick=()=>{ actDay=TODAY; renderActivity(); };
+  $('#openSearch').onclick=()=>openSearch();
+}
+function openGroupSheet(name,txs){
+  const C=cat(txs[0].category), total=txs.reduce((a,t)=>a+counted(t),0);
+  openSheet(`<div class="sband" style="background:${C.c};--fg:${C.fg}">
+      <div class="sub" style="margin:0 0 8px"><i class="ti ${C.i}" style="font-size:20px"></i>${esc(name)}</div>
+      <div class="big num">${money(total)}</div><div class="sub">${txs.length} payments</div></div>
+    ${groupedList(txs)}`);
+  bindRows('#sheetBody');
+}
+function openSearch(mode){
+  openSheet(`<h2>${mode==='new'?'New to check':'Search'}</h2>
+    ${mode==='new'?'':`<div class="search cut-a"><i class="ti ti-search"></i><input id="q" placeholder="Merchant or note" autocomplete="off"></div>`}
+    ${mode==='new'?`<button class="btn cut-a" id="allGood" style="margin-bottom:12px"><i class="ti ti-checks"></i>All correct, clear the new tags</button>`:''}
+    <div id="qres"></div>`);
+  const draw=q=>{ let list=mode==='new'?S.txs.filter(t=>t.inbox):S.txs.filter(t=>!q||(t.merchant+' '+(t.note||'')).toLowerCase().includes(q.toLowerCase()));
+    list=list.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,80);
+    $('#qres').innerHTML=list.length?groupedList(list):`<div class="empty"><i class="ti ti-mood-empty"></i>Nothing matches</div>`; bindRows('#qres'); };
+  draw(''); const q=$('#q'); if(q){ q.oninput=e=>draw(e.target.value); setTimeout(()=>q.focus(),350); }
+  const ag=$('#allGood'); if(ag) ag.onclick=()=>{ S.txs.forEach(t=>t.inbox=false); save(); closeSheet(); toast('ti-checks','All caught up'); render(); };
+}
+// swipes: the mosaic steps a day, the strip steps a week
+function swipe(el,fn){ let x0=null,y0=null; el.addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; y0=e.touches[0].clientY; },{passive:true});
+  el.addEventListener('touchend',e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null; if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.3) fn(dx<0?1:-1); },{passive:true}); }
+swipe($('#actRoot'),dir=>{ const n=addDays(actDay,dir); if(n>TODAY) return; actDay=n; renderActivity(); });
+swipe($('#actWeek'),dir=>{ let n=addDays(actDay,dir*7); if(n>TODAY) n=TODAY; if(n===actDay) return; actDay=n; renderActivity(); });
+
+/* ---------- Month: the whole month, cracked by bucket then category ---------- */
+let mz=null;
+const month=new Mosaic($('#monthRoot'),{band:pageBand});
+const BUCKETS={everyday:'Day-to-day',fixed:'Fixed',oneoff:'One-off'};
+function bucketCats(st,kind){ const o={}; if(kind==='everyday') return {...st.byCat}; (kind==='fixed'?st.fixed:st.oneoff).forEach(t=>o[t.category]=(o[t.category]||0)+counted(t)); Object.keys(o).forEach(k=>{ if(o[k]<=.004) delete o[k]; }); return o; }
+function renderMonth(){
+  const st=monthStats(ym), pk=shiftMonth(ym,-1), pst=monthStats(pk), hasPrev=pst.txs.length>0;
+  const sums={}, items=[];
+  Object.keys(BUCKETS).forEach(kind=>{ const bc=bucketCats(st,kind), sum=Object.values(bc).reduce((a,v)=>a+v,0); sums[kind]=sum; if(sum<=0.004) return;
+    const prev=hasPrev?Object.values(bucketCats(pst,kind)).reduce((a,v)=>a+v,0):null, diff=prev==null?null:sum-prev;
+    const tag=`${BUCKETS[kind]} ${m0(sum)}${diff==null||Math.abs(diff)<1?'':`<span class="${diff>0?'up':'dn'}">${diff>0?'▲':'▼'}${m0(Math.abs(diff))}</span>`}`;
+    items.push({k:kind,v:sum,tag,onTap:()=>{ mz=kind; renderMonth(); },
+      kids:Object.entries(bc).map(([k,v])=>{ const C=cat(k); return {k,v,raw:v,fill:C.c,fg:C.fg,label:shardLabel(C.i,val=>m0(val),C.n),onTap:mz===kind?()=>openCatSheet(k,kind):()=>{ mz=kind; renderMonth(); }}; })}); });
+  if(!items.length) items.push({k:'none',v:1,raw:0,fill:'#241D42',fg:'#fff',noCount:1,label:shardLabel('ti-calendar-off','','Nothing logged this month'),onTap:()=>{}});
+  if(mz&&!sums[mz]) mz=null;
+  const one=sums.oneoff>0, fix=sums.fixed>0;
+  const anchors={everyday:[.52,.36],fixed:one?[.18,.84]:[.42,.86],oneoff:fix?[.86,.78]:[.6,.86]};
+  month.set({items,anchors,floor:.14,kidFloor:.1,zoom:mz});
+  const day=st.everySum, over=day>S.allowance, total=sums.everyday+sums.fixed+sums.oneoff;
+  const surplus=Math.max(S.allowance-day,0), canMove=surplus>0&&!surplusMoves(ym)&&(ym<THIS_M||st.daysLeft<=3);
+  if(mz) setPills(`<i class="ti ti-arrow-left"></i>${BUCKETS[mz]} · ${m0(sums[mz])}`, mz==='everyday'?verdict(day,over):'', ()=>{ mz=null; renderMonth(); });
+  else setPills(null, verdict(day,over));
+  const mp=$('#movePill'); mp.classList.toggle('hidden',!canMove||!!mz); mp.innerHTML=`<i class="ti ti-moneybag"></i>Move ${m0(surplus)} to Surplus`;
+  $('#mLabel').textContent=`${monthName(ym,{month:'short'})} · ${m0(total)}`;
+  mp.onclick=()=>openEditor(null,{merchant:'To POSB Surplus',amount:surplus,category:'other',kind:'transfer',account:'salary',toAcc:'surplus'});
+}
+const verdict=(day,over)=>`<span class="vpill cut-btn ${over?'red':'ok'}"><i class="ti ti-${over?'alert-triangle':'check'}"></i>${m0(day)} / ${m0(S.allowance)}</span>`;
+swipe($('#monthRoot'),dir=>{ if(mz) return; const n=shiftMonth(ym,dir); if(n>THIS_M) return; ym=n; renderMonth(); });
+
+/* ---------- Accounts: balances as territories, debt striped ---------- */
+let az=null;
+const accts=new Mosaic($('#accRoot'),{band:pageBand});
+function txDelta(t){ return isIn(t)?t.amount:-t.amount; }
+// balance of an account right now: last known balance + everything logged after that date
+function accBalance(a){
+  const b=(S.balances||{})[a]; if(!b) return null;
+  let v=b.amount;
+  S.txs.forEach(t=>{ if(t.date<=b.date) return;
+    if(t.account===a) v+=txDelta(t);
+    else if(t.kind==='transfer'&&!isIn(t)&&t.toAcc===a&&!S.txs.some(x=>x.account===a&&isIn(x)&&x.kind==='transfer'&&Math.abs(x.amount-t.amount)<0.005&&Math.abs(daysBetween(x.date,t.date))<=3)) v+=t.amount;
+    else if(t.kind==='transfer'&&isIn(t)&&t.fromAcc===a&&!S.txs.some(x=>x.account===a&&!isIn(x)&&x.kind==='transfer'&&Math.abs(x.amount-t.amount)<0.005&&Math.abs(daysBetween(x.date,t.date))<=3)) v-=t.amount;
+  });
+  return v;
+}
+function cardOwed(){
+  const c=S.cardBill; if(!c) return null;
+  let v=c.amount, since=0;
+  S.txs.forEach(t=>{ if(t.date<=c.stmt) return;
+    if(t.account==='card'){ if(isIn(t)) v-=t.amount; else { v+=t.amount; if(t.kind!=='transfer') since+=t.amount; } }
+    else if(t.kind==='transfer'&&!isIn(t)&&t.toAcc==='card') v-=t.amount; });
+  return {owed:v, since, paid:S.txs.some(t=>t.kind==='transfer'&&t.toAcc==='card'&&t.date>c.stmt)};
+}
+const surplusMoves = k => monthTxs(k).filter(t=>t.kind==='transfer'&&!isIn(t)&&t.toAcc==='surplus').reduce((a,t)=>a+t.amount,0);
+const ACC_FILL={salary:['#FF5A36','#2A0800'],savings:['#3DDC84','#06301A'],surplus:['#FFC21F','#2B1A00'],cash:['#B8F03C','#14200A']};
+function accZoomKids(a,bal,co){
+  const txs=monthTxs(ym), gross=t=>(t.split&&t.split.share!=null)?t.split.share:t.amount, K=[];
+  const add=(k,v,fill,fg,icon,name)=>{ if(v>0.004) K.push({k,v,raw:v,fill,fg,label:shardLabel(icon,val=>m0(val),name),onTap:()=>openAccSheet(a)}); };
+  if(a==='salary'){ const o=txs.filter(t=>t.account==='salary'&&!isIn(t));
+    add('js',o.filter(t=>t.kind==='transfer'&&t.toAcc==='savings').reduce((s,t)=>s+t.amount,0),'#3DDC84','#06301A','ti-pig-money','To JumpStart');
+    add('sur',o.filter(t=>t.kind==='transfer'&&t.toAcc==='surplus').reduce((s,t)=>s+t.amount,0),'#FFC21F','#2B1A00','ti-moneybag','To Surplus');
+    add('day',o.filter(t=>t.kind==='everyday').reduce((s,t)=>s+gross(t),0),'#FF3D7F','#FFFFFF','ti-sun','Day-to-day');
+    add('fix',o.filter(t=>t.kind==='fixed').reduce((s,t)=>s+gross(t),0),'#FFB36B','#2E1600','ti-repeat','Fixed');
+    add('one',o.filter(t=>t.kind==='oneoff').reduce((s,t)=>s+gross(t),0),'#7DD3FC','#062A3D','ti-bolt','One-off'); }
+  if(a==='savings'&&bal!=null){ const owed=co&&!co.paid?Math.max(co.owed,0):0;
+    add('free',Math.max(bal-owed,0),'#3DDC84','#06301A','ti-lock-open','Free to use');
+    add('forcard',Math.min(owed,Math.max(bal,0)),'#FF8A8A','#3A0610','ti-credit-card-pay','For card bill'); }
+  if(a==='card'){ const o=txs.filter(t=>t.account==='card'&&!isIn(t)&&t.kind!=='transfer');
+    add('day',o.filter(t=>t.kind==='everyday').reduce((s,t)=>s+t.amount,0),'#FF3D7F','#FFFFFF','ti-sun','Day-to-day');
+    add('fix',o.filter(t=>t.kind==='fixed').reduce((s,t)=>s+t.amount,0),'#FFB36B','#2E1600','ti-repeat','Fixed');
+    add('one',o.filter(t=>t.kind==='oneoff').reduce((s,t)=>s+t.amount,0),'#FF8AC8','#3A0624','ti-bolt','One-off'); }
+  if(a==='surplus'){ for(let i=5;i>=0;i--){ const k=shiftMonth(ym,-i); add('m'+k,surplusMoves(k),i?'#FFE08A':'#FFC21F','#2B1A00','ti-moneybag',monthName(k,{month:'short'})); } }
+  if(a==='cash'){ add('wd',txs.filter(t=>t.category==='cash'&&!isIn(t)).reduce((s,t)=>s+t.amount,0),'#7CF2C9','#05302A','ti-cash','Withdrawn');
+    add('sp',txs.filter(t=>t.account==='cash'&&!isIn(t)).reduce((s,t)=>s+gross(t),0),'#B8F03C','#14200A','ti-shopping-bag','Spent from cash'); }
+  if(!K.length) K.push({k:'set',v:1,raw:0,noCount:1,fill:'#352C5C',fg:'#FFFFFF',label:shardLabel(bal==null?'ti-pencil':'ti-mood-empty','',bal==null?'Tap to set balance':'Nothing this month'),onTap:()=>openAccSheet(a)});
+  return K;
+}
+function renderAccounts(){
+  const co=cardOwed(), bal={}; ['salary','savings','surplus','cash'].forEach(a=>bal[a]=accBalance(a));
+  const items=[];
+  ['savings','salary','card','surplus','cash'].forEach(a=>{
+    if(a==='card'&&!co) return;
+    const A=ACCOUNTS[a], v=a==='card'?Math.max(co.owed,0):bal[a];
+    const kids= az===a ? accZoomKids(a,v,co) : [ a==='card'
+      ? {k:'bal',v:1,raw:v,fill:'url(#debt)',fg:'#FFD6DB',label:shardLabel('ti-credit-card',val=>'−'+m0(val),co.paid?'Paid':`Owed · due ${new Date(S.cardBill.due+'T00:00').toLocaleDateString('en-SG',{day:'numeric',month:'short'})}`),onTap:()=>{ az=a; renderAccounts(); }}
+      : {k:'bal',v:1,raw:v==null?0:v,noCount:v==null,fill:ACC_FILL[a][0],fg:ACC_FILL[a][1],label:shardLabel(A.i,v==null?'':val=>m0(val),v==null?'Set balance':'est. today'),onTap:()=>{ az=a; renderAccounts(); }} ];
+    items.push({k:a,v:Math.max(v||0,1),tag:A.n,kids,onTap:()=>{ az=a; renderAccounts(); }});
+  });
+  accts.set({items,anchors:{savings:[.4,.42],salary:[.84,.2],card:[.78,.78],surplus:[.16,.88],cash:[.1,.62]},floor:.09,kidFloor:.1,zoom:az});
+  const st=monthStats(ym), spent=st.everySum+st.fixedSum+st.oneoffSum, rate=st.salaryIn?(st.salaryIn-spent)/st.salaryIn:null;
+  const known=['salary','savings','surplus','cash'].reduce((s,a)=>s+(bal[a]||0),0), net=known-(co?Math.max(co.owed,0):0);
+  if(az){
+    const act= az==='card' ? (co&&!co.paid&&co.owed>0.004?`<button class="vpill cut-btn" id="payCard"><i class="ti ti-credit-card-pay"></i>Mark paid</button>`:'')
+                         : `<button class="vpill cut-btn" id="setBal"><i class="ti ti-pencil"></i>Balance</button>`;
+    setPills(`<i class="ti ti-arrow-left"></i>${ACCOUNTS[az].n}`, act, ()=>{ az=null; renderAccounts(); });
+    const pc=$('#payCard'); if(pc) pc.onclick=()=>{ S.txs.push({id:uid(),date:TODAY,merchant:'Pay SC Card',amount:Math.round(co.owed*100)/100,category:'other',kind:'transfer',account:'savings',toAcc:'card',
+      source:'manual',card:'',verified:false,inbox:false,split:null,note:'',created:Date.now()}); save(); toast('ti-check','Card payment logged'); renderAccounts(); };
+    const sb=$('#setBal'); if(sb) sb.onclick=()=>openAccSheet(az);
+  } else setPills(`<i class="ti ti-scale"></i>Net ${m0(net)}`, rate==null?'':`<span class="vpill cut-btn ${rate>=0?'ok':'red'}"><i class="ti ti-trending-up"></i>Kept ${Math.round(rate*100)}%</span>`, ()=>{});
+}
+function openAccSheet(a){
+  const A=ACCOUNTS[a], bal=a==='card'?(cardOwed()||{}).owed:accBalance(a), b=(S.balances||{})[a];
+  const list=monthTxs(ym).filter(t=>t.account===a||(t.kind==='transfer'&&t.toAcc===a));
+  openSheet(`
+    <div class="sband" style="background:${A.c};--fg:#100C1C">
+      <div class="sub" style="margin:0 0 8px"><i class="ti ${A.i}" style="font-size:20px"></i>${A.n}</div>
+      <div class="big num">${bal==null?'—':(a==='card'?'−':'')+money(bal)}</div>
+      <div class="sub">${a==='card'?'Statement plus charges since, minus payments':b?`From ${money(b.amount)} on ${dayLabel(b.date)} (${esc(b.src||'you')}) plus what's logged since`:'No balance yet'}</div>
+    </div>
+    ${a==='card'?'':`<div class="field"><label class="lbl" for="balIn">Balance in your bank app now</label>
+      <div class="row2"><input class="input cut-btn" id="balIn" inputmode="decimal" placeholder="0.00"><button class="btn cut-a" id="balSave" style="height:48px"><i class="ti ti-check"></i>Set</button></div>
+      <p class="hint">Check your bank app and type what it shows. Slice carries on from there.</p></div>`}
+    <span class="lbl" style="margin-top:8px">${monthName(ym)}</span>
+    ${list.length?groupedList(list):`<div class="empty" style="padding:14px">Nothing logged for this account this month</div>`}`);
+  bindRows('#sheetBody');
+  const bs=$('#balSave'); if(bs) bs.onclick=()=>{ const v=parseFloat(String($('#balIn').value).replace(/[^0-9.-]/g,'')); if(isNaN(v)) return shake($('#balIn'));
+    S.balances=S.balances||{}; S.balances[a]={amount:Math.round(v*100)/100,date:TODAY,src:'you'}; save(); closeSheet(); toast('ti-check',`${A.short} balance set`); render(); };
+}
+
+/* ---------- top bar pills per screen ---------- */
+let pillBack=null;
+function setPills(leftHTML,rightHTML,onLeft){
+  const L=$('#vpL'); L.classList.toggle('hidden',!leftHTML); $('#mpill').classList.toggle('hidden',!!leftHTML);
+  if(leftHTML) L.innerHTML=leftHTML; pillBack=onLeft||null; L.classList.toggle('tap',!!onLeft);
+  $('#vpR').innerHTML=rightHTML||'';
+}
+$('#vpL').onclick=()=>{ if(pillBack) pillBack(); };
+
+/* ---------- navigation ---------- */
 function renderMonthPill(){
   $('#mLabel').textContent = ym===THIS_M ? monthName(ym) : monthName(ym,{month:'short',year:'numeric'});
   $('#mNext').disabled = ym>=THIS_M;
@@ -745,29 +1044,26 @@ function renderMonthPill(){
   p.classList.toggle('hidden', !n || view!=='home');
   p.innerHTML=`<i class="ti ti-bolt"></i>${n} new to check`;
 }
+const STAGES={home:['#home',home],activity:['#vAct',act],wrap:['#vMonth',month],accounts:['#vAcc',accts]};
 function render(launch){
   renderMonthPill();
-  if(view==='home'){ shardTargets(launch); shardsStart(); }
-  else shardsStop();
+  Object.entries(STAGES).forEach(([k,[sel,m]])=>{ $(sel).classList.toggle('hidden',k!==view); if(k===view) m.start(); else m.stop(); });
+  if(view==='home'){ setPills(null,''); renderHome(launch); }
   if(view==='activity') renderActivity();
-  if(view==='wrap') renderWrap();
+  if(view==='wrap') renderMonth();
   if(view==='accounts') renderAccounts();
+  if(view!=='wrap') $('#movePill').classList.add('hidden');
+  if(view!=='home'){ $('#overPill').classList.add('hidden'); document.body.classList.remove('has-over'); }
 }
 function go(v){
+  if(v!==view){ mz=null; az=null; }
   view=v;
   $$('.nbtn[data-view]').forEach(b=>b.setAttribute('aria-current',b.dataset.view===v?'page':'false'));
-  document.body.classList.toggle('paged',v!=='home');
-  if(v!=='home'){ $('#overPill').classList.add('hidden'); document.body.classList.remove('has-over'); }
   chromeShow(v==='home'?3000:0);
-  $('#pgActivity').classList.toggle('hidden',v!=='activity');
-  $('#pgWrap').classList.toggle('hidden',v!=='wrap');
-  $('#pgAcc').classList.toggle('hidden',v!=='accounts');
-  const pg = v==='activity'?$('#pgActivity'):v==='wrap'?$('#pgWrap'):v==='accounts'?$('#pgAcc'):null;
-  if(pg){ pg.classList.remove('enter'); void pg.offsetWidth; pg.classList.add('enter'); pg.scrollTop=0; }
   render(false);
 }
 
-/* ---------- transaction row ---------- */
+/* ---------- transaction rows (sheets and search) ---------- */
 function rowHTML(t){
   if(isIn(t)){ const L=t.linkTo&&S.txs.find(x=>x.id===t.linkTo);
     const tags=`<span class="tag in cut-btn">${IN_KINDS[t.kind]?IN_KINDS[t.kind].n:'In'}</span>${L?`<span>for ${esc(L.merchant)}</span>`:''}${t.verified?'<span class="tag ok"><i class="ti ti-circle-check"></i>Stmt</span>':''}`;
@@ -786,127 +1082,18 @@ function rowHTML(t){
 function bindRows(scope){ $$(scope+' .row').forEach(b=>b.onclick=()=>openEditor(S.txs.find(t=>t.id===b.dataset.id))); }
 function groupedList(txs){
   const groups={}; txs.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
-  return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,list],gi)=>`
-    <div class="rise" style="--i:${Math.min(gi,12)}"><div class="dayh"><span>${dayLabel(d)}</span><span class="num">${(v=>v>0.004?money(v):'')(list.filter(t=>!isIn(t)&&t.kind!=='transfer').reduce((a,t)=>a+counted(t),0))}</span></div>
+  return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,list])=>`
+    <div><div class="dayh"><span>${dayLabel(d)}</span><span class="num">${(v=>v>0.004?money(v):'')(list.filter(t=>!isIn(t)&&t.kind!=='transfer').reduce((a,t)=>a+counted(t),0))}</span></div>
     ${list.sort((a,b)=>b.created-a.created).map(rowHTML).join('')}</div>`).join('');
 }
-
-/* ---------- activity ---------- */
-function renderActivity(){
-  let txs = filter.mode==='new' ? S.txs.filter(t=>t.inbox) : monthTxs(ym);
-  if(['everyday','fixed','oneoff'].includes(filter.mode)) txs=txs.filter(t=>!isIn(t)&&t.kind===filter.mode);
-  if(filter.mode==='transfer') txs=txs.filter(t=>t.kind==='transfer');
-  if(filter.mode==='in') txs=txs.filter(t=>isIn(t)&&t.kind!=='transfer');
-  if(filter.cat) txs=txs.filter(t=>t.category===filter.cat);
-  if(filter.q){ const q=filter.q.toLowerCase(); txs=txs.filter(t=>(t.merchant+' '+(t.note||'')).toLowerCase().includes(q)); }
-  const total=txs.filter(t=>!isIn(t)&&t.kind!=='transfer').reduce((a,t)=>a+counted(t),0);
-  const chip=(id,label,icon,on)=>`<button class="chip cut-btn" data-chip="${id}" aria-pressed="${on}">${icon?`<i class="ti ${icon}"></i>`:''}${label}</button>`;
-  const hasNew=S.txs.some(t=>t.inbox);
-  $('#activityInner').innerHTML=`
-    <h2 class="ttl rise">Activity</h2>
-    <div class="search cut-a rise" style="--i:1"><i class="ti ti-search"></i><input id="q" placeholder="Search merchant or note" value="${esc(filter.q)}" autocomplete="off"></div>
-    <div class="chips rise" style="--i:2">
-      ${chip('all','All','',filter.mode==='all'&&!filter.cat)}
-      ${hasNew?chip('new','New','ti-bolt',filter.mode==='new'):''}
-      ${chip('everyday','Day-to-day','ti-sun',filter.mode==='everyday')}
-      ${chip('fixed','Fixed','ti-repeat',filter.mode==='fixed')}
-      ${chip('oneoff','One-off','ti-bolt',filter.mode==='oneoff')}
-      ${chip('in','Money in','ti-arrow-down-left',filter.mode==='in')}
-      ${chip('transfer','Transfer','ti-arrows-exchange',filter.mode==='transfer')}
-      ${filter.cat?chip('cat',cat(filter.cat).n,cat(filter.cat).i,true):''}
-    </div>
-    ${filter.mode==='new'&&txs.length?`<button class="btn cut-a rise" id="allGood" style="--i:3;margin-bottom:12px"><i class="ti ti-checks"></i>All correct, clear the new tags</button>`:''}
-    <div class="panel cut-b rise" style="--i:3;padding:4px 16px 8px">
-      <div class="dayh" style="padding-top:12px;color:var(--tx2)"><span>${txs.length} items</span><span class="num">${filter.mode==='in'?'+'+money(txs.reduce((a,t)=>a+t.amount,0)):money(total)}</span></div>
-      ${txs.length?groupedList(txs):`<div class="empty"><i class="ti ti-mood-empty"></i>Nothing matches</div>`}
-    </div>`;
-  const q=$('#q');
-  q.oninput=e=>{ filter.q=e.target.value; clearTimeout(q._t); q._t=setTimeout(()=>{ renderActivity(); const n=$('#q'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
-  $$('[data-chip]').forEach(b=>b.onclick=()=>{ const v=b.dataset.chip;
-    if(v==='all') filter={mode:'all',cat:null,q:filter.q}; else if(v==='cat') filter.cat=null; else filter.mode = filter.mode===v?'all':v;
-    renderActivity(); });
-  const ag=$('#allGood'); if(ag) ag.onclick=()=>{ S.txs.forEach(t=>t.inbox=false); save(); filter.mode='all'; toast('ti-checks','All caught up'); render(); };
-  bindRows('#activityInner');
-}
-
-/* ---------- month wrap-up ---------- */
-function renderWrap(){
-  const st=monthStats(ym), A=S.allowance;
-  const cats=Object.entries(st.byCat).sort((a,b)=>b[1]-a[1]);
-  const scale=Math.max(A,st.everySum);
-  const pacePct = st.isNow ? (st.daysGone/st.dim)*A/scale*100 : null;
-  const surplus=Math.max(A-st.everySum,0);
-  const months=[]; for(let i=5;i>=0;i--) months.push(shiftMonth(ym,-i));
-  const hist=months.map(k=>{ const s=monthStats(k); const has=s.txs.length>0; return {k,v:has?A-s.everySum:null}; });
-  const hMax=Math.max(...hist.map(h=>Math.abs(h.v||0)),1);
-  const accs=Object.entries(st.byAcc).sort((a,b)=>b[1]-a[1]); const accMax=Math.max(...accs.map(a=>a[1]),1);
-  const status = st.left>=0 ? (st.isNow?'left so far':'unspent') : 'over';
-  $('#wrapInner').innerHTML=`
-    <h2 class="ttl rise">${monthName(ym,{month:'long',year:'numeric'})}</h2>
-
-    <div class="panel cut-a rise" style="--i:1">
-      <div class="bigline"><b class="num" style="color:${st.left<0?'var(--red)':'var(--tx)'}">${money(Math.abs(st.left),0)}</b><span>${status}</span></div>
-      <div class="hint" style="margin-top:4px">${money(st.everySum)} day-to-day of ${money(A,0)} allowance${st.isNow?` · ${st.daysLeft} days to go`:''}</div>
-      <div class="sbar cut-btn">
-        ${cats.map(([k,v])=>`<div class="seg2" style="width:${(v/scale*100).toFixed(2)}%;background:${cat(k).c}"></div>`).join('')}
-        ${pacePct!=null?`<div class="pace" style="left:${pacePct.toFixed(1)}%"><span>pace</span></div>`:''}
-      </div>
-      <div class="stats" style="margin:0">
-        <div class="stat cut-tile"><span>Safe per day</span><b class="num">${st.isNow&&st.left>0?money(st.left/Math.max(st.daysLeft,1)):'—'}</b></div>
-        <div class="stat cut-tile"><span>Paid back to you</span><b class="num">${money(st.paidBack)}</b></div>
-      </div>
-    </div>
-
-    <div class="panel cut-c rise" style="--i:2">
-      <div class="ph"><h3>Money moves</h3><span>${st.isNow?'so far':'for the month'}</span></div>
-      <div class="flow">${accTile('salary')}<div><div class="t1">Salary in</div><div class="t2">POSB Salary</div></div><div class="ra num pos">${st.salaryIn?'+'+money(st.salaryIn):'—'}</div></div>
-      <div class="flow">${accTile('savings')}<div><div class="t1">Moved to JumpStart</div><div class="t2">Kept back: allowance plus parents</div></div><div class="ra num">${st.toSavings?money(st.toSavings):'—'}</div></div>
-      <div class="flow">${accTile('card')}<div><div class="t1">Pay SC Card from JumpStart</div><div class="t2">${money(st.cardEvery)} day-to-day · ${money(st.cardPlan)} fixed and one-off</div></div><div class="ra num">${money(st.cardEvery+st.cardPlan)}</div></div>
-      <div class="flow">${accTile('surplus')}<div><div class="t1">Move to POSB Surplus</div><div class="t2">${st.left>=0?`${money(A,0)} allowance minus everyday spend`:'Nothing left over this month'}</div></div><div class="ra num">${money(surplus)}</div></div>
-      ${surplus>0&&!surplusMoves(ym)?`<button class="btn cut-a" id="toSurplus" style="margin:6px 0 4px"><i class="ti ti-moneybag"></i>Move ${money(surplus,0)} to Surplus</button>`:''}
-      <p class="hint">Card amounts are for the calendar month. Your statement runs 17th to 16th, so the actual bill can differ slightly.</p>
-    </div>
-
-    <div class="panel cut-b rise" style="--i:3">
-      <div class="ph"><h3>Surplus history</h3><span>last 6 months</span></div>
-      <div class="hist">${hist.map(h=>`<div class="hcol"><span class="v num">${h.v==null?'':money(h.v,0)}</span>
-        <div class="bar" data-h="${h.v==null?0:Math.max(Math.abs(h.v)/hMax*100,3).toFixed(1)}" style="height:0;background:${h.v==null?'var(--s2)':h.v<0?'var(--red)':h.k===ym?'var(--green)':'var(--s3)'}"></div>
-        <span class="m">${monthName(h.k,{month:'short'})}</span></div>`).join('')}</div>
-    </div>
-
-    <div class="panel cut-a rise" style="--i:4">
-      <div class="ph"><h3>Fixed</h3><span class="num">${money(st.fixedSum)} · outside allowance</span></div>
-      ${st.fixed.length?st.fixed.sort((a,b)=>b.amount-a.amount).map(rowHTML).join(''):`<div class="empty" style="padding:16px"><i class="ti ti-repeat-off"></i>No fixed costs yet</div>`}
-    </div>
-
-    <div class="panel cut-b rise" style="--i:5">
-      <div class="ph"><h3>One-off</h3><span class="num">${money(st.oneoffSum)} · outside allowance</span></div>
-      ${st.oneoff.length?st.oneoff.sort((a,b)=>b.amount-a.amount).map(rowHTML).join(''):`<div class="empty" style="padding:16px"><i class="ti ti-bolt-off"></i>No one-offs this month</div>`}
-    </div>
-
-    <div class="panel cut-c rise" style="--i:6">
-      <div class="ph"><h3>By account</h3><span>excluding transfers</span></div>
-      ${accs.length?accs.map(([a,v])=>`<div class="accbar"><span>${ACCOUNTS[a].short}</span><div class="tr cut-btn"><div class="fl" data-w="${(v/accMax*100).toFixed(1)}" style="background:${ACCOUNTS[a].c}"></div></div><span class="am num">${money(v,0)}</span></div>`).join('')
-        :`<div class="empty" style="padding:16px">No spending yet</div>`}
-    </div>`;
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    $$('#wrapInner .seg2').forEach(s=>s.style.transform='scaleX(1)');
-    $$('#wrapInner .hcol .bar').forEach(b=>{ b.style.height=b.dataset.h+'%'; b.style.transform='scaleY(1)'; });
-    $$('#wrapInner .accbar .fl').forEach(f=>f.style.width=f.dataset.w+'%');
-  }));
-  bindRows('#wrapInner');
-  const ts=$('#toSurplus'); if(ts) ts.onclick=()=>openEditor(null,{merchant:'To POSB Surplus',amount:surplus,category:'other',kind:'transfer',account:'salary',toAcc:'surplus'});
-}
 const accTile = a => `<span class="tile cut-tile" style="background:${ACCOUNTS[a].c};--fg:#100C1C"><i class="ti ${ACCOUNTS[a].i}"></i></span>`;
-
 
 /* ---------- auto-hiding bars (home only) ---------- */
 let hideT=null;
 function scheduleHide(ms=3000){ clearTimeout(hideT); hideT=setTimeout(chromeHide,ms); }
-function chromeHide(){ if(view!=='home') return; if($('#sheet').classList.contains('on')) return scheduleHide(1500); document.body.classList.add('chrome-off'); }
+function chromeHide(){ if(view!=='home') return; if($('#sheet').classList.contains('on')||!$('#vAdd').classList.contains('hidden')) return scheduleHide(1500); document.body.classList.add('chrome-off'); }
 function chromeShow(ms){ document.body.classList.remove('chrome-off'); if(view==='home') scheduleHide(ms||3500); else clearTimeout(hideT); }
 $('#handle').onclick=()=>chromeShow();
-$('#fabFloat').onclick=()=>openEditor(null);
 ['.topbar','.nav'].forEach(sel=>$(sel).addEventListener('pointerdown',()=>{ if(view==='home') scheduleHide(4000); }));
 (()=>{ let s0=null; const h=$('#home');
   h.addEventListener('touchstart',e=>{ const y=e.touches[0].clientY; s0={y,edge:y>innerHeight-90?'b':y<90?'t':null}; },{passive:true});
@@ -915,137 +1102,85 @@ $('#fabFloat').onclick=()=>openEditor(null);
 })();
 
 /* =================================================================
-   ACCOUNTS OVERVIEW — money flow, balances, card bill, surplus
+   + FLOW — amount, where, what, logged. Every answer is a shard,
+   sized by how likely you are to pick it.
    ================================================================= */
-// balance of an account right now: last known balance + everything logged after that date
-function txDelta(t){ return isIn(t)?t.amount:-t.amount; }
-function accBalance(a){
-  const b=(S.balances||{})[a]; if(!b) return null;
-  let v=b.amount;
-  S.txs.forEach(t=>{ if(t.date<=b.date) return;
-    if(t.account===a) v+=txDelta(t);
-    // the other side of a transfer, when only one side has been logged
-    else if(t.kind==='transfer'&&!isIn(t)&&t.toAcc===a&&!S.txs.some(x=>x.account===a&&isIn(x)&&x.kind==='transfer'&&Math.abs(x.amount-t.amount)<0.005&&Math.abs(daysBetween(x.date,t.date))<=3)) v+=t.amount;
-    else if(t.kind==='transfer'&&isIn(t)&&t.fromAcc===a&&!S.txs.some(x=>x.account===a&&!isIn(x)&&x.kind==='transfer'&&Math.abs(x.amount-t.amount)<0.005&&Math.abs(daysBetween(x.date,t.date))<=3)) v-=t.amount;
-  });
-  return v;
+const adder=new Mosaic($('#addRoot'),{band:H=>[0,H]});
+let addAmt='0', addPhase='keys', addAcc='card', addAccTouched=false, addDay='Today', addMerchant=null, addTimer=null, lastAdded=null;
+const ACC_ORDER=['card','salary','savings','surplus','cash'];
+function recentMerchants(){
+  const since=addDays(TODAY,-60), m={};
+  S.txs.forEach(t=>{ if(isIn(t)||t.kind==='transfer'||t.date<since) return; const k=mKey(t.merchant); if(!k) return;
+    const e=m[k]||(m[k]={name:t.merchant,cat:t.category,acc:t.account,n:0,last:''}); e.n++;
+    if(t.date>=e.last){ e.last=t.date; e.cat=t.category; e.acc=t.account; e.name=t.merchant; } });
+  return Object.values(m).sort((a,b)=>b.n-a.n||b.last.localeCompare(a.last)).slice(0,6);
 }
-function cardOwed(){
-  const c=S.cardBill; if(!c) return null;
-  let v=c.amount, since=0;
-  S.txs.forEach(t=>{ if(t.date<=c.stmt) return;
-    if(t.account==='card'){ if(isIn(t)) v-=t.amount; else { v+=t.amount; if(t.kind!=='transfer') since+=t.amount; } }
-    else if(t.kind==='transfer'&&!isIn(t)&&t.toAcc==='card') v-=t.amount; });
-  return {owed:v, since, paid:S.txs.some(t=>t.kind==='transfer'&&t.toAcc==='card'&&t.date>c.stmt)};
+function catUsage(){ const since=addDays(TODAY,-90), u={}; Object.keys(CATS).forEach(k=>u[k]=1);
+  S.txs.forEach(t=>{ if(!isIn(t)&&t.kind!=='transfer'&&t.date>=since&&u[t.category]!=null) u[t.category]++; }); return u; }
+function addPills(){
+  const A=ACCOUNTS[addAcc];
+  $('#addPills').innerHTML=`<button class="vpill cut-btn" id="aClose" aria-label="Close"><i class="ti ti-x"></i></button>
+    <span class="grow"></span>
+    <button class="vpill cut-btn" id="aDay"><i class="ti ti-calendar"></i>${addDay}</button>
+    <button class="vpill cut-btn" id="aAcc"><i class="ti ${A.i}"></i>${A.short}</button>
+    <button class="vpill cut-btn" id="aMore"><i class="ti ti-dots"></i>More</button>`;
+  $('#aClose').onclick=closeAdd;
+  $('#aDay').onclick=()=>{ addDay=addDay==='Today'?'Yesterday':'Today'; addPills(); };
+  $('#aAcc').onclick=()=>{ addAcc=ACC_ORDER[(ACC_ORDER.indexOf(addAcc)+1)%ACC_ORDER.length]; addAccTouched=true; addPills(); };
+  $('#aMore').onclick=()=>{ const amt=parseFloat(addAmt)>0?parseFloat(addAmt):''; const date=addDay==='Yesterday'?addDays(TODAY,-1):TODAY; closeAdd(); openEditor(null,{amount:amt,account:addAcc,date}); };
 }
-function accMonth(a,k){
-  let inn=0,out=0; monthTxs(k).forEach(t=>{ if(t.account===a){ if(isIn(t)) inn+=t.amount; else out+=t.amount; }
-    else if(t.kind==='transfer'&&!isIn(t)&&t.toAcc===a) inn+=t.amount; });
-  return {inn,out};
+function addPhaseSet(p){
+  addPhase=p; const [W,H]=adder.size(), items=[];
+  if(p==='keys'){
+    const top=H*.30, rh=(H-top)/5, jit=(k,a)=>{ let x=0; for(const c of k) x=(x*31+c.charCodeAt(0))%997; return ((x%100)/100-.5)*a; };
+    items.push({k:'amt',v:.27,fixed:[W/2,H*.13],still:1,noCount:1,fill:'#FFC21F',fg:'#2B1A00',stroke:5,label:r=>`<div class="a" style="font-size:${Math.round(clamp(r*.55,18,64))}px">$${addAmt}</div>`});
+    ['1','2','3','4','5','6','7','8','9','.','0','del'].forEach((k,i)=>{ const rr=Math.floor(i/3), c=i%3;
+      items.push({k:'k'+k,v:.055,fixed:[W*(c+.5)/3+jit(k,30),top+rh*(rr+.5)+jit(k+'y',22)],fast:1,bump:1,noCount:1,stroke:5,fill:['#1C1733','#211B3B','#272044'][(rr+c)%3],fg:'#FFFFFF',
+        label:r=>k==='del'?`<i class="ti ti-backspace" style="font-size:${Math.round(Math.min(28,r*.5))}px"></i>`:`<div class="a" style="font-size:${Math.round(clamp(r*.6,18,34))}px">${k}</div>`,
+        onTap:()=>addKey(k)}); });
+    items.push({k:'next',v:.07,fixed:[W/2,top+rh*4.5],fast:1,bump:1,noCount:1,stroke:5,fill:'#FF3D7F',fg:'#FFFFFF',
+      label:r=>`<i class="ti ti-arrow-right" style="font-size:${Math.round(Math.min(30,r*.55))}px;${parseFloat(addAmt)>0?'':'opacity:.4'}"></i>`,onTap:()=>{ if(parseFloat(addAmt)>0) addPhaseSet('where'); }});
+    adder.set({items,floor:0});
+  } else if(p==='where'||p==='what'){
+    items.push({k:'amt',v:.09,noCount:1,fill:'#FFC21F',fg:'#2B1A00',label:r=>`<div class="a" style="font-size:${Math.round(clamp(r*.55,18,64))}px">$${addAmt}</div>`,onTap:()=>addPhaseSet('keys')});
+    if(p==='where'){
+      const rec=recentMerchants(), tot=rec.reduce((a,e)=>a+e.n,0)||1;
+      rec.forEach((e,i)=>{ const C=cat(e.cat); items.push({k:'m'+i,v:Math.max(e.n/tot*.72,.07),noCount:1,fill:C.c,fg:C.fg,label:shardLabel(C.i,'',esc(e.name.replace(/^PayNow( to)?\s+/i,''))),onTap:()=>addPick(e.name,e.cat,e.acc,'m'+i)}); });
+      items.push({k:'else',v:.1,noCount:1,fill:'#352C5C',fg:'#FFFFFF',label:shardLabel('ti-dots','','Elsewhere'),onTap:()=>addPhaseSet('what')});
+    } else {
+      const u=catUsage(), tot=Object.values(u).reduce((a,v)=>a+v,0);
+      Object.keys(CATS).forEach(k=>{ const C=cat(k); items.push({k:'c'+k,v:Math.max(u[k]/tot*.85,.04),noCount:1,fill:C.c,fg:C.fg,label:shardLabel(C.i,'',C.n),onTap:()=>addPick(null,k,null,'c'+k)}); });
+    }
+    adder.set({items,floor:0,anchors:{amt:[.5,.07]}});
+  }
 }
-const surplusMoves = k => monthTxs(k).filter(t=>t.kind==='transfer'&&!isIn(t)&&t.toAcc==='surplus').reduce((a,t)=>a+t.amount,0);
-
-function flowSVG(st){
-  const k=ym, txs=monthTxs(k);
-  const other=st.income-st.salaryIn;
-  const L=[['Salary',st.salaryIn,ACCOUNTS.salary.c],['Paid back',st.paidBack,'#3DDC84'],['Other in',other,'#B8F03C']].filter(x=>x[1]>0.5);
-  const toJS=txs.filter(t=>t.kind==='transfer'&&!isIn(t)&&t.toAcc==='savings').reduce((a,t)=>a+t.amount,0);
-  const gross=kd=>txs.filter(t=>!isIn(t)&&t.kind===kd).reduce((a,t)=>a+((t.split&&t.split.share!=null)?t.split.share:t.amount),0);
-  const R=[['Day-to-day',gross('everyday'),'#FF3D7F'],['Fixed',gross('fixed'),'#FFB36B'],['One-off',gross('oneoff'),'#FFC21F'],['To JumpStart',toJS,ACCOUNTS.savings.c],['To Surplus',surplusMoves(k),'#7CF2C9']].filter(x=>x[1]>0.5);
-  if(!L.length&&!R.length) return `<div class="empty" style="padding:16px"><i class="ti ti-arrows-split"></i>No money moved this month yet</div>`;
-  const W=358,H=250,gap=6, tin=L.reduce((a,x)=>a+x[1],0), tout=R.reduce((a,x)=>a+x[1],0), tot=Math.max(tin,tout,1);
-  const sc=(H-gap*Math.max(L.length,R.length,1))/tot;
-  const xL=96,xM=172,xR=250,nw=10;
-  let lastL=-99, lastR=-99;
-  let svg='', yL=0, mL=(H-(tin*sc))/2, yR=0, mR=(H-(tout*sc))/2;
-  const midTop=(H-tot*sc)/2;
-  // left nodes -> middle
-  let mi=midTop+(tot-tin)*sc/2, i=0;
-  L.forEach(([n,v,c])=>{ const h=Math.max(v*sc,2), y=yL+ (i?0:0); const top=mL+yL;
-    svg+=`<polygon class="rib" style="--d:${i*80}ms" points="${xL+nw},${top} ${xM},${mi} ${xM},${mi+h} ${xL+nw},${top+h}" fill="${c}" opacity=".35"/>`;
-    svg+=`<rect class="nod" style="--d:${i*80}ms" x="${xL}" y="${top}" width="${nw}" height="${h}" fill="${c}"/>`;
-    { const two=h>26, cy=Math.max(top+h/2, lastL+(two?16:9)+6); lastL=cy+(two?11:0);
-      svg+=`<text x="${xL-8}" y="${cy-(two?5:-4)}" text-anchor="end" class="fl1">${n}${two?'':` <tspan class="fl2">${money(v,0)}</tspan>`}</text>${two?`<text x="${xL-8}" y="${cy+11}" text-anchor="end" class="fl2">${money(v,0)}</text>`:''}`; }
-    yL+=h+gap; mi+=h; i++; });
-  // middle bar
-  svg+=`<rect x="${xM}" y="${midTop}" width="${nw}" height="${tot*sc}" fill="#FFFFFF" opacity=".9"/>`;
-  // middle -> right nodes
-  let mo=midTop+(tot-tout)*sc/2; i=0;
-  R.forEach(([n,v,c])=>{ const h=Math.max(v*sc,2), top=mR+yR;
-    svg+=`<polygon class="rib" style="--d:${300+i*80}ms" points="${xM+nw},${mo} ${xR},${top} ${xR},${top+h} ${xM+nw},${mo+h}" fill="${c}" opacity=".35"/>`;
-    svg+=`<rect class="nod" style="--d:${300+i*80}ms" x="${xR}" y="${top}" width="${nw}" height="${h}" fill="${c}"/>`;
-    { const two=h>26, cy=Math.max(top+h/2, lastR+(two?16:9)+6); lastR=cy+(two?11:0);
-      svg+=`<text x="${xR+nw+8}" y="${cy-(two?5:-4)}" class="fl1">${n}${two?'':` <tspan class="fl2">${money(v,0)}</tspan>`}</text>${two?`<text x="${xR+nw+8}" y="${cy+11}" class="fl2">${money(v,0)}</text>`:''}`; }
-    yR+=h+gap; mo+=h; i++; });
-  return `<svg class="flowsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Money in and out this month">${svg}</svg>`;
+function addKey(k){
+  if(k==='del') addAmt=addAmt.length>1?addAmt.slice(0,-1):'0';
+  else if(k==='.'){ if(!addAmt.includes('.')) addAmt+='.'; }
+  else { if(addAmt.includes('.')&&addAmt.split('.')[1].length>=2) return; if(addAmt.replace('.','').length>=7) return; addAmt=addAmt==='0'?k:addAmt+k; }
 }
-
-function renderAccounts(){
-  const st=monthStats(ym), spent=st.everySum+st.fixedSum+st.oneoffSum;
-  const kept=st.salaryIn?st.salaryIn-spent:null, rate=st.salaryIn?kept/st.salaryIn:null;
-  const cb=S.cardBill, co=cardOwed(), dueIn=cb?daysBetween(cb.due,TODAY):null;
-  const tiles=['salary','savings','surplus','cash'].map((a,i)=>{ const A=ACCOUNTS[a], bal=accBalance(a), b=(S.balances||{})[a], mv=accMonth(a,ym);
-    return `<button class="atile cut-${['a','b','c','a'][i]} rise" style="--i:${4+i};--ac:${A.c}" data-acc="${a}">
-      <span class="aband"><i class="ti ${A.i}"></i>${A.n}</span>
-      <b class="num">${bal==null?'—':money(bal,0)}</b>
-      <small>${b?(b.date===TODAY?'today':`est. from ${dayLabel(b.date)}`):'Tap to set balance'}</small>
-      <span class="aio num"><span class="pos">+${money(mv.inn,0)}</span><span>-${money(mv.out,0)}</span></span></button>`; }).join('');
-  const months=[]; for(let i=5;i>=0;i--) months.push(shiftMonth(ym,-i));
-  const sh=months.map(k=>({k,v:surplusMoves(k)})), shMax=Math.max(...sh.map(x=>x.v),1), sTot=sh.reduce((a,x)=>a+x.v,0);
-  $('#accInner').innerHTML=`
-    <h2 class="ttl rise">Accounts</h2>
-
-    <div class="panel cut-a rise" style="--i:1">
-      <div class="ph"><h3>Money flow</h3><span>${monthName(ym)}</span></div>
-      ${flowSVG(st)}
-    </div>
-
-    <div class="stats rise" style="--i:2">
-      <div class="stat cut-tile"><span>Spent, all buckets</span><b class="num">${money(spent,0)}</b></div>
-      <div class="stat cut-tile"><span>Kept from salary</span><b class="num" style="color:${rate==null?'var(--tx)':rate>=0?'var(--green)':'var(--red)'}">${rate==null?'—':Math.round(rate*100)+'%'}</b></div>
-    </div>
-
-    ${cb?`<div class="panel cut-b rise card-bill" style="--i:3">
-      <div class="ph"><h3>SC Card bill</h3><span>${co.paid?'Paid':dueIn<0?'Overdue':`Due in ${dueIn} day${dueIn===1?'':'s'}`}</span></div>
-      <div class="bigline"><b class="num">${money(cb.amount)}</b><span>due ${new Date(cb.due+'T00:00').toLocaleDateString('en-SG',{day:'numeric',month:'short'})}</span></div>
-      <div class="hint">Statement ${new Date(cb.stmt+'T00:00').toLocaleDateString('en-SG',{day:'numeric',month:'short'})} · ${money(co.since)} charged since, goes on next month's bill</div>
-      ${co.paid?'':`<button class="btn cut-a" id="payCard" style="margin-top:12px"><i class="ti ti-credit-card-pay"></i>Mark paid from JumpStart</button>`}
-    </div>`:''}
-
-    <div class="agrid">${tiles}</div>
-
-    <div class="panel cut-c rise" style="--i:8">
-      <div class="ph"><h3>Surplus growth</h3><span class="num">${money(sTot,0)} in 6 months</span></div>
-      <div class="hist">${sh.map(x=>`<div class="hcol"><span class="v num">${x.v?money(x.v,0):''}</span>
-        <div class="bar" data-h="${x.v?Math.max(x.v/shMax*100,4).toFixed(1):0}" style="height:0;background:${x.k===ym?'#7CF2C9':'var(--s3)'}"></div>
-        <span class="m">${monthName(x.k,{month:'short'})}</span></div>`).join('')}</div>
-      ${sTot?'':`<p class="hint">Nothing moved to Surplus yet. When a month ends under budget, tap "Move to Surplus" on the Month tab.</p>`}
-    </div>`;
-  requestAnimationFrame(()=>requestAnimationFrame(()=>$$('#accInner .hcol .bar').forEach(b=>{ b.style.height=b.dataset.h+'%'; b.style.transform='scaleY(1)'; })));
-  $$('#accInner [data-acc]').forEach(b=>b.onclick=()=>openAccSheet(b.dataset.acc));
-  const pc=$('#payCard'); if(pc) pc.onclick=()=>{
-    S.txs.push({id:uid(),date:TODAY,merchant:'Pay SC Card',amount:co.owed>0?Math.round(Math.min(co.owed,cb.amount)*100)/100:cb.amount,category:'other',kind:'transfer',account:'savings',toAcc:'card',
-      source:'manual',card:'',verified:false,inbox:false,split:null,note:'',created:Date.now()});
-    save(); toast('ti-check','Card payment logged'); renderAccounts(); };
+function addPick(merchant,catK,acc,key){
+  if(acc&&!addAccTouched) addAcc=acc;
+  const amt=Math.round(parseFloat(addAmt)*100)/100, date=addDay==='Yesterday'?addDays(TODAY,-1):TODAY, mer=merchant||cat(catK).n;
+  const rec={id:uid(),date,merchant:mer,amount:amt,category:catK,kind:merchant?kindFor(mer,catK):defaultKind(catK),account:addAcc,
+    source:'manual',card:'',verified:false,inbox:false,split:null,note:'',created:Date.now()};
+  S.txs.push(rec); save(); lastAdded=rec.id;
+  // the picked shard swallows the screen
+  const C=cat(catK), A=ACCOUNTS[addAcc];
+  adder.set({items:[{k:key,v:1,noCount:1,fill:C.c,fg:C.fg,label:()=>`<i class="ti ${C.i}" style="font-size:56px"></i><div class="a" style="font-size:52px">${money(amt)}</div><div class="n">${esc(mer)} · ${addDay} · ${A.short}</div>`,onTap:closeAdd}],floor:0});
+  addPhase='done'; addPills();
+  clearTimeout(addTimer); addTimer=setTimeout(()=>{ closeAdd(); toast('ti-check',`${money(amt)} logged · tap to undo`,()=>{ S.txs=S.txs.filter(t=>t.id!==lastAdded); save(); render(); toast('ti-arrow-back-up','Undone'); }); },900);
 }
-function openAccSheet(a){
-  const A=ACCOUNTS[a], bal=accBalance(a), b=(S.balances||{})[a];
-  const list=monthTxs(ym).filter(t=>t.account===a||(t.kind==='transfer'&&t.toAcc===a));
-  openSheet(`
-    <div class="sband" style="background:${A.c};--fg:#100C1C">
-      <div class="sub" style="margin:0 0 8px"><i class="ti ${A.i}" style="font-size:20px"></i>${A.n}</div>
-      <div class="big num">${bal==null?'—':money(bal)}</div>
-      <div class="sub">${b?`From ${money(b.amount)} on ${dayLabel(b.date)} (${esc(b.src||'you')}) plus what's logged since`:'No balance yet'}</div>
-    </div>
-    <div class="field"><label class="lbl" for="balIn">Balance in your bank app now</label>
-      <div class="row2"><input class="input cut-btn" id="balIn" inputmode="decimal" placeholder="0.00"><button class="btn cut-a" id="balSave" style="height:48px"><i class="ti ti-check"></i>Set</button></div>
-      <p class="hint">Check your bank app and type what it shows. Slice carries on from there.</p></div>
-    <span class="lbl" style="margin-top:8px">${monthName(ym)}</span>
-    ${list.length?groupedList(list):`<div class="empty" style="padding:14px">Nothing logged for this account this month</div>`}`);
-  bindRows('#sheetBody');
-  $('#balSave').onclick=()=>{ const v=parseFloat(String($('#balIn').value).replace(/[^0-9.-]/g,'')); if(isNaN(v)) return shake($('#balIn'));
-    S.balances=S.balances||{}; S.balances[a]={amount:Math.round(v*100)/100,date:TODAY,src:'you'}; save(); closeSheet(); toast('ti-check',`${A.short} balance set`); render(); };
+function openAdd(){
+  clearTimeout(addTimer); addAmt='0'; addAcc='card'; addAccTouched=false; addDay='Today';
+  $('#vAdd').classList.remove('hidden'); document.body.classList.add('adding');
+  Object.values(adder.T).forEach(B=>{ adder.drop(B.k); }); adder.T={}; adder.svg.querySelectorAll('.terr').forEach(e=>e.remove());
+  Object.values(STAGES).forEach(([,m])=>m.stop());
+  addPills(); adder.start(); requestAnimationFrame(()=>addPhaseSet('keys'));
 }
+function closeAdd(){ clearTimeout(addTimer); $('#vAdd').classList.add('hidden'); document.body.classList.remove('adding'); adder.stop(); render(); }
+$('#btnAdd').onclick=openAdd;
+$('#fabFloat').onclick=openAdd;
 
 /* =================================================================
    SHEETS
@@ -1059,22 +1194,20 @@ $('#scrim').onclick=closeSheet;
   sh.addEventListener('touchend',e=>{ if(y0==null) return; const dy=e.changedTouches[0].clientY-y0; sh.style.transition=''; sh.style.transform=''; y0=null; if(dy>110) closeSheet(); });
 })();
 
-function openCatSheet(k){
-  const C=cat(k), list=monthTxs(ym).filter(t=>t.category===k&&t.kind==='everyday');
+function openCatSheet(k,kind='everyday'){
+  const C=cat(k), list=monthTxs(ym).filter(t=>t.category===k&&t.kind===kind);
   const total=list.reduce((a,t)=>a+counted(t),0), st=monthStats(ym);
   openSheet(`
     <div class="sband" style="background:${C.c};--fg:${C.fg}">
       <div class="sub" style="margin:0 0 8px"><i class="ti ${C.i}" style="font-size:20px"></i>${C.n} · ${monthName(ym)}</div>
       <div class="big num">${money(total)}</div>
-      <div class="sub">${list.length} items · ${st.everySum?Math.round(total/st.everySum*100):0}% of everyday spend</div>
+      <div class="sub">${list.length} items · ${kind==='everyday'?(st.everySum?Math.round(total/st.everySum*100):0)+'% of day-to-day':KINDS[kind].n}</div>
     </div>
-    ${list.length?groupedList(list):`<div class="empty">Nothing here this month</div>`}
-    <button class="btn cut-a" id="seeAll" style="margin-top:12px"><i class="ti ti-list-details"></i>Open in Activity</button>`);
+    ${list.length?groupedList(list):`<div class="empty">Nothing here this month</div>`}`);
   bindRows('#sheetBody');
-  $('#seeAll').onclick=()=>{ closeSheet(); filter={mode:'everyday',cat:k,q:''}; go('activity'); };
 }
 function openMoreSheet(){
-  const list=SH.moreList||[], total=list.reduce((a,[,v])=>a+v,0);
+  const list=HOME_MORE, total=list.reduce((a,[,v])=>a+v,0);
   openSheet(`
     <div class="sband" style="background:${SHARD_MORE.c};--fg:${SHARD_MORE.fg}">
       <div class="sub" style="margin:0 0 8px"><i class="ti ti-dots" style="font-size:20px"></i>Others · ${monthName(ym)}</div>
@@ -1204,7 +1337,6 @@ function openEditor(t, preset){
     else { del.dataset.armed=1; del.innerHTML='<i class="ti ti-alert-triangle"></i>Tap again to delete'; }
   };
 }
-$('#btnAdd').onclick=()=>openEditor(null);
 function shake(el){ el.animate([{transform:'translateX(0)'},{transform:'translateX(-8px)'},{transform:'translateX(8px)'},{transform:'translateX(-4px)'},{transform:'translateX(0)'}],{duration:320}); }
 
 /* ---------- settings ---------- */
@@ -1257,9 +1389,9 @@ function openSettings(){
 $('#btnSettings').onclick=openSettings;
 $('#mPrev').onclick=()=>{ ym=shiftMonth(ym,-1); render(); };
 $('#mNext').onclick=()=>{ if(ym<THIS_M){ ym=shiftMonth(ym,1); render(); } };
-$$('.nbtn[data-view]').forEach(b=>b.onclick=()=>{ if(b.dataset.view==='activity'&&view!=='activity') filter={mode:'all',cat:null,q:''}; go(b.dataset.view); });
+$$('.nbtn[data-view]').forEach(b=>b.onclick=()=>go(b.dataset.view));
 $('#overPill').onclick=()=>openLeftSheet();
-$('#newPill').onclick=()=>{ filter={mode:'new',cat:null,q:''}; go('activity'); };
+$('#newPill').onclick=()=>openSearch('new');
 
 /* =================================================================
    SYNC (Worker inbox: Apple Pay taps + PayNow shortcut)
@@ -1416,7 +1548,8 @@ $('#jsonInput').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''
   catch{ toast('ti-alert-triangle','Not a Slice backup'); } };
 
 /* ---------- toast + shard burst ---------- */
-function toast(icon,msg){ const t=$('#toast'); t.innerHTML=`<i class="ti ${icon}"></i>${esc(msg)}`; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
+function toast(icon,msg,onTap){ const t=$('#toast'); t.innerHTML=`<i class="ti ${icon}"></i>${esc(msg)}`; t.classList.add('on'); clearTimeout(t._t);
+  t.onclick=onTap?()=>{ t.classList.remove('on'); t.onclick=null; onTap(); }:null; t._t=setTimeout(()=>{ t.classList.remove('on'); t.onclick=null; },onTap?4000:2200); }
 function burst(fromEl){
   if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c=$('#burst'), x=c.getContext('2d'), dpr=devicePixelRatio||1; c.width=innerWidth*dpr; c.height=innerHeight*dpr; x.setTransform(dpr,0,0,dpr,0,0);
@@ -1447,8 +1580,8 @@ $('#launch').onclick=finishLaunch;
 setTimeout(finishLaunch, matchMedia('(prefers-reduced-motion: reduce)').matches?0:1250);
 renderMonthPill();
 sync(false);
-document.addEventListener('visibilitychange',()=>{ if(document.hidden) shardsStop(); else { if(view==='home') shardsStart(); sync(false); } });
-addEventListener('resize',()=>{ if(view==='home') shardTargets(false); });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sync(false); });
+let rsT=null; addEventListener('resize',()=>{ clearTimeout(rsT); rsT=setTimeout(()=>{ ENGINES.forEach(m=>{ Object.keys(m.T).forEach(k=>{ const B=m.T[k]; [B.k,...Object.keys(B.kids).map(x=>B.k+'/'+x)].forEach(id=>m.drop(id)); }); m.svg.querySelectorAll('.terr').forEach(e=>e.remove()); Object.values(m.tg).forEach(e=>e.remove()); m.T={}; m.tr={}; m.tg={}; }); if($('#vAdd').classList.contains('hidden')) render(); else addPhaseSet(addPhase==='done'?'keys':addPhase); },200); });
 </script>
 </body>
 </html>
