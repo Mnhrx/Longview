@@ -12,29 +12,32 @@ Four parts. Part 1 alone gives you a working app. Parts 2–4 add automatic logg
 
 Always open Slice from the home-screen icon. On iPhone, the home-screen app keeps its own storage, separate from Safari.
 
-## 2. Create the Worker (inbox and sync)
+## 2. Create the Worker and database (inbox and sync)
 
-Same Cloudflare account as Redline.
+Same Cloudflare account as Redline. Everything here fits in Cloudflare's free plan.
 
-1. Cloudflare → **Storage & Databases → KV** → Create namespace `slice-queue`.
-2. **Workers & Pages** → Create → *Hello World* Worker named `slice` → Deploy → **Edit code**.
-3. Replace everything with `worker.js` → Deploy.
-4. Worker → **Settings → Bindings** → Add → KV namespace. Variable name `QUEUE`, namespace `slice-queue`.
-5. Worker → **Settings → Variables and Secrets** → Add → type *Secret*, name `SECRET`, value: a long random string. Keep it somewhere safe.
-6. Copy the Worker URL (`https://slice.<you>.workers.dev`).
-7. In Slice: Settings → paste the URL and secret → **Sync now**. "Up to date" means it's connected.
+1. Cloudflare → **Storage & Databases → D1** → **Create database**, name it `slice`.
+2. **Workers & Pages** → Create → *Hello World* Worker named `slice` → Deploy. (Already have a `slice` Worker? Use that one.)
+3. Worker → **Edit code** → replace everything with `worker.js` → **Deploy**.
+4. Worker → **Settings → Bindings** → **Add** → *D1 database*. Variable name `DB` (capitals), database `slice`.
+5. Worker → **Settings → Variables and Secrets** → **Add** → type *Secret*, name `SECRET`, value: a long random password (30+ characters). Keep it somewhere safe. (Already made one? Keep it.)
+6. Copy the Worker's address (`https://slice.<you>.workers.dev`).
 
-**Already set up the Worker before?** Paste the new `worker.js` over the old code and Deploy. It adds the sync between your devices. Nothing else changes.
+The tables create themselves the first time Slice connects. If you made a KV namespace for an older version, you can remove its binding and delete it; Slice no longer uses it.
+
+**If something's off**, Sync now shows "Sync failed". Check that the address has no extra slash or space at the end, that the secret matches exactly, and that the binding names are `DB` and `SECRET` in capitals.
 
 ## Sync your phone and computer
 
 Do this on your **phone first**, because it has your real data.
 
-1. Phone: Settings → enter the Worker URL and secret → **Sync now**. Your phone's data becomes the synced copy.
-2. Computer: open your Slice link in a browser → Settings → same URL and secret → **Sync now**.
+1. Phone: Settings → paste the Worker address and secret → **Sync now**. "Synced" or "Up to date" means it worked, and your phone's data is now the synced copy.
+2. Computer: open your Slice link in a browser → Settings → same address and secret → **Sync now**.
 3. The computer asks which copy to use. Pick **Use the synced data**.
 
-After that it's automatic. Every change is sent within a couple of seconds, and each device pulls the latest when you open it, switch back to it, or every 45 seconds while it's open. If you edit the same transaction on both, the newer edit wins. Deletes carry across too. The Worker also keeps a daily copy for two weeks as a safety net.
+After that it's automatic. Each change is sent within a couple of seconds, and each device picks up the other's changes when you open it, switch back to it, or every 45 seconds while it's open. Only what changed is sent. If you edit the same transaction on both, the newer edit wins, and deletes carry across too.
+
+**Safety net:** D1 keeps a rolling 7-day history. If something ever goes badly wrong, Cloudflare → D1 → `slice` → **Time Travel** can put the database back to any moment in the last week. Settings → **Backup** still saves a file you can keep too.
 
 ## On a computer
 
