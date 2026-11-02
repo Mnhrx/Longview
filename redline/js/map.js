@@ -24,10 +24,10 @@ function land() {
 }
 // OneMap's night street map under the trails (roads, expressways, names). Tiles are Web Mercator; this close to the
 // equator that's almost exactly the same as our flat map, so each tile is simply stretched onto its corners.
-const TILE = 'https://www.onemap.gov.sg/maps/tiles/Night/{z}/{x}/{y}.png', tiles = new Map(); let tilesOK = 0;
+const TILE = 'https://www.onemap.gov.sg/maps/tiles/Night/{z}/{x}/{y}.png', tiles = new Map(); let tilesOK = 0; const tileSubs = new Set();
 const tLon = (x, z) => x / 2 ** z * 360 - 180, tLat = (y, z) => Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 2 ** z))) * 180 / Math.PI;
 function tileImg(z, x, y) { const k = z + '/' + x + '/' + y; let t = tiles.get(k);
-  if (!t) { t = new Image(); t.onload = () => { t.ok = 1; tilesOK++; tick(); }; t.onerror = () => { t.bad = 1; }; t.src = TILE.replace('{z}', z).replace('{x}', x).replace('{y}', y); tiles.set(k, t); if (tiles.size > 400) tiles.delete(tiles.keys().next().value); }
+  if (!t) { t = new Image(); t.onload = () => { t.ok = 1; tilesOK++; tick(); tileSubs.forEach(f => f()); }; t.onerror = () => { t.bad = 1; }; t.src = TILE.replace('{z}', z).replace('{x}', x).replace('{y}', y); tiles.set(k, t); if (tiles.size > 400) tiles.delete(tiles.keys().next().value); }
   return t; }
 function streetMap() {
   if (window.PREVIEW_NOTILES) return false;
@@ -139,6 +139,9 @@ return {
   replay() { if (focus && !RM) { dot = { t: 0 }; tick(); } },
   get tiles() { return tilesOK > 0; },
   inSG: (la, lo) => la < 1.445 || inPoly(GEO.sg[0], lo, la), GEO, K, land: (ctx, w, h, c) => { const s = { g, W, H, cam }; g = ctx; W = w; H = h; cam = c; land(); g = s.g; W = s.W; H = s.H; cam = s.cam; }, fit: (b, pad, w, h) => fit(b, pad, w, h),
+  // the same street map, drawn into another canvas (Draw my route). onTile: redraw that canvas when a tile arrives
+  street: (ctx, w, h, c, dpr) => { const s = { g, W, H, cam, DPR }; g = ctx; W = w; H = h; cam = c; DPR = dpr || 1; let ok = false; try { ok = streetMap(); } finally { g = s.g; W = s.W; H = s.H; cam = s.cam; DPR = s.DPR; } return ok; },
+  onTile: f => { tileSubs.add(f); return () => tileSubs.delete(f); },
 };
 })();
 

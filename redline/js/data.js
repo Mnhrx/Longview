@@ -229,10 +229,10 @@ async function routeKm(points, alts) {
     const ctl = new AbortController(); setTimeout(() => ctl.abort(), 9000);
     const coords = points.map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
     const j = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=simplified&geometries=geojson&steps=true${alts && points.length === 2 ? '&alternatives=3' : ''}`, { signal: ctl.signal, cache: 'no-store' })).json();
-    if (j.code === 'Ok') { const all = j.routes.map(one), best = all[0]; if (all.length > 1) best.alts = all; return best; }
+    if (j.code === 'Ok') { const all = j.routes.map(one), best = all[0]; if (all.length > 1) best.alts = all; best.wps = (j.waypoints || []).map(w => ({ lat: w.location[1], lon: w.location[0], name: w.name || '' })); best.legs = (j.routes[0].legs || []).map(l => l.distance / 1000); return best; }
   } catch (e) {}
   let d = 0; for (let i = 1; i < points.length; i++) d += haversine(points[i - 1], points[i]);
-  return { km: d * 1.3, src: 'estimate', path: points.map(p => [p.lat, p.lon]) };
+  return { km: d * 1.3, src: 'estimate', path: points.map(p => [p.lat, p.lon]), wps: points.map(p => ({ lat: p.lat, lon: p.lon, name: '' })) };
 }
 // keep a long GPS trail to a few dozen waypoints so routing stays fast
 function sampleTrail(pts, max = 30) {
@@ -272,7 +272,7 @@ function rememberRoute(ride, alt) {
 }
 // where a ride's line came from: a real GPS trail, a road you picked, or Redline's best guess
 const RIDE_KINDS = { gps: ['GPS track', '#45E0A2'], pick: ['Your pick', '#5AB8FF'], guess: ['Best guess', '#FFB020'], typed: ['Typed in', '#B5ABBA'] };
-function rideKind(r) { const e = r.est; if (e === 'tracked') return 'gps'; if (e === 'picked' || e === 'remembered') return 'pick'; if (e === 'manual' || !(r.path && r.path.length > 1)) return 'typed'; return 'guess'; }
+function rideKind(r) { const e = r.est; if (e === 'tracked') return 'gps'; if (e === 'picked' || e === 'remembered' || e === 'drawn') return 'pick'; if (e === 'manual' || !(r.path && r.path.length > 1)) return 'typed'; return 'guess'; }
 // joining GPS points to roads can add little detours. With dense points, the dot-to-dot distance (+15% for curves) is a ceiling
 function trimKm(ride, trail) { if (trail.length < 6) return; const dk = trailKm(trail), gap = dk / (trail.length - 1);
   if (gap < .8 && ride.km > dk * 1.3) { ride.kmRoad = ride.km; ride.km = Math.round(dk * 1.15 * 10) / 10; ride.kmFix = true; } }

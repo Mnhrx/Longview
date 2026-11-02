@@ -12,7 +12,7 @@ Four parts. Part 1 alone gives you a working app. Parts 2–4 add automatic logg
 
 Always open Slice from the home-screen icon. On iPhone, the home-screen app keeps its own storage, separate from Safari.
 
-## 2. Create the inbox (Cloudflare Worker)
+## 2. Create the Worker (inbox and sync)
 
 Same Cloudflare account as Redline.
 
@@ -23,6 +23,29 @@ Same Cloudflare account as Redline.
 5. Worker → **Settings → Variables and Secrets** → Add → type *Secret*, name `SECRET`, value: a long random string. Keep it somewhere safe.
 6. Copy the Worker URL (`https://slice.<you>.workers.dev`).
 7. In Slice: Settings → paste the URL and secret → **Sync now**. "Up to date" means it's connected.
+
+**Already set up the Worker before?** Paste the new `worker.js` over the old code and Deploy. It adds the sync between your devices. Nothing else changes.
+
+## Sync your phone and computer
+
+Do this on your **phone first**, because it has your real data.
+
+1. Phone: Settings → enter the Worker URL and secret → **Sync now**. Your phone's data becomes the synced copy.
+2. Computer: open your Slice link in a browser → Settings → same URL and secret → **Sync now**.
+3. The computer asks which copy to use. Pick **Use the synced data**.
+
+After that it's automatic. Every change is sent within a couple of seconds, and each device pulls the latest when you open it, switch back to it, or every 45 seconds while it's open. If you edit the same transaction on both, the newer edit wins. Deletes carry across too. The Worker also keeps a daily copy for two weeks as a safety net.
+
+## On a computer
+
+Open the same link in any browser wider than about 900px and Slice switches layout:
+
+- Nav down the left, shards in the middle, and a side panel on the right. Clicking a shard shows its details in the panel instead of a pop-up. Close it (or press Esc) to go back to the screen's summary.
+- Hover a shard to see its exact amount, even small ones without a label.
+- Activity shows the whole month as the strip.
+- Month has a **Review** button: the month's transactions as a table. Change category or "Counts as" from the dropdowns. With "Apply changes to the same merchant" on, it also fixes that merchant's other payments and remembers it.
+- Drag a statement PDF anywhere onto the window to import it.
+- Keys: **N** logs a payment (type the amount, Enter), **1–4** switch screens, **← →** change month (or day on Activity), **Esc** closes or zooms out.
 
 ## 3. Apple Pay taps (Shortcuts automation)
 
@@ -74,8 +97,10 @@ Slice can't see your bank. Each balance starts from the last known figure (a sta
 ## Good to know
 
 - Data lives on your phone. Settings → **Backup** after each statement, and keep the file in iCloud Drive.
-- Settings → **Upload statement** reads SC card and JumpStart PDFs on your phone. It confirms what's logged, fixes amounts and adds anything missed. Re-uploading the same statement never creates duplicates.
-- The POSB transaction-history PDF from the app is just pictures of the page, so it can't be read. A POSB monthly eStatement PDF (from digibank) or a CSV export should work; send one over to get a POSB reader added.
+- Settings → **Upload statement** (or drag the PDF onto Slice on a computer) reads SC card, JumpStart and POSB statements on your device. It confirms what's logged, fixes amounts and adds anything missed. Re-uploading the same statement never creates duplicates.
+- **POSB:** use the transaction history PDF from the digibank app. Its pages are pictures, so Slice reads them with OCR (text recognition). It takes about 30 seconds on a computer and longer on a phone. The first time, it asks whether the account is POSB Salary or POSB Surplus, then remembers. It also sets that account's balance from the PDF.
+  - New payments come in as **New to check**. A smudged decimal point gets fixed automatically and marked "Check amount".
+  - Slice learns your names for payees from transactions it already has, so the canteen's PayNow name becomes "Work canteen" by itself.
 - **Money in:** tap + then **Received**. Mark it *Payback* when a friend pays you back, and pick the meal it's for. That meal then only counts your share.
 
 ## The screens

@@ -848,6 +848,30 @@ html,body{height:auto;overflow:visible} body{min-height:calc(100vh + 2px)}
 .btn,.minibtn{display:inline-flex;align-items:center;justify-content:center;gap:7px;text-align:center} .btn svg{width:18px;height:18px;flex:none} .minibtn svg{width:15px;height:15px;flex:none}
 .btns .btn{min-width:0} .rcpt .minibtn{width:100%;padding:12px;background:var(--panel2);color:var(--cream)}
 .mdacts{margin-top:14px}
+/* Draw my route, missing rides, photo pins */
+.drawmap{position:relative;border-radius:22px;overflow:hidden;background:#0F0C12;height:min(54vh,440px);margin-bottom:12px}
+.drawmap canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.dzoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.dzoom button{width:40px;height:40px;border:0;border-radius:13px;background:rgba(27,22,31,.86);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:var(--cream);font:800 22px/1 var(--disp);display:grid;place-items:center;padding:0} .dzoom svg{width:18px;height:18px}
+.dhint{position:absolute;left:10px;bottom:10px;right:60px;background:rgba(27,22,31,.86);border-radius:12px;padding:8px 11px;font:700 13px var(--disp);color:var(--cream);pointer-events:none}
+.dsum{display:flex;align-items:baseline;gap:10px;margin:2px 2px 10px;flex-wrap:wrap} .dsum b{font:800 26px var(--disp)} .dsum span{font:600 14px var(--disp);color:var(--muted)}
+.dspin{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);border-top-color:transparent;animation:spin .8s linear infinite;align-self:center}
+.dpins{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px} .dpins:empty{display:none}
+.dpin{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:99px;background:var(--panel2);color:var(--ink);padding:5px 10px 5px 5px;font:700 13px var(--disp);max-width:100%}
+.dpin i{flex:none;width:22px;height:22px;border-radius:50%;background:var(--cream);color:var(--bg);font:800 12px/22px var(--disp);text-align:center;font-style:normal} .dpin.ph i{background:#5AB8FF}
+.dpin span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px} .dpin svg{width:12px;height:12px;color:var(--muted);flex:none}
+.btn:disabled{opacity:.45}
+.pnote{margin:-4px 0 12px;font-size:13.5px} .pnote svg{width:14px;height:14px;vertical-align:-2px;margin-right:3px} .pnote[hidden]{display:none}
+.linkbtn{border:0;background:none;color:var(--orange);font:700 13.5px var(--disp);padding:0;text-decoration:underline;text-underline-offset:3px}
+.rploc{position:absolute;left:5px;bottom:5px;width:22px;height:22px;border-radius:8px;background:#5AB8FF;color:#0B1A2A;display:grid;place-items:center} .rploc svg{width:13px;height:13px}
+.gaps{display:flex;flex-direction:column;gap:10px}
+.gapc{display:flex;gap:12px;background:var(--panel2);border-radius:20px;padding:14px}
+.gapc .gi{flex:none;width:38px;height:38px;border-radius:12px;background:rgba(255,176,32,.16);color:var(--amber);display:grid;place-items:center} .gapc .gi svg{width:20px;height:20px}
+.gapc b{display:block;font:800 16px var(--disp)} .gapc .grow>span{display:block;font:500 14px/1.4 var(--disp);color:var(--muted);margin-top:2px}
+.gbtns{display:flex;gap:8px;margin-top:10px} .gbtns .minibtn{flex:1;background:var(--panel);color:var(--cream);padding:10px} .gbtns .minibtn.dark{background:var(--cream);color:var(--bg)}
+.gaprow{box-shadow:inset 0 0 0 2px rgba(255,176,32,.5);margin-bottom:8px} .gaprow .mi{color:var(--amber)} #addRide{margin:0 0 12px}
+.mrow.static .mi.ok{color:var(--mint)} .mrow.static .grow>span{white-space:normal}
+.rfix{gap:8px} .rfix .scanbtn{padding:12px 8px;font-size:15px}
 </style>
 </head>
 <body data-place="0">
@@ -880,6 +904,7 @@ html,body{height:auto;overflow:visible} body{min-height:calc(100vh + 2px)}
 <script src="js/radar.js"></script>
 <script src="js/export.js"></script>
 <script src="js/extras.js"></script>
+<script src="js/draw.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -311,6 +311,7 @@ function inboxItems() { const out = [], a = S.al || {};
   if (isIOS && S.relay && SHORTCUTS.start && S.intercom && S.intercom !== 'none' && !(a.start && a.end) && !a.dismiss) out.push(['autolog', 'head', 'Make rides log themselves', 'Finish auto-log setup']);
   if (S.newItemsOffer && missingStd().some(d => NEW_V7.includes(d[0]))) out.push(['newitems', 'wrench', 'New service items', 'Review what Redline can now track']);
   if (!S.commute) out.push(['roads', 'rain', 'Rain on your commute', 'Add home and work postal codes']);
+  const gp = rideGaps().length; if (gp) out.push(['gaps', 'ride', `${gp} ride${gp > 1 ? 's' : ''} may be missing`, 'Your bike moved between two rides']);
   if (!(S.tyres || []).length) out.push(['tyres', 'target', 'Tyre pressure', 'Log your first check']);
   return out.filter(x => !(S.inboxSeen || []).includes(x[0] + ':' + x[2])); }
 // only what needs you now, most urgent first, never more than three
@@ -404,7 +405,8 @@ function ridesSheet() {
   };
   openSheet('All rides', `${S.rides.length} rides · ${num(S.rides.reduce((s, r) => s + (r.km || 0), 0))} km`, `
     <label class="srch">${ic('search', 2.2)}<input type="search" id="rq" placeholder="Search title, notes, road (PIE, AYE…)" autocomplete="off"></label>
-    <div class="fchips">${chips.map(([v, l]) => `<button type="button" data-f="${v}" class="${v === '' ? 'on' : ''}">${esc(l)}</button>`).join('')}</div><div id="rBody">${body()}</div>`, sh => {
+    <div class="fchips">${chips.map(([v, l]) => `<button type="button" data-f="${v}" class="${v === '' ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>${(n => n ? `<button type="button" class="mrow gaprow" id="gapRow"><span class="mi">${ic('ride')}</span><span class="grow"><b>${n} ride${n > 1 ? 's' : ''} may be missing</b><span>Your bike moved between two rides. Log them in a tap</span></span>${ic('chev')}</button>` : '')(rideGaps().length)}<button type="button" class="mrow" id="addRide"><span class="mi">${ic('plus')}</span><span class="grow"><b>Log a ride the tracking missed</b><span>Start from your last ride’s end · draw loops on the map</span></span>${ic('chev')}</button><div id="rBody">${body()}</div>`, sh => {
+    const gr = $('#gapRow', sh); if (gr) gr.onclick = () => { haptic(); gapsSheet(); }; $('#addRide', sh).onclick = () => { haptic(); rideForm(); };
     const paint = () => { $('#rBody', sh).innerHTML = body(); wireB(); };
     const wireB = () => { $$('#rBody .li', sh).forEach(b => b.onclick = () => showOnMap(b.dataset.id));
       $$('#rBody .cd.on', sh).forEach(c => c.onclick = () => { const grp = c.closest('.mgrp'), d = c.dataset.day.split('-')[2], was = c.classList.contains('sel');
@@ -675,6 +677,7 @@ function closeSheet() { sheetEl.classList.remove('on'); shadeEl.classList.remove
 shadeEl.addEventListener('click', closeSheet);
 function F(x) {
   if (x.type === 'row') return `<div class="two">${x.f.map(F).join('')}</div>`;
+  if (x.type === 'html') return x.h;
   const v = x.v ?? '', lab = x.l ? `<span>${x.l}</span>` : '';
   if (x.type === 'chips') { const sel = x.multi ? (v || []) : [v];
     return `<div class="fld" data-k="${x.k}" data-type="chips" data-multi="${x.multi ? 1 : ''}">${lab}<div class="chips">${x.o.map(o => `<button type="button" class="chipbtn" data-v="${esc(o.v)}" aria-pressed="${sel.includes(o.v)}">${esc(o.l)}</button>`).join('')}</div></div>`; }
@@ -943,7 +946,8 @@ function odoForm() {
     check: v => odoCheck(v.odo, v.date),
     onSave: v => { S.odoLog.push({ id: uid(), ...v, ts: Date.now() }); toast('Odometer updated'); } });
 }
-function rideForm(r) {
+function rideForm(r, opt) {
+  if (!r) return newRideForm(opt || {});
   const isNew = !r, dt = r ? todayISO(new Date(r.start.t)) : todayISO();
   form({ title: isNew ? 'Log a ride' : (esc(r.title) || 'Ride'), lede: isNew ? 'For rides the auto-log missed.' : fmtDT(r.start.t) + (r.est === 'estimate' ? ' · distance estimated' : '') + (gpsReason(r) ? `<br><span class="why ${rideKind(r)}">${esc(gpsReason(r))}${r.kmFix ? ` · ${num(r.kmRoad, 1)} km trimmed to ${num(r.km, 1)} km` : ''}</span>` : ''),
     fields: [{ k: 'title', l: 'Title', v: r?.title || '', ph: 'Sunday ride to Changi' },
@@ -956,11 +960,131 @@ function rideForm(r) {
       if (!v.km) { toast(isNew ? 'Add the distance, or where you rode from and to' : 'Add the distance', 'over'); return false; }
       if (isNew) { const t0 = +new Date(v.date + 'T' + (v.time || '09:00')); S.rides.push({ id: uid(), title: v.title, start: { t: t0 }, end: { t: t0 + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', mood: v.mood, note: v.note }); toast('Ride logged'); }
       else { const t0 = v.date ? +new Date(v.date + 'T' + (v.time || '09:00')) : r.start.t, dur = v.mins != null ? v.mins * 6e4 : r.end.t - r.start.t, kmChanged = v.km !== r.km;
-        Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note, loop: false }); r.start.t = t0; r.end.t = t0 + dur; if (kmChanged) r.est = 'manual'; } },
-    extra: (!isNew && r.path && r.path.length > 1 ? `<button type="button" class="rmini" id="rmini" aria-label="Show this ride on the map"><canvas></canvas><span>${ic('full', 2.4)} Map</span></button>` : '') + (!isNew ? `<div class="rphotos" id="rph"></div><button type="button" class="scanbtn" id="shRide">${ic('share', 2.2)}<span>Share this ride</span></button><div style="height:10px"></div>` : '') + (!isNew && r.start && r.start.lat != null && r.est !== 'tracked' ? `<button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Wrong road? Pick which way you went</span></button><div style="height:12px"></div>` : ''),
-    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => routePicker(r); if (!isNew) { const mm = $('#rmini', sh); if (mm) { requestAnimationFrame(() => miniRoute($('canvas', mm), r)); mm.onclick = () => showOnMap(r.id, true); } ridePhotos(r, $('#rph', sh)); $('#shRide', sh).onclick = async e => { const sp = $('span', e.currentTarget); sp.textContent = 'Making the image…'; await WRAP.shareRide(r); sp.textContent = 'Share this ride'; }; } },
+        Object.assign(r, { title: v.title, km: v.km, mood: v.mood, note: v.note }); r.start.t = t0; r.end.t = t0 + dur; if (kmChanged) r.est = 'manual'; } },
+    extra: (!isNew && r.path && r.path.length > 1 ? `<button type="button" class="rmini" id="rmini" aria-label="Show this ride on the map"><canvas></canvas><span>${ic('full', 2.4)} Map</span></button>` : '') + (!isNew ? `<div class="rphotos" id="rph"></div><button type="button" class="scanbtn" id="shRide">${ic('share', 2.2)}<span>Share this ride</span></button><div style="height:10px"></div>` : '') + (!isNew && (startPt(r) && endPt(r)) && r.est !== 'tracked' ? `<div class="two rfix"><button type="button" class="scanbtn" id="pickRoute">${ic('ride', 2.2)}<span>Pick a road</span></button><button type="button" class="scanbtn" id="drawRoute">${ic('pin', 2.2)}<span>Draw the route</span></button></div><div style="height:12px"></div>` : ''),
+    onOpen: sh => { const b = $('#pickRoute', sh); if (b) b.onclick = () => r.start.lat != null ? routePicker(r) : redrawRide(r); const dr = $('#drawRoute', sh); if (dr) dr.onclick = () => redrawRide(r); if (!isNew) { const mm = $('#rmini', sh); if (mm) { requestAnimationFrame(() => miniRoute($('canvas', mm), r)); mm.onclick = () => showOnMap(r.id, true); } ridePhotos(r, $('#rph', sh)); $('#shRide', sh).onclick = async e => { const sp = $('span', e.currentTarget); sp.textContent = 'Making the image…'; await WRAP.shareRide(r); sp.textContent = 'Share this ride'; }; } },
     onDelete: !isNew && (() => S.rides = S.rides.filter(x => x !== r)), bin: !isNew && { list: 'rides', obj: r, label: r.title || `Ride of ${num(r.km, 1)} km` } });
 }
+/* ---------- a ride the tracking missed: start where your last ride ended, then check or draw the route on the map ---------- */
+const PLACE_L = { last: 'Last ride’s end', home: 'Home', work: 'Work', park: 'Where I parked', here: 'Here now', loop: 'Back where I started', next: 'Next ride’s start', type: 'Type a place' };
+// the last ride (with a location) that ended before a time
+// where a ride started and ended: the saved points, or the ends of its line on the map
+const endPt = r => r.end && r.end.lat != null ? { lat: r.end.lat, lon: r.end.lon } : r.path && r.path.length > 1 ? { lat: r.path[r.path.length - 1][0], lon: r.path[r.path.length - 1][1] } : null;
+const startPt = r => r.start && r.start.lat != null ? { lat: r.start.lat, lon: r.start.lon } : r.path && r.path.length > 1 ? { lat: r.path[0][0], lon: r.path[0][1] } : null;
+function lastEnd(t) { let b = null; for (const r of S.rides) if (r.end && endPt(r) && r.end.t <= t && (!b || r.end.t > b.end.t)) b = r; return b; }
+const hhmm = t => new Date(t).toTimeString().slice(0, 5);
+const rangeT = (a, b) => { const f = t => new Date(t).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' }); return a === b ? f(a) : `${f(a)}–${f(b)}`; };
+function newRideForm(opt) {
+  const gap = opt.gap, after = opt.after, photos = [];
+  const t0 = gap ? Math.min(gap.a.end.t + 10 * 6e4, (gap.a.end.t + gap.b.start.t) / 2) : after ? after.end.t + 15 * 6e4 : Date.now() - 60 * 6e4, d0 = new Date(Math.round(t0 / 3e5) * 3e5);
+  const le0 = lastEnd(+d0);
+  const fromO = ['last', S.home && 'home', S.work && 'work', S.parked && 'park', 'type'].filter(Boolean).map(v => ({ v, l: PLACE_L[v] }));
+  const toO = [gap && 'next', 'loop', S.home && 'home', S.work && 'work', 'here', 'type'].filter(Boolean).map(v => ({ v, l: PLACE_L[v] }));
+  const CTA = 'Next: check the route';
+  form({ title: gap ? 'Log the missing ride' : after ? 'Next leg' : 'Log a ride',
+    lede: gap ? `Somewhere between ${fmtDT(gap.a.end.t)} and ${fmtDT(gap.b.start.t)}.` : after ? 'Starts where the last leg ended.' : 'For rides the tracking missed. Pick where you started and ended, then check the route on the map.',
+    fields: [{ k: 'title', l: 'Title', ph: 'Night loop round ECP' },
+      { k: 'from', l: 'Started from', type: 'chips', o: fromO, v: le0 ? 'last' : S.home ? 'home' : 'type' },
+      { type: 'html', h: `<p class="gnote pnote" id="lastNote"></p><div id="fromT" hidden>${F({ k: 'fromTxt', ph: 'A place name or postal code' })}</div>` },
+      { k: 'to', l: 'Ended at', type: 'chips', o: toO, v: gap ? 'next' : '' },
+      { type: 'html', h: `<div id="toT" hidden>${F({ k: 'toTxt', ph: 'A place name or postal code' })}</div>` },
+      { type: 'html', h: `<div class="fld"><span>Photos from the ride</span><div class="rphotos" id="nph"></div><p class="gnote pnote" id="phNote">Photos with a location drop pins on the route. <button type="button" class="linkbtn" id="phCheck">What can Redline read from a photo?</button></p></div>` },
+      { type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: todayISO(d0) }, { k: 'time', l: 'Started at', type: 'time', v: hhmm(d0) }] },
+      { type: 'row', f: [{ k: 'mins', l: 'Duration (min)', type: 'number', ph: 'From the map' }, { k: 'km', l: 'Distance (km)', type: 'number', ph: 'From the map' }] },
+      { k: 'mood', l: 'Vibe', type: 'chips', o: MOODS, v: '' }, { k: 'note', l: 'Journal', type: 'textarea', ph: 'Where you went, what you ate, how it felt' }],
+    cta: CTA,
+    check: v => { if (v.km > 700) return `${num(v.km)} km in one ride is a lot for Singapore and JB. A typo?`; if (v.km && v.mins && v.km / (v.mins / 60) > 150) return `${num(v.km, 1)} km in ${v.mins} min is ${Math.round(v.km / (v.mins / 60))} km/h on average. Check the distance and time.`; return null; },
+    onSave: v => {
+      const t = +new Date(v.date + 'T' + (v.time || '09:00'));
+      if (!v.to) { // no end picked: a typed-in ride, if there's a distance
+        if (!v.km) { toast('Pick where you ended, or type the distance', 'over'); return false; }
+        const ride = { id: uid(), title: v.title, start: { t }, end: { t: t + (v.mins || 0) * 6e4 }, km: v.km, src: 'manual', est: 'manual', mood: v.mood, note: v.note };
+        S.rides.push(ride); toast('Ride logged'); keepPhotos(ride, photos); return; }
+      const btn = $('#fm > .btns .btn:not(.danger)');
+      (async () => { btn.disabled = true; btn.textContent = 'Finding places…';
+        try {
+          const pt = async (k, txt, which) => {
+            if (k === 'last') { const le = lastEnd(t); if (!le) throw { msg: 'No earlier ride to start from. Pick another start.' }; return { ...endPt(le), label: '' }; }
+            if (k === 'home') return { lat: S.home.lat, lon: S.home.lon, label: 'Home' }; if (k === 'work') return { lat: S.work.lat, lon: S.work.lon, label: 'Work' };
+            if (k === 'park') return { lat: S.parked.lat, lon: S.parked.lon, label: '' }; if (k === 'next') return { ...startPt(gap.b), label: '' };
+            if (k === 'here') { try { const h = await here(); return { lat: h.lat, lon: h.lon, label: '' }; } catch (e) { throw { msg: LOC_HELP }; } }
+            if (!txt) throw { msg: `Type where you ${which}` };
+            try { const p = await placePoint(txt); return { lat: p.lat, lon: p.lon, label: txt }; } catch (e) { throw { msg: `Couldn’t find “${txt}”. Try a postal code.` }; } };
+          const a = await pt(v.from, v.fromTxt, 'started'), loop = v.to === 'loop', b = loop ? a : await pt(v.to, v.toTxt, 'ended');
+          const vias = DRAW.merge(a, b, [], photos.map(p => p.m).filter(m => m.lat != null));
+          DRAW.open({ title: 'Check the route', from: a, to: b, loop, vias, cta: 'Save ride', done: res => saveDrawn(v, t, a, b, res, photos) });
+        } catch (e) { toast((e && e.msg) || 'Couldn’t map that. Check the places.', 'over'); btn.disabled = false; btn.textContent = CTA; }
+      })();
+      return false; },
+    onOpen: sh => {
+      const upd = () => { const v = read($('#fm', sh)), t = +new Date(v.date + 'T' + (v.time || '09:00')), le = lastEnd(t), n = $('#lastNote', sh);
+        n.hidden = v.from !== 'last'; n.innerHTML = le ? `${ic('ride', 2.4)} After <b>${esc(le.title || 'your last ride')}</b>, which ended ${fmtDT(le.end.t)}` : 'No earlier ride with a location. Pick another start.';
+        $('#fromT', sh).hidden = v.from !== 'type'; $('#toT', sh).hidden = v.to !== 'type'; };
+      sh.addEventListener('pick', upd); $$('input[name=date],input[name=time]', sh).forEach(i => i.addEventListener('change', upd)); upd();
+      $('#phCheck', sh).onclick = () => DRAW.checkPhoto();
+      const box = $('#nph', sh), note = $('#phNote', sh);
+      const paint = () => { box.innerHTML = photos.map((p, i) => `<div class="rp"><img src="${p.url}" alt="Ride photo ${i + 1}">${p.m.lat != null ? `<em class="rploc">${ic('pin', 2.6)}</em>` : ''}<button type="button" class="rpx" data-i="${i}" aria-label="Remove photo">${ic('x', 3)}</button></div>`).join('') + `<button type="button" class="rpadd">${ic('img', 2.2)}<span>${photos.length ? 'Add more' : 'Add photos'}</span></button>`;
+        $$('.rpx', box).forEach(b => b.onclick = () => { const [p] = photos.splice(+b.dataset.i, 1); URL.revokeObjectURL(p.url); paint(); });
+        $('.rpadd', box).onclick = pick;
+        if (photos.length) { const loc = photos.filter(p => p.m.lat != null).length, ts = photos.map(p => p.m).filter(m => m.t && !m.tGuess).map(m => m.t).sort((a, b) => a - b);
+          note.innerHTML = `${photos.length} photo${photos.length > 1 ? 's' : ''} · ${loc ? `<b>${loc} with a location</b>, pinned on the route` : 'no location inside (tap the map instead)'}${ts.length ? ` · taken ${rangeT(ts[0], ts[ts.length - 1])}` : ''} <button type="button" class="linkbtn" id="phCheck">Check a photo</button>`;
+          $('#phCheck', sh).onclick = () => DRAW.checkPhoto(); } };
+      const pick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true;
+        i.onchange = async () => { const fs = [...i.files].slice(0, 12 - photos.length); if (!fs.length) return;
+          for (const f of fs) photos.push({ file: f, url: URL.createObjectURL(f), m: await DRAW.meta(f) });
+          // the photos know when the ride happened: fill in the date, start time and length
+          const ts = photos.map(p => p.m).filter(m => m.t && !m.tGuess).map(m => m.t).sort((a, b) => a - b);
+          if (ts.length) { const d = new Date(ts[0]); $('input[name=date]', sh).value = todayISO(d); $('input[name=time]', sh).value = hhmm(Math.floor(ts[0] / 3e5) * 3e5); const span = Math.round((ts[ts.length - 1] - ts[0]) / 6e4), mi = $('input[name=mins]', sh); if (span >= 5 && !mi.value) mi.value = span; }
+          haptic(); paint(); upd(); }; i.click(); };
+      paint(); } });
+}
+// photos picked while logging: shrunk and kept on the phone, with the time and place they were taken
+async function keepPhotos(ride, photos) { if (!photos.length) return;
+  for (const p of photos) { try { const src = await smallPhoto(p.file, 1400, .8), k = `ph:${ride.id}:${uid()}`; await kv('put', k, { src, t: Date.now(), taken: p.m.t, lat: p.m.lat, lon: p.m.lon }); ride.photos = [...(ride.photos || []), k]; } catch (e) {} URL.revokeObjectURL(p.url); }
+  save(); refresh(); }
+function saveDrawn(v, t, a, b, res, photos) {
+  const mins = v.mins || res.mins || Math.round(res.km / 35 * 60), nm = res.names || [];
+  const n0 = a.label || nm[0] || 'Start', n1 = b.label || nm[nm.length - 1] || 'End';
+  const ride = { id: uid(), title: v.title || (res.loop ? `Loop from ${n0}` : `${n0} to ${n1}`), start: { lat: a.lat, lon: a.lon, t }, end: { lat: b.lat, lon: b.lon, t: t + mins * 6e4 },
+    km: res.km, path: res.path, roads: res.roads, src: 'manual', est: res.est, vias: res.vias, mood: v.mood, note: v.note };
+  if (res.loop) ride.loop = true;
+  if (v.km && Math.abs(v.km - res.km) > .3) { ride.kmMap = res.km; ride.km = v.km; } // your own number (trip meter) beats the map's
+  S.rides.push(ride);
+  if (!res.loop && res.vias.length && res.est === 'drawn') rememberRoute(ride, res);
+  if (!S.parked || ride.end.t >= (S.parked.t || 0)) S.parked = { lat: ride.end.lat, lon: ride.end.lon, t: ride.end.t };
+  save(); syncWorld(); closeSheet(); refresh(); haptic(); celebrate(); keepPhotos(ride, photos);
+  banner(`Ride logged · ${num(ride.km, 1)} km`, 'Log the next leg', () => rideForm(null, { after: ride }));
+}
+// redraw an existing ride's route (from its edit sheet), optionally with photo spots added as pins
+function redrawRide(r, spots) {
+  const a = startPt(r), b = endPt(r); if (!a || !b) { toast('This ride has no start or end on the map', 'over'); return; }
+  const loop = !!r.loop || haversine(a, b) < .25, vias = spots ? DRAW.merge(a, b, r.vias || [], spots) : (r.vias || []);
+  DRAW.open({ from: a, to: b, loop, vias, cta: 'Save route', done: res => {
+    applyRoute(r, res, res.est); r.vias = res.vias; Object.assign(r.start, a); if (!loop) Object.assign(r.end, b); else Object.assign(r.end, a); if (res.loop) r.loop = true; delete r.kmFix; delete r.kmRoad; delete r.alts; delete r.pick;
+    if (!loop && res.vias.length && res.est === 'drawn') rememberRoute(r, res);
+    save(); syncWorld(); closeSheet(); refresh(); toast(`Route saved · ${num(r.km, 1)} km`); } });
+}
+/* ---------- missing rides: the bike ended one ride in one place and started the next somewhere else ---------- */
+function rideGaps() {
+  const no = new Set(S.gapNo || []), since = Date.now() - 60 * 864e5, out = [];
+  // only rides with real start and end points (auto-logged, or mapped from places), not typed-in ones
+  const rs = S.rides.filter(r => r.start && r.end && r.start.lat != null && r.end.lat != null).sort((a, b) => a.start.t - b.start.t);
+  for (let i = 1; i < rs.length; i++) { const a = rs[i - 1], b = rs[i], dt = b.start.t - a.end.t; if (b.start.t < since || dt <= 0 || dt > 10 * 864e5 || no.has(a.id + '>' + b.id)) continue;
+    const km = haversine(endPt(a), startPt(b)); if (km < 1.5) continue;
+    if (S.rides.some(r => r.start.t > a.end.t && r.start.t < b.start.t)) continue; // something's already logged in between
+    out.push({ a, b, km }); }
+  return out.reverse();
+}
+function gapsSheet() {
+  const gs = rideGaps(); if (!gs.length) { closeSheet(); toast('No missing rides'); return; }
+  openSheet('Missing rides?', 'Your bike ended one ride in one place and started the next somewhere else, with nothing logged between. If it wasn’t a ride (a lorry, a tow, a GPS point that was off), tap Not a ride.',
+    `<div class="gaps">${gs.map((x, i) => `<div class="gapc"><span class="gi">${ic('ride', 2.4)}</span><div class="grow"><b>${fmtDT(x.a.end.t)}</b><span>After “${esc(x.a.title || 'Ride')}”, the next ride started ${num(x.km, 1)} km away (${fmtDT(x.b.start.t)})</span>
+      <div class="gbtns"><button type="button" class="minibtn" data-no="${i}">Not a ride</button><button type="button" class="minibtn dark" data-log="${i}">Log it</button></div></div></div>`).join('')}</div>`, sh => {
+    $$('[data-log]', sh).forEach(b => b.onclick = () => { haptic(); rideForm(null, { gap: gs[+b.dataset.log] }); });
+    $$('[data-no]', sh).forEach(b => b.onclick = () => { const x = gs[+b.dataset.no]; S.gapNo = [...(S.gapNo || []), x.a.id + '>' + x.b.id].slice(-200); save(); haptic(); refresh(); gapsSheet(); });
+  });
+}
+
 // photos on a ride: shrunk on the phone and kept on the phone (IndexedDB), never uploaded
 async function ridePhotos(r, box) { if (!box) return;
   const keys = r.photos || [], srcs = await Promise.all(keys.map(k => kv('get', k)));
@@ -968,8 +1092,12 @@ async function ridePhotos(r, box) { if (!box) return;
     <button type="button" class="rpadd">${ic('img', 2.2)}<span>${keys.length ? 'Add more' : 'Add photos'}</span></button>`;
   $('.rpadd', box).onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true;
     i.onchange = async () => { const fs = [...i.files].slice(0, 12 - keys.length); if (!fs.length) return; $('.rpadd span', box).textContent = 'Adding…';
-      for (const f of fs) { try { const src = await smallPhoto(f, 1400, .8), k = `ph:${r.id}:${uid()}`; await kv('put', k, { src, t: Date.now() }); r.photos = [...(r.photos || []), k]; } catch (e) {} }
-      save(); haptic(); toast(fs.length > 1 ? `${fs.length} photos added` : 'Photo added'); ridePhotos(r, box); refresh(); }; i.click(); };
+      const spots = [];
+      for (const f of fs) { try { const m = await DRAW.meta(f), src = await smallPhoto(f, 1400, .8), k = `ph:${r.id}:${uid()}`; await kv('put', k, { src, t: Date.now(), taken: m.t, lat: m.lat, lon: m.lon }); r.photos = [...(r.photos || []), k]; if (m.lat != null) spots.push(m); } catch (e) {} }
+      save(); haptic(); ridePhotos(r, box); refresh();
+      // photos that know where they were taken can pin the route (not on a real GPS track, that's already right)
+      if (spots.length && startPt(r) && endPt(r) && r.est !== 'tracked') banner(`${spots.length} photo${spots.length > 1 ? 's have' : ' has'} a location`, 'Put on route', () => redrawRide(r, spots));
+      else toast(fs.length > 1 ? `${fs.length} photos added` : 'Photo added'); }; i.click(); };
   $$('.rpx', box).forEach(b => b.onclick = async () => { await kv('del', b.dataset.k); r.photos = (r.photos || []).filter(k => k !== b.dataset.k); save(); ridePhotos(r, box); refresh(); });
 }
 /* ---------- "Which way did you go?": pick the road you actually took; Redline remembers it for next time ---------- */
@@ -1387,12 +1515,13 @@ function ptRuns(pts) { const runs = []; for (const p of pts) { const r = runs[ru
 // why a ride came out as Best guess (or how good its GPS was)
 function gpsReason(r) {
   const k = rideKind(r); if (!r.start || r.start.lat == null) return '';
+  if (r.src === 'manual') { const v = r.vias || [], ph = v.filter(x => x.ph).length; return r.est === 'drawn' ? `Drawn by you · ${v.length} pin${v.length === 1 ? '' : 's'}${ph ? `, ${ph} from photos` : ''}` : 'Logged by hand'; }
   const n = r.gpsN != null ? r.gpsN : (Date.now() - r.end.t < 3 * DAY ? ptsIn(r.start.t - 9e4, r.end.t + 9e4).length : null);
   if (k === 'gps') return `${r.gpsN || (r.gps || []).length} GPS points${r.gpsDrop ? `, ${r.gpsDrop} bad one${r.gpsDrop > 1 ? 's' : ''} removed` : ''}`;
   if (n == null) return '';
   return n === 0 ? `No GPS: OwnTracks sent nothing between ${fmtTime(r.start.t)} and ${fmtTime(r.end.t)}` : `Only ${n} GPS point${n > 1 ? 's' : ''} during the ride (needs 2 good ones)`;
 }
-function lastRideGps() { const r = [...S.rides].filter(x => x.start && x.start.lat != null).sort((a, b) => b.end.t - a.end.t)[0]; if (!r) return null;
+function lastRideGps() { const r = [...S.rides].filter(x => x.start && x.start.lat != null && x.src !== 'manual').sort((a, b) => b.end.t - a.end.t)[0]; if (!r) return null;
   return { r, ok: rideKind(r) === 'gps', n: r.gpsN != null ? r.gpsN : ptsIn(r.start.t - 9e4, r.end.t + 9e4).length }; }
 function activitySheet(day = 0) {
   const body = () => {
@@ -1886,7 +2015,7 @@ function demoSheet() {
     $('#dSetup', sh).onclick = () => { closeSheet(); S = fresh(); save(); startSetup(); };
   });
 }
-const MORE = { newitems: () => newItemsSheet(), bikehub: () => bikeHub(), apphub: () => appHub(), licence: () => licenceForm(), tyres: () => tyreSheet(), workshops: () => workshopsSheet(), warranties: () => warrantySheet(), goals: () => goalForm(), activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
+const MORE = { gaps: () => gapsSheet(), newitems: () => newItemsSheet(), bikehub: () => bikeHub(), apphub: () => appHub(), licence: () => licenceForm(), tyres: () => tyreSheet(), workshops: () => workshopsSheet(), warranties: () => warrantySheet(), goals: () => goalForm(), activity: () => activitySheet(), costs: () => costsSheet(), export: () => exportSheet(), quickscan: () => quickScanSheet(), mydata: () => myDataSheet('odo'), relay: relaySheet, bike: bikeForm, renewals: renewalsSheet, autolog: autoLogSheet, relay: relaySheet, roads: trafficSheet, badges: badgesSheet, sound: soundSheet, backup: backupSheet, demo: demoSheet };
 
 function applyLite() {}
 /* ================= audio: off by default ================= */
@@ -2028,6 +2157,7 @@ function seedPreview() {
     ['Tuas sunrise run', 'tuas', 34, 'Spirited'], ['West coast AYE', 'ayer', 41, 'Chill'], ['Lim Chu Kang', 'lck', 48, 'Chill'], ['Second Link to JB', 'link2', 56, 'Touring'], ['ECP night run', 'ecp', 63, 'Night'], ['Work commute', 'commute', 70, '']];
   const RD = { commute: ['PIE'], ecp: ['ECP'], jb: ['TPE', 'SLE', 'BKE', 'WDL'], tuas: ['PIE', 'AYE'], mandai: ['TPE', 'SLE'], link2: ['AYE', 'TUAS'], sentosa: ['ECP'], ayer: ['AYE'], changi: [], punggol: ['TPE'], lck: ['KJE'] };
   R0.forEach(([title, k, d, mood], i) => { const t0 = now - d * 864e5 - i * 37e5, path = smooth(P[k]), est = ['tracked', 'picked', 'route'][i % 3]; S.rides.push({ id: uid(), title, km: len(path), path, est, gps: est === 'tracked' ? path.filter((_, j) => j % 4 === 0) : undefined, roads: RD[k] || [], start: { t: t0 }, end: { t: t0 + Math.round(len(path) * 1.8) * 6e4 }, src: 'manual', mood, note: '' }); });
+  [...S.rides].sort((a, b) => b.start.t - a.start.t).slice(0, 3).forEach(r => { const p0 = r.path[0], p1 = r.path[r.path.length - 1]; Object.assign(r.start, { lat: p0[0], lon: p0[1] }); Object.assign(r.end, { lat: p1[0], lon: p1[1] }); });
   const R = S.renewals; R[0].date = D(-24); R[1].date = D(-148); R[2].date = D(-1680); R[3].date = D(-210); R[0].cost = 160; R[1].cost = 420;
   S.parked = { lat: 1.3521, lon: 103.8198, t: now - 3 * 36e5 };
   S.roads = ['ECP', 'TPE']; S.demoInc = true; S.intercom = 'Cardo'; S.setupDone = true; syncItems(); save();
