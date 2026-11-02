@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Service record</title><meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#161219;--panel:#1F1A24;--panel2:#2A2330;--ink:#FFF8F0;--cream:#F6EBDD;--muted:#B5ABBA;--orange:#FF6A2B;--mint:#45E0A2;--amber:#FFB020;--red:#FF3B3B;--disp:"Bricolage Grotesque",system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:500 15px/1.45 var(--disp);-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) 16px 40px}
+.top{background:var(--panel);border-radius:26px;padding:22px 20px;border-bottom:3px solid var(--orange)}
+.top small{display:block;color:var(--orange);font-weight:800;letter-spacing:.12em;font-size:12px}
+.top h1{margin:6px 0 2px;font-size:clamp(30px,8vw,44px);line-height:1.05}.top p{margin:0;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 22px}
+.kpis div{background:var(--panel);border-radius:18px;padding:12px 14px}.kpis span{display:block;font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:800}.kpis b{font-size:24px}
+h2{font-size:20px;margin:26px 0 10px}
+.tbl{width:100%;border-collapse:collapse;background:var(--panel);border-radius:18px;overflow:hidden}
+.tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:800;padding:10px 12px;background:var(--panel2)}
+.tbl td{padding:10px 12px;border-top:1px solid rgba(255,255,255,.06);vertical-align:top}.tbl td.n{text-align:right;white-space:nowrap}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:800}
+.over{background:var(--red);color:#fff}.soon{background:var(--amber);color:#1A0E07}.ok{background:var(--mint);color:#0B2A1D}.unset{background:#4A4150;color:#ddd}
+.note{color:var(--muted);font-size:13px;margin-top:26px}.err{background:var(--panel);border-radius:18px;padding:20px}
+@media (max-width:560px){.hide-s{display:none}}
+</style></head><body><div class="wrap" id="app"><div class="err">Opening the service record…</div></div>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const n = (v, d = 0) => v == null || isNaN(v) ? '—' : Number(v).toLocaleString('en-SG', { minimumFractionDigits: d, maximumFractionDigits: d });
+const dt = s => s ? new Date(s + 'T12:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const ST = { over: 'Overdue', soon: 'Due soon', ok: 'Good', unset: 'Not set' };
+(async () => {
+  const el = document.getElementById('app');
+  try {
+    const h = location.hash.slice(1), kind = h[0], b64 = h.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+    const bin = Uint8Array.from(atob(b64 + '==='.slice((b64.length + 3) % 4)), c => c.charCodeAt(0));
+    const text = kind === 'z' ? await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text() : new TextDecoder().decode(bin);
+    const R = JSON.parse(text), B = R.b || {};
+    document.title = `${B.name || 'Bike'} · service record`;
+    el.innerHTML = `<div class="top"><small>SERVICE RECORD</small><h1>${esc(B.name || 'Bike')}</h1><p>${[B.model, B.plate, B.build].filter(Boolean).map(esc).join(' · ')}</p></div>
+      <div class="kpis"><div><span>ODOMETER</span><b>${R.o != null ? n(R.o) + ' km' : '—'}</b></div><div><span>SERVICES LOGGED</span><b>${R.s.length}</b></div><div><span>SPENT ON SERVICING</span><b>S$${n(R.c.s)}</b></div><div><span>RECORD AS OF</span><b style="font-size:18px">${dt(R.d)}</b></div></div>
+      <h2>Maintenance status</h2><table class="tbl"><tr><th>Item</th><th class="hide-s">Every</th><th>Last done</th><th>Status</th></tr>
+      ${R.i.map(([name, km, mo, lo, ld, st, left]) => `<tr><td><b>${esc(name)}</b><br><small style="color:var(--muted)">${esc(left || '')}</small></td><td class="hide-s">${[km ? n(km) + ' km' : '', mo ? mo + ' mo' : ''].filter(Boolean).join(' / ') || '—'}</td><td>${lo != null ? n(lo) + ' km' : ''}${ld ? '<br>' + dt(ld) : lo == null ? '—' : ''}</td><td><span class="pill ${st}">${ST[st] || ''}</span></td></tr>`).join('')}</table>
+      <h2>Service history</h2>${R.s.length ? `<table class="tbl"><tr><th>Date</th><th>Work done</th><th class="hide-s">Workshop</th><th>Cost</th></tr>
+      ${R.s.map(([d, o, w, shop, cost, notes]) => `<tr><td>${dt(d)}<br><small style="color:var(--muted)">${n(o)} km</small></td><td>${esc(w)}${notes ? `<br><small style="color:var(--muted)">${esc(notes)}</small>` : ''}</td><td class="hide-s">${esc(shop || '—')}</td><td class="n">${cost ? 'S$' + n(cost, 2) : '—'}</td></tr>`).join('')}</table>` : '<div class="err">No services logged.</div>'}
+      <p class="note">Shared from Redline, the owner’s own maintenance log. ${R.r ? `${R.r} rides · ${n(R.k)} km logged in the app.` : ''} This page only shows what’s inside the link; nothing is stored online.</p>`;
+  } catch (e) { el.innerHTML = '<div class="err"><b>This link looks incomplete.</b><br>Ask the owner to share it again from Redline (Costs &amp; export → Share service record).</div>'; }
+})();
+</script></body></html>
