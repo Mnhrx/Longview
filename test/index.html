@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#06080a">
+<title>Spore</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#06080a; --panel:rgba(12,16,15,.9); --line:rgba(255,255,255,.09);
+  --text:#e9f2ee; --dim:#8c9a94; --mint:#7CFFB2; --gold:#FFD27A;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
+#map{position:fixed;inset:0;background:#0b0e0f}
+#fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:500}
+.leaflet-control-attribution{background:rgba(0,0,0,.45)!important;color:#7a8781!important;font-size:9px!important}
+.leaflet-control-attribution a{color:#9fb0a8!important}
+.leaflet-top.leaflet-right{top:calc(var(--safe-t) + 4px)}
+
+header{position:fixed;z-index:600;top:calc(var(--safe-t) + 12px);left:14px;pointer-events:none}
+header h1{margin:0;font-size:22px;letter-spacing:.32em;font-weight:700;color:var(--mint);text-shadow:0 0 18px rgba(124,255,178,.55)}
+header p{margin:2px 0 0;font:500 11px "JetBrains Mono",monospace;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+
+#sheet{position:fixed;z-index:700;left:0;right:0;bottom:0;max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);border-radius:22px 22px 0 0;padding:10px 16px calc(16px + var(--safe-b))}
+.grip{width:38px;height:4px;border-radius:4px;background:rgba(255,255,255,.18);margin:0 auto 10px}
+#hint{font-size:14px;color:var(--dim);margin-bottom:10px;line-height:1.4}
+#hint a{color:var(--mint);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+#friends{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.friend{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);flex:none}
+.friend .nm{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.friend .tm{font:600 13px "JetBrains Mono",monospace;color:var(--c);min-width:58px;text-align:right}
+.friend .x{border:0;background:none;color:var(--dim);font-size:20px;line-height:1;padding:0 2px;cursor:pointer}
+.row{display:flex;gap:8px;margin-bottom:8px}
+input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;color:var(--text);
+  font:500 16px "Space Grotesk",sans-serif;padding:11px 12px;outline:none}
+input:focus{border-color:rgba(124,255,178,.5)}
+button.b{border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);border-radius:12px;
+  font:600 14px "Space Grotesk",sans-serif;padding:11px 13px;cursor:pointer;white-space:nowrap}
+button.b:active{transform:scale(.97)}
+button.primary{flex:1;background:var(--mint);color:#04140b;border-color:transparent;box-shadow:0 0 22px rgba(124,255,178,.35)}
+button.b:disabled{opacity:.35;box-shadow:none}
+#status{font:500 12px "JetBrains Mono",monospace;color:var(--mint);letter-spacing:.06em;min-height:16px;margin:4px 0 6px}
+#status.err{color:#ff8a8a}
+.card{border:1px solid rgba(255,210,122,.35);border-radius:16px;padding:12px 14px;margin:6px 0 10px;
+  background:linear-gradient(160deg,rgba(255,210,122,.09),rgba(255,210,122,.02))}
+.card .k{font:600 10px "JetBrains Mono",monospace;letter-spacing:.2em;color:var(--gold);text-transform:uppercase}
+.card .road{font-size:20px;font-weight:700;margin:3px 0 2px}
+.card .sub{font-size:13px;color:var(--dim)}
+.card a{display:inline-block;margin-top:8px;color:var(--gold);font-size:13px;font-weight:600;text-decoration:none}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px}
+.chip{flex:none;border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:12px;color:var(--dim);background:none;cursor:pointer;font-family:inherit}
+.chip.on{color:#04140b;background:var(--gold);border-color:transparent}
+.place{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.place:last-child{border-bottom:0}
+.place .pn{flex:1;min-width:0}
+.place .pn b{display:block;font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.place .pn span{font-size:12px;color:var(--dim)}
+.place .pd{font:600 12px "JetBrains Mono",monospace;color:var(--gold)}
+.tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:6px;background:rgba(124,255,178,.14);color:var(--mint);margin-left:4px;vertical-align:1px}
+.empty{color:var(--dim);font-size:13px;padding:8px 0}
+
+.pin{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#06100b;
+  font:700 13px "JetBrains Mono",monospace;box-shadow:0 0 0 4px rgba(0,0,0,.45),0 0 18px var(--c);border:2px solid rgba(255,255,255,.75)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#121816;color:var(--text)}
+.leaflet-popup-content{font-family:"Space Grotesk",sans-serif;margin:10px 12px}
+.leaflet-popup-content a{color:var(--gold)}
+#toast{position:fixed;z-index:800;left:50%;top:calc(var(--safe-t) + 64px);transform:translateX(-50%) translateY(-10px);opacity:0;
+  background:#1a2220;border:1px solid var(--line);padding:9px 14px;border-radius:12px;font-size:13px;transition:.25s;pointer-events:none;white-space:nowrap}
+#toast.on{opacity:1;transform:translateX(-50%)}
+@media (min-width:700px){#sheet{left:16px;right:auto;width:400px;bottom:16px;border-radius:22px;border:1px solid var(--line);max-height:calc(100vh - 110px)}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<canvas id="fx"></canvas>
+<header><h1>SPORE</h1><p>meet in the middle</p></header>
+<div id="toast"></div>
+
+<section id="sheet">
+  <div class="grip"></div>
+  <div id="hint">Tap the map to drop each friend, 2 to 6 people. Drag a pin to move it. <a id="demo">Try 4 sample friends</a></div>
+  <div id="friends"></div>
+  <div class="row">
+    <input id="q" placeholder="Postal code or place" enterkeyhint="go" autocomplete="off">
+    <button class="b" id="addQ">Add</button>
+    <button class="b" id="addMe">Me</button>
+  </div>
+  <div class="row">
+    <button class="b primary" id="go">Find hangout</button>
+    <button class="b" id="reroll">Reroll</button>
+    <button class="b" id="clear">Clear</button>
+  </div>
+  <div id="status"></div>
+  <div id="out"></div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------- services (all free, no keys) ---------- */
+const OSRM = 'https://router.project-osrm.org';          // routing, road snapping, travel-time table
+const OVERPASS = 'https://overpass-api.de/api/interpreter'; // what's nearby (OpenStreetMap)
+const ONEMAP = 'https://www.onemap.gov.sg/api/common/elastic/search'; // SG postal codes
+
+const COLORS = ['#7CFFB2','#FFB86B','#B48CFF','#6BD8FF','#FF7AA8','#E8FF6B'];
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rand = (a,b) => a + Math.random()*(b-a);
+
+/* ---------- map ---------- */
+const map = L.map('map', {zoomControl:false}).setView([1.3521,103.8198], 11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  subdomains:'abcd', maxZoom:19,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO · routes OSRM'
+}).addTo(map);
+const placeLayer = L.layerGroup().addTo(map);
+
+let friends = [];
+let state = null;   // {cands, idx, shown:[], center, routes, places, filter}
+let growth = null;  // animation state
+
+/* ---------- geometry ---------- */
+function hav(a,b){ const R=6371000, toR=Math.PI/180;
+  const dLa=(b[0]-a[0])*toR, dLo=(b[1]-a[1])*toR;
+  const s=Math.sin(dLa/2)**2+Math.cos(a[0]*toR)*Math.cos(b[0]*toR)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s)); }
+function offset(p, ang, d){ // ang: radians, 0 = east, counter-clockwise
+  return [p[0] + d*Math.sin(ang)/110540, p[1] + d*Math.cos(ang)/(111320*Math.cos(p[0]*Math.PI/180))]; }
+function heading(a,b){ return Math.atan2((b[0]-a[0])*110540, (b[1]-a[1])*111320*Math.cos(a[0]*Math.PI/180)); }
+
+/* ---------- ui helpers ---------- */
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2200); }
+function status(msg, err){ const s=$('status'); s.textContent=msg||''; s.classList.toggle('err', !!err); }
+async function getJSON(url, opts={}, ms=15000){
+  const c=new AbortController(); const h=setTimeout(()=>c.abort(), ms);
+  try{ const r=await fetch(url,{...opts, signal:c.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+  finally{ clearTimeout(h); } }
+const pinIcon = (color,n) => L.divIcon({className:'', html:`<div class="pin" style="--c:${color}">${n}</div>`, iconSize:[30,30], iconAnchor:[15,15]});
+const fmtMin = s => s==null ? '' : Math.max(1, Math.round(s/60)) + ' min';
+const fmtDist = m => m<1000 ? Math.round(m/10)*10+' m' : (m/1000).toFixed(1)+' km';
+
+/* ---------- friends ---------- */
+function addFriend(lat,lng,label){
+  if(friends.length>=6){ toast('Max 6 friends'); return; }
+  const used=new Set(friends.map(f=>f.color));
+  const f={lat,lng,label,color:COLORS.find(c=>!used.has(c)), secs:null};
+  f.marker=L.marker([lat,lng],{icon:pinIcon(f.color,friends.length+1),draggable:true,keyboard:false}).addTo(map);
+  f.marker.on('dragend',e=>{ const p=e.target.getLatLng(); f.lat=p.lat; f.lng=p.lng; resetResult(); render(); });
+  friends.push(f); resetResult(); render();
+}
+function removeFriend(i){ map.removeLayer(friends[i].marker); friends.splice(i,1); resetResult(); render(); }
+function resetResult(){ state=null; growth=null; placeLayer.clearLayers(); friends.forEach(f=>f.secs=null); $('out').innerHTML=''; status(''); }
+
+function render(){
+  $('friends').innerHTML = friends.map((f,i)=>`
+    <div class="friend" style="--c:${f.color}">
+      <span class="dot"></span>
+      <span class="nm">${esc(f.label || 'Friend '+(i+1))}</span>
+      <span class="tm" id="tm${i}">${f.secs!=null?fmtMin(f.secs):''}</span>
+      <button class="x" data-i="${i}" aria-label="Remove">&times;</button>
+    </div>`).join('');
+  friends.forEach((f,i)=>f.marker.setIcon(pinIcon(f.color,i+1)));
+  $('go').disabled = friends.length<2;
+  $('reroll').disabled = !state || state.cands.length<2;
+  $('hint').style.display = friends.length ? 'none' : '';
+}
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+$('friends').addEventListener('click', e=>{ const b=e.target.closest('.x'); if(b) removeFriend(+b.dataset.i); });
+map.on('click', e=>addFriend(e.latlng.lat, e.latlng.lng));
+$('clear').onclick = ()=>{ friends.forEach(f=>map.removeLayer(f.marker)); friends=[]; resetResult(); render(); };
+$('demo').onclick = ()=>{
+  [[1.3540,103.9440,'Tampines'],[1.4360,103.7865,'Woodlands'],[1.3330,103.7422,'Jurong East'],[1.3008,103.8455,'Orchard']]
+    .forEach(p=>addFriend(p[0],p[1],p[2]));
+  map.fitBounds(friends.map(f=>[f.lat,f.lng]), {padding:[60,60], paddingBottomRight:[0, sheetH()]});
+};
+$('addMe').onclick = ()=>{
+  if(!navigator.geolocation){ toast('Location not available'); return; }
+  status('Finding you…');
+  navigator.geolocation.getCurrentPosition(p=>{ status(''); addFriend(p.coords.latitude,p.coords.longitude,'Me'); map.panTo([p.coords.latitude,p.coords.longitude]); },
+    ()=>{ status('Location blocked. Allow it for Safari in Settings.', true); }, {enableHighAccuracy:true, timeout:10000});
+};
+async function addQuery(){
+  const q=$('q').value.trim(); if(!q) return;
+  status('Looking up '+q+'…');
+  try{
+    const r=await getJSON(`${ONEMAP}?searchVal=${encodeURIComponent(q)}&returnGeom=Y&getAddrDetails=Y&pageNum=1`);
+    const x=r.results && r.results[0];
+    if(!x){ status('Nothing found for '+q, true); return; }
+    const name = x.BUILDING && x.BUILDING!=='NIL' ? x.BUILDING : (x.ROAD_NAME || q);
+    addFriend(+x.LATITUDE, +x.LONGITUDE, titleCase(name)); map.panTo([+x.LATITUDE, +x.LONGITUDE]);
+    $('q').value=''; status('');
+  }catch(e){ status('Lookup failed. Check your connection.', true); }
+}
+const titleCase = s => s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
+$('addQ').onclick = addQuery;
+$('q').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addQuery(); $('q').blur(); } });
+const sheetH = () => $('sheet').getBoundingClientRect().height + 10;
+
+/* ---------- finding the fair middle ----------
+   1. Lay a grid of test points over the area between everyone.
+   2. One OSRM "table" call gives every friend's ride time to every test point,
+      and snaps each test point onto the nearest road.
+   3. Score = the LONGEST ride (nobody gets stuck far away), with the average as a tie-break.
+   4. Zoom the grid in around the winner and repeat, 3 rounds total.        */
+async function osrmTable(srcs, dsts){
+  const coords=[...srcs,...dsts].map(p=>p[1].toFixed(6)+','+p[0].toFixed(6)).join(';');
+  const s=srcs.map((_,i)=>i).join(';'), d=dsts.map((_,i)=>i+srcs.length).join(';');
+  const r=await getJSON(`${OSRM}/table/v1/driving/${coords}?sources=${s}&destinations=${d}&annotations=duration`);
+  if(r.code!=='Ok') throw new Error(r.message||r.code);
+  return r;
+}
+const score = c => c.max + 0.3*c.avg;
+async function findCandidates(){
+  const pts=friends.map(f=>[f.lat,f.lng]);
+  const la=pts.map(p=>p[0]), lo=pts.map(p=>p[1]);
+  let cLat=(Math.min(...la)+Math.max(...la))/2, cLng=(Math.min(...lo)+Math.max(...lo))/2;
+  let hLat=Math.max((Math.max(...la)-Math.min(...la))/2*0.8, 0.008);
+  let hLng=Math.max((Math.max(...lo)-Math.min(...lo))/2*0.8, 0.008);
+  const all=[];
+  for(let round=0; round<3; round++){
+    status(`Sampling the middle · round ${round+1} of 3`);
+    const n = round===0 ? 6 : 5, cands=[];
+    for(let i=0;i<n;i++) for(let j=0;j<n;j++)
+      cands.push([cLat-hLat+2*hLat*i/(n-1), cLng-hLng+2*hLng*j/(n-1)]);
+    const r=await osrmTable(pts,cands);
+    cands.forEach((_,j)=>{
+      const secs=pts.map((_,i)=>r.durations[i][j]);
+      const dst=r.destinations[j];
+      if(secs.some(v=>v==null) || dst.distance>350) return; // no road near this test point (sea, forest, reservoir)
+      const c={lat:dst.location[1], lng:dst.location[0], road:dst.name||'', secs,
+               max:Math.max(...secs), avg:secs.reduce((a,b)=>a+b,0)/secs.length};
+      c.score=score(c); all.push(c);
+    });
+    if(!all.length){ hLat*=1.5; hLng*=1.5; continue; }
+    all.sort((a,b)=>a.score-b.score);
+    cLat=all[0].lat; cLng=all[0].lng; hLat/=2.5; hLng/=2.5;
+    await sleep(250); // be polite to the free server
+  }
+  if(!all.length) throw new Error('No rideable spot between you');
+  const out=[];
+  for(const c of all) if(!out.some(o=>hav([o.lat,o.lng],[c.lat,c.lng])<400)) out.push(c);
+  return out;
+}
+
+async function routeOf(f,c){
+  const r=await getJSON(`${OSRM}/route/v1/driving/${f.lng},${f.lat};${c.lng},${c.lat}?overview=full&geometries=geojson`);
+  if(r.code!=='Ok' || !r.routes.length) throw new Error('No route');
+  const rt=r.routes[0];
+  return {coords:rt.geometry.coordinates.map(p=>[p[1],p[0]]), secs:rt.duration, dist:rt.distance};
+}
+
+$('go').onclick = async ()=>{
+  if(friends.length<2) return;
+  resetResult(); setBusy(true);
+  try{
+    const cands=await findCandidates();
+    state={cands, idx:0, shown:[0]};
+    await showCandidate(cands[0]);
+  }catch(e){ status(e.message==='No rideable spot between you' ? e.message : 'Routing server busy. Try again in a moment.', true); }
+  setBusy(false); render();
+};
+$('reroll').onclick = async ()=>{
+  if(!state) return;
+  const best=state.cands[0].score;
+  // next spot that's still fair (within ~30% of the best) and not near one we've shown
+  let next=state.cands.findIndex((c,i)=>!state.shown.includes(i) && c.score<=best*1.3+180 &&
+     state.shown.every(s=>hav([c.lat,c.lng],[state.cands[s].lat,state.cands[s].lng])>900));
+  if(next<0){ state.shown=[]; next=0; toast('Back to the fairest spot'); }
+  state.shown.push(next); state.idx=next;
+  setBusy(true);
+  try{ await showCandidate(state.cands[next]); }catch(e){ status('Routing server busy. Try again.', true); }
+  setBusy(false); render();
+};
+function setBusy(b){ ['go','reroll','clear','addQ','addMe'].forEach(id=>$(id).disabled=b); if(!b) render(); }
+
+async function showCandidate(c){
+  growth=null; placeLayer.clearLayers(); $('out').innerHTML='';
+  friends.forEach(f=>f.secs=null); render();
+  status('Tracing the roads…');
+  const routes=[];
+  for(const f of friends){ routes.push(await routeOf(f,c)); await sleep(120); }
+  const center=[c.lat,c.lng];
+  map.fitBounds([...friends.map(f=>[f.lat,f.lng]), center], {padding:[50,50], paddingBottomRight:[0,sheetH()], animate:true});
+  await sleep(450);
+  const placesP = nearby(c).catch(()=>null);
+  status('Growing towards the middle…');
+  await grow(routes, center);
+  routes.forEach((r,i)=>friends[i].secs=r.secs); render();
+  const secs=routes.map(r=>r.secs);
+  const card=`<div class="card"><div class="k">Hangout spot</div>
+    <div class="road">${esc(c.road || 'Unnamed road')}</div>
+    <div class="sub">Everyone within ${fmtMin(Math.min(...secs))} to ${fmtMin(Math.max(...secs))} ride</div>
+    <a href="https://www.google.com/maps/search/?api=1&query=${c.lat.toFixed(6)},${c.lng.toFixed(6)}" target="_blank" rel="noopener">Open in Google Maps &rarr;</a></div>`;
+  $('out').innerHTML = card + '<div id="pl"><div class="empty">Looking around…</div></div>';
+  status('');
+  const res=await placesP;
+  state.places=res; state.filter='All'; state.center=center;
+  renderPlaces();
+}
+
+/* ---------- what's nearby (OpenStreetMap via Overpass) ---------- */
+function catOf(t){
+  if(t.amenity==='cafe'||t.amenity==='ice_cream') return 'Coffee';
+  if(t.amenity==='bar') return 'Drinks';
+  if(t.amenity) return 'Food';
+  if(t.leisure) return 'Parks';
+  if(t.shop) return 'Malls';
+  return 'Sights';
+}
+async function nearby(c){
+  let last=[], R0=0;
+  for(const R of [800,1600,3000]){
+    const a=`(around:${R},${c.lat},${c.lng})`;
+    const q=`[out:json][timeout:20];(nwr${a}[amenity~"^(restaurant|cafe|fast_food|food_court|ice_cream|bar)$"][name];nwr${a}[leisure~"^(park|garden|nature_reserve)$"][name];nwr${a}[shop=mall][name];nwr${a}[tourism~"^(viewpoint|attraction|museum)$"][name];);out center 120;`;
+    const r=await getJSON(OVERPASS,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)},25000);
+    const seen=new Set();
+    last=r.elements.map(e=>{
+      const lat=e.lat??e.center?.lat, lng=e.lon??e.center?.lon, t=e.tags||{};
+      return {name:t.name, lat, lng, cat:catOf(t), halal:/^(yes|only)$/.test(t['diet:halal']||''), cuisine:t.cuisine||'',
+              d:lat?hav([c.lat,c.lng],[lat,lng]):1e9};
+    }).filter(p=>p.lat && !seen.has(p.name) && seen.add(p.name)).sort((a,b)=>a.d-b.d);
+    R0=R;
+    if(last.length>=4) break;
+    await sleep(400);
+  }
+  return {R:R0, list:last};
+}
+function renderPlaces(){
+  const el=$('pl'); if(!el) return;
+  const res=state.places;
+  if(!res){ el.innerHTML='<div class="empty">Couldn\'t load nearby places. Use Google Maps above.</div>'; return; }
+  if(!res.list.length){ el.innerHTML='<div class="empty">Nothing mapped within 3 km. Very mysterious. Try Reroll.</div>'; return; }
+  const cats=['All',...['Food','Coffee','Drinks','Parks','Malls','Sights'].filter(k=>res.list.some(p=>p.cat===k))];
+  const list=res.list.filter(p=>state.filter==='All'||p.cat===state.filter).slice(0,25);
+  el.innerHTML=`<div class="chips">${cats.map(k=>`<button class="chip${k===state.filter?' on':''}" data-k="${k}">${k}</button>`).join('')}</div>`+
+    list.map(p=>`<div class="place" data-n="${esc(p.name)}"><div class="pn"><b>${esc(p.name)}</b>
+      <span>${p.cat}${p.cuisine?' · '+esc(p.cuisine.split(';')[0].replace(/_/g,' ')):''}</span>${p.halal?'<span class="tag">halal</span>':''}</div>
+      <div class="pd">${fmtDist(p.d)}</div></div>`).join('');
+  placeLayer.clearLayers();
+  list.forEach(p=>{
+    L.circleMarker([p.lat,p.lng],{radius:5,color:'#FFD27A',weight:1.5,fillColor:'#FFD27A',fillOpacity:.55})
+      .bindPopup(`<b>${esc(p.name)}</b><br>${p.cat} · ${fmtDist(p.d)}<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=">Directions</a>`)
+      .addTo(placeLayer);
+  });
+}
+$('out').addEventListener('click', e=>{
+  const ch=e.target.closest('.chip'); if(ch){ state.filter=ch.dataset.k; renderPlaces(); return; }
+  const pl=e.target.closest('.place'); if(!pl) return;
+  const p=state.places.list.find(x=>x.name===pl.dataset.n); if(!p) return;
+  map.flyTo([p.lat,p.lng], 17, {duration:.8});
+  placeLayer.eachLayer(l=>{ const ll=l.getLatLng(); if(ll.lat===p.lat&&ll.lng===p.lng) setTimeout(()=>l.openPopup(),850); });
+});
+
+/* ---------- the fungi growth ----------
+   Each friend's route is the main hypha. It creeps along the real road at a speed set by
+   that friend's actual ride time, so a longer ride takes longer to arrive.
+   Side branches sprout off the main strand as the tip passes, wander, and sometimes fork.
+   When every strand has arrived, the middle blooms.                                  */
+function buildHypha(route, color, T){
+  const pts=route.coords, cum=[0];
+  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i]));
+  const L=cum[cum.length-1]||1;
+    const at=s=>{ // point + direction at distance s along the route
+    let i=1; while(i<cum.length-1 && cum[i]<s) i++;
+    const a=pts[i-1], b=pts[i], seg=(cum[i]-cum[i-1])||1, u=clamp((s-cum[i-1])/seg,0,1);
+    return {p:[a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u], ang:heading(a,b)};
+  };
+  const branches=[];
+  const spawn=(p,ang,len,born,depth)=>{
+    const segs=8, line=[p]; let cur=p, a=ang;
+    const br={line, born, dur:rand(500,1100)*(depth?0.7:1), w:depth?0.7:1.15};
+    for(let k=0;k<segs;k++){
+      a+=rand(-.45,.45); cur=offset(cur,a,len/segs); line.push(cur);
+      if(depth<2 && k>=1 && k<=6 && Math.random()<.3)
+        spawn(cur, a+(Math.random()<.5?-1:1)*rand(.5,1.1), len*rand(.4,.65), born+br.dur*(k+1)/segs, depth+1);
+    }
+    branches.push(br);
+  };
+  const count=clamp(Math.round(L/160),22,110);
+  for(let k=1;k<count;k++){
+    if(Math.random()<.15) continue;
+    const s=L*(k+rand(-.4,.4))/count;
+    const {p,ang}=at(s);
+    spawn(p, ang+(Math.random()<.5?-1:1)*rand(.55,1.35), clamp(L*rand(.025,.085),70,1600), s/L*T, 0);
+  }
+  return {pts, cum, L, T, color, branches, secs:route.secs};
+}
+
+const fx=$('fx'), ctx=fx.getContext('2d');
+function sizeCanvas(){ const d=Math.min(window.devicePixelRatio||1,2); fx.width=innerWidth*d; fx.height=innerHeight*d; ctx.setTransform(d,0,0,d,0,0); }
+addEventListener('resize', sizeCanvas); sizeCanvas();
+const P = ll => map.latLngToContainerPoint(ll);
+function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${n>>8&255},${n&255},${a})`; }
+
+function grow(routes, center){
+  const maxS=Math.max(...routes.map(r=>r.secs))||1;
+  // slowest friend's strand takes ~6.5 s; others scale by their real ride time
+  const hy=routes.map((r,i)=>buildHypha(r, friends[i].color, 1800+4700*(r.secs/maxS)));
+  const Tall=Math.max(...hy.map(h=>h.T));
+  const sparks=Array.from({length:46},()=>({a:rand(0,Math.PI*2), v:rand(25,95), c:hy[Math.floor(Math.random()*hy.length)].color}));
+  return new Promise(done=>{
+    growth={hy, center, t0:performance.now(), Tall, sparks, done, finished:false};
+  });
+}
+
+function drawStrand(pts, cum, upto){
+  ctx.beginPath(); let p=P(pts[0]); ctx.moveTo(p.x,p.y);
+  for(let i=1;i<pts.length;i++){
+    if(cum[i]<=upto){ p=P(pts[i]); ctx.lineTo(p.x,p.y); continue; }
+    const a=P(pts[i-1]), b=P(pts[i]), u=(upto-cum[i-1])/((cum[i]-cum[i-1])||1);
+    p={x:a.x+(b.x-a.x)*u, y:a.y+(b.y-a.y)*u}; ctx.lineTo(p.x,p.y); break;
+  }
+  return p;
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  const g=growth; if(!g) return;
+  const t=now-g.t0;
+  ctx.globalCompositeOperation='lighter'; ctx.lineCap='round'; ctx.lineJoin='round';
+
+  // seed bursts at each friend's start
+  g.hy.forEach(h=>{
+    const s=P(h.pts[0]), u=clamp(t/900,0,1);
+    if(u<1){ ctx.strokeStyle=rgba(h.color,.6*(1-u)); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(s.x,s.y,8+40*u,0,7); ctx.stroke(); }
+  });
+
+  g.hy.forEach((h,i)=>{
+    const u=clamp(t/h.T,0,1);
+    const e=u<1 ? u*(0.85+0.15*u) : 1; // a touch of acceleration
+    const upto=h.L*e;
+    // side branches
+    for(const b of h.branches){
+      const f=clamp((t-b.born)/b.dur,0,1); if(f<=0) continue;
+      const n=b.line.length-1, k=f*n, kk=Math.floor(k);
+      ctx.beginPath(); let p=P(b.line[0]); ctx.moveTo(p.x,p.y);
+      for(let j=1;j<=kk;j++){ p=P(b.line[j]); ctx.lineTo(p.x,p.y); }
+      if(kk<n){ const a=P(b.line[kk]), c=P(b.line[kk+1]), r=k-kk; p={x:a.x+(c.x-a.x)*r,y:a.y+(c.y-a.y)*r}; ctx.lineTo(p.x,p.y); }
+      ctx.strokeStyle=rgba(h.color,b.w>1?.62:.4); ctx.lineWidth=b.w*1.25; ctx.stroke();
+      if(f<1){ ctx.fillStyle=rgba(h.color,.9); ctx.beginPath(); ctx.arc(p.x,p.y,1.6,0,7); ctx.fill(); }
+    }
+    // main strand: soft halo, then bright core
+    ctx.strokeStyle=rgba(h.color,.16); ctx.lineWidth=9; drawStrand(h.pts,h.cum,upto); ctx.stroke();
+    ctx.strokeStyle=rgba(h.color,.95); ctx.lineWidth=2.4; const tip=drawStrand(h.pts,h.cum,upto); ctx.stroke();
+    if(u<1){
+      const gr=ctx.createRadialGradient(tip.x,tip.y,0,tip.x,tip.y,14);
+      gr.addColorStop(0,rgba(h.color,.95)); gr.addColorStop(1,rgba(h.color,0));
+      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(tip.x,tip.y,14,0,7); ctx.fill();
+      // live ride-time counter in the list
+      const el=$('tm'+i); if(el) el.textContent=fmtMin(h.secs*u);
+    }
+  });
+
+  // bloom at the middle
+  const c=P(g.center), bt=t-g.Tall;
+  if(bt>0){
+    if(!g.finished){ g.finished=true; g.done(); }
+    if(bt<1600){
+      const u=bt/1600;
+      for(let r=0;r<3;r++){ const uu=clamp(u*1.3-r*.15,0,1); if(uu<=0) continue;
+        ctx.strokeStyle=`rgba(255,226,160,${.7*(1-uu)})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(c.x,c.y,10+90*uu,0,7); ctx.stroke(); }
+      g.sparks.forEach(s=>{ const d=s.v*Math.sqrt(u)*1.4; ctx.fillStyle=rgba(s.c,.9*(1-u));
+        ctx.beginPath(); ctx.arc(c.x+Math.cos(s.a)*d, c.y+Math.sin(s.a)*d, 2,0,7); ctx.fill(); });
+    }
+  }
+  // the spot itself: grows in with the strands, pulses once everyone's there
+  const near=clamp((t-g.Tall*0.7)/(g.Tall*0.3),0,1);
+  if(near>0){
+    const pulse=bt>0 ? 1+0.18*Math.sin(bt/380) : near;
+    const R=22*pulse;
+    const gr=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,R);
+    gr.addColorStop(0,'rgba(255,240,200,.95)'); gr.addColorStop(.35,'rgba(255,210,122,.55)'); gr.addColorStop(1,'rgba(255,210,122,0)');
+    ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(c.x,c.y,R,0,7); ctx.fill();
+    if(bt>0){ ctx.strokeStyle='rgba(255,210,122,.8)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(c.x,c.y,9+3*Math.sin(bt/380),0,7); ctx.stroke(); }
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+requestAnimationFrame(frame);
+render();
+</script>
+</body>
+</html>
