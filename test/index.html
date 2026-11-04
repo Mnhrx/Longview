@@ -19,7 +19,8 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:"Space Grotesk",system-ui,sans-serif;overflow:hidden}
 #map{position:fixed;inset:0;background:#0b0e0f}
-#fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:500}
+#flood,#fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:500}
+#flood{z-index:499;transition:opacity 1.6s ease}
 .leaflet-control-attribution{background:rgba(0,0,0,.45)!important;color:#7a8781!important;font-size:9px!important}
 .leaflet-control-attribution a{color:#9fb0a8!important}
 .leaflet-top.leaflet-right{top:calc(var(--safe-t) + 4px)}
@@ -68,6 +69,10 @@ button.b:disabled{opacity:.35;box-shadow:none}
 .place .pd{font:600 12px "JetBrains Mono",monospace;color:var(--gold)}
 .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:6px;background:rgba(124,255,178,.14);color:var(--mint);margin-left:4px;vertical-align:1px}
 .empty{color:var(--dim);font-size:13px;padding:8px 0}
+.tabs{display:flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:14px;margin:4px 0 8px}
+.tabs button{flex:1;border:0;border-radius:10px;padding:9px;background:none;color:var(--dim);font:600 14px "Space Grotesk",sans-serif;cursor:pointer}
+.tabs button.on{background:rgba(255,210,122,.16);color:var(--gold)}
+.tabs button small{display:block;font:500 11px "JetBrains Mono",monospace;opacity:.8;margin-top:1px}
 
 .pin{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#06100b;
   font:700 13px "JetBrains Mono",monospace;box-shadow:0 0 0 4px rgba(0,0,0,.45),0 0 18px var(--c);border:2px solid rgba(255,255,255,.75)}
@@ -82,6 +87,7 @@ button.b:disabled{opacity:.35;box-shadow:none}
 </head>
 <body>
 <div id="map"></div>
+<canvas id="flood"></canvas>
 <canvas id="fx"></canvas>
 <header><h1>SPORE</h1><p>meet in the middle</p></header>
 <div id="toast"></div>
@@ -97,7 +103,6 @@ button.b:disabled{opacity:.35;box-shadow:none}
   </div>
   <div class="row">
     <button class="b primary" id="go">Find hangout</button>
-    <button class="b" id="reroll">Reroll</button>
     <button class="b" id="clear">Clear</button>
   </div>
   <div id="status"></div>
@@ -106,210 +111,396 @@ button.b:disabled{opacity:.35;box-shadow:none}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-/* ---------- services (all free, no keys) ---------- */
-const OSRM = 'https://router.project-osrm.org';          // routing, road snapping, travel-time table
-const OVERPASS = 'https://overpass-api.de/api/interpreter'; // what's nearby (OpenStreetMap)
-const ONEMAP = 'https://www.onemap.gov.sg/api/common/elastic/search'; // SG postal codes
+/* ===== Spore — meet in the middle =====
+   How it works
+   1. Download the road network between everyone (OpenStreetMap via Overpass):
+      main roads across the whole area + small local roads around each friend.
+   2. Every friend's spore spreads outward along ALL roads at once, at the speed you'd ride each road
+      (Dijkstra's algorithm — it visits roads in order of ride time, exactly like a spreading front).
+   3. The first road point that every colour has reached = SOONEST meetup.
+      Only the branches that reach it stay; the rest of the spread fades away.
+   4. The bloom then drifts to the EQUAL spot: where everyone's ride is about the same,
+      as long as the slowest ride isn't more than ~30% longer than at the soonest spot.      */
 
+const OVERPASS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+const ONEMAP = 'https://www.onemap.gov.sg/api/common/elastic/search';
 const COLORS = ['#7CFFB2','#FFB86B','#B48CFF','#6BD8FF','#FF7AA8','#E8FF6B'];
+// typical riding speeds (km/h) per road type — includes a bit of junction/light time
+const SPEED = {motorway:70,motorway_link:40,trunk:50,trunk_link:35,primary:40,primary_link:30,secondary:35,secondary_link:28,
+               tertiary:30,tertiary_link:25,unclassified:25,residential:22,living_street:12};
+const FLOOD_MS = 7500;        // how long the spreading takes on screen
+const EQUAL_SLACK = 1.3;      // equal spot: slowest ride may be at most 30% longer than at soonest
+
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 const rand = (a,b) => a + Math.random()*(b-a);
+const ease = u => u<.5 ? 2*u*u : 1-Math.pow(-2*u+2,2)/2;
 
-/* ---------- map ---------- */
+/* ---------- map (Esri dark grey: free, no key) ---------- */
 const map = L.map('map', {zoomControl:false}).setView([1.3521,103.8198], 11);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  subdomains:'abcd', maxZoom:19,
-  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO · routes OSRM'
-}).addTo(map);
+const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+L.tileLayer(ESRI+'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom:16, maxZoom:19,
+  attribution:'Tiles &copy; Esri · Roads &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+L.tileLayer(ESRI+'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom:16, maxZoom:19, opacity:.7}).addTo(map);
 const placeLayer = L.layerGroup().addTo(map);
 
 let friends = [];
-let state = null;   // {cands, idx, shown:[], center, routes, places, filter}
-let growth = null;  // animation state
+let busy = false;
+let res = null;   // result: {G, runs, spots:{soon,equal}, sel}
 
-/* ---------- geometry ---------- */
-function hav(a,b){ const R=6371000, toR=Math.PI/180;
-  const dLa=(b[0]-a[0])*toR, dLo=(b[1]-a[1])*toR;
-  const s=Math.sin(dLa/2)**2+Math.cos(a[0]*toR)*Math.cos(b[0]*toR)*Math.sin(dLo/2)**2;
-  return 2*R*Math.asin(Math.sqrt(s)); }
-function offset(p, ang, d){ // ang: radians, 0 = east, counter-clockwise
-  return [p[0] + d*Math.sin(ang)/110540, p[1] + d*Math.cos(ang)/(111320*Math.cos(p[0]*Math.PI/180))]; }
-function heading(a,b){ return Math.atan2((b[0]-a[0])*110540, (b[1]-a[1])*111320*Math.cos(a[0]*Math.PI/180)); }
-
-/* ---------- ui helpers ---------- */
-function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2200); }
-function status(msg, err){ const s=$('status'); s.textContent=msg||''; s.classList.toggle('err', !!err); }
-async function getJSON(url, opts={}, ms=15000){
-  const c=new AbortController(); const h=setTimeout(()=>c.abort(), ms);
-  try{ const r=await fetch(url,{...opts, signal:c.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
-  finally{ clearTimeout(h); } }
-const pinIcon = (color,n) => L.divIcon({className:'', html:`<div class="pin" style="--c:${color}">${n}</div>`, iconSize:[30,30], iconAnchor:[15,15]});
-const fmtMin = s => s==null ? '' : Math.max(1, Math.round(s/60)) + ' min';
+/* ---------- small helpers ---------- */
+function hav(a,b){ const R=6371000, t=Math.PI/180, dLa=(b[0]-a[0])*t, dLo=(b[1]-a[1])*t;
+  const s=Math.sin(dLa/2)**2+Math.cos(a[0]*t)*Math.cos(b[0]*t)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
+function status(m,err){ const s=$('status'); s.textContent=m||''; s.classList.toggle('err',!!err); }
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtMin = s => s==null||!isFinite(s) ? '' : Math.max(1, Math.round(s/60)) + ' min';
 const fmtDist = m => m<1000 ? Math.round(m/10)*10+' m' : (m/1000).toFixed(1)+' km';
+const titleCase = s => s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
+const pinIcon = (c,n) => L.divIcon({className:'', html:`<div class="pin" style="--c:${c}">${n}</div>`, iconSize:[30,30], iconAnchor:[15,15]});
+function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${n>>8&255},${n&255},${a})`; }
+const sheetH = () => $('sheet').getBoundingClientRect().height + 10;
+
+async function getJSON(url, ms=15000){
+  const c=new AbortController(), h=setTimeout(()=>c.abort(),ms);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); } finally{ clearTimeout(h); } }
+// Overpass with a fallback server and a download counter
+async function overpass(q, onBytes, ms=120000){
+  let last;
+  for(const url of OVERPASS){
+    const c=new AbortController(), h=setTimeout(()=>c.abort(),ms);
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q),signal:c.signal});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      if(!onBytes || !r.body) return await r.json();
+      const rd=r.body.getReader(), parts=[]; let n=0;
+      for(;;){ const {done,value}=await rd.read(); if(done) break; parts.push(value); n+=value.length; onBytes(n); }
+      const buf=new Uint8Array(n); let o=0; for(const p of parts){ buf.set(p,o); o+=p.length; }
+      return JSON.parse(new TextDecoder().decode(buf));
+    }catch(e){ last=e; } finally{ clearTimeout(h); }
+  }
+  throw last;
+}
 
 /* ---------- friends ---------- */
 function addFriend(lat,lng,label){
+  if(busy) return;
   if(friends.length>=6){ toast('Max 6 friends'); return; }
   const used=new Set(friends.map(f=>f.color));
-  const f={lat,lng,label,color:COLORS.find(c=>!used.has(c)), secs:null};
+  const f={lat,lng,label,color:COLORS.find(c=>!used.has(c)),secs:null};
   f.marker=L.marker([lat,lng],{icon:pinIcon(f.color,friends.length+1),draggable:true,keyboard:false}).addTo(map);
-  f.marker.on('dragend',e=>{ const p=e.target.getLatLng(); f.lat=p.lat; f.lng=p.lng; resetResult(); render(); });
-  friends.push(f); resetResult(); render();
+  f.marker.on('dragend',e=>{ const p=e.target.getLatLng(); f.lat=p.lat; f.lng=p.lng; reset(); render(); });
+  friends.push(f); reset(); render();
 }
-function removeFriend(i){ map.removeLayer(friends[i].marker); friends.splice(i,1); resetResult(); render(); }
-function resetResult(){ state=null; growth=null; placeLayer.clearLayers(); friends.forEach(f=>f.secs=null); $('out').innerHTML=''; status(''); }
-
+function removeFriend(i){ if(busy) return; map.removeLayer(friends[i].marker); friends.splice(i,1); reset(); render(); }
+function reset(){ res=null; vis.paths=[]; vis.spots=[]; vis.tips=null; placeLayer.clearLayers(); friends.forEach(f=>f.secs=null);
+  $('out').innerHTML=''; status(''); fctx.clearRect(0,0,innerWidth,innerHeight); }
 function render(){
-  $('friends').innerHTML = friends.map((f,i)=>`
-    <div class="friend" style="--c:${f.color}">
-      <span class="dot"></span>
-      <span class="nm">${esc(f.label || 'Friend '+(i+1))}</span>
-      <span class="tm" id="tm${i}">${f.secs!=null?fmtMin(f.secs):''}</span>
-      <button class="x" data-i="${i}" aria-label="Remove">&times;</button>
-    </div>`).join('');
+  $('friends').innerHTML=friends.map((f,i)=>`<div class="friend" style="--c:${f.color}"><span class="dot"></span>
+    <span class="nm">${esc(f.label||'Friend '+(i+1))}</span><span class="tm" id="tm${i}">${fmtMin(f.secs)}</span>
+    <button class="x" data-i="${i}" aria-label="Remove">&times;</button></div>`).join('');
   friends.forEach((f,i)=>f.marker.setIcon(pinIcon(f.color,i+1)));
-  $('go').disabled = friends.length<2;
-  $('reroll').disabled = !state || state.cands.length<2;
-  $('hint').style.display = friends.length ? 'none' : '';
+  ['go','clear','addQ','addMe'].forEach(id=>$(id).disabled=busy);
+  if(friends.length<2) $('go').disabled=true;
+  $('hint').style.display=friends.length?'none':'';
 }
-const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-$('friends').addEventListener('click', e=>{ const b=e.target.closest('.x'); if(b) removeFriend(+b.dataset.i); });
-map.on('click', e=>addFriend(e.latlng.lat, e.latlng.lng));
-$('clear').onclick = ()=>{ friends.forEach(f=>map.removeLayer(f.marker)); friends=[]; resetResult(); render(); };
-$('demo').onclick = ()=>{
+$('friends').addEventListener('click',e=>{ const b=e.target.closest('.x'); if(b) removeFriend(+b.dataset.i); });
+map.on('click',e=>addFriend(e.latlng.lat,e.latlng.lng));
+$('clear').onclick=()=>{ friends.forEach(f=>map.removeLayer(f.marker)); friends=[]; reset(); render(); };
+$('demo').onclick=()=>{
   [[1.3540,103.9440,'Tampines'],[1.4360,103.7865,'Woodlands'],[1.3330,103.7422,'Jurong East'],[1.3008,103.8455,'Orchard']]
     .forEach(p=>addFriend(p[0],p[1],p[2]));
-  map.fitBounds(friends.map(f=>[f.lat,f.lng]), {padding:[60,60], paddingBottomRight:[0, sheetH()]});
+  map.fitBounds(friends.map(f=>[f.lat,f.lng]),{padding:[60,60],paddingBottomRight:[0,sheetH()]});
 };
-$('addMe').onclick = ()=>{
+$('addMe').onclick=()=>{
   if(!navigator.geolocation){ toast('Location not available'); return; }
   status('Finding you…');
   navigator.geolocation.getCurrentPosition(p=>{ status(''); addFriend(p.coords.latitude,p.coords.longitude,'Me'); map.panTo([p.coords.latitude,p.coords.longitude]); },
-    ()=>{ status('Location blocked. Allow it for Safari in Settings.', true); }, {enableHighAccuracy:true, timeout:10000});
+    ()=>status('Location blocked. Allow it for Safari in Settings.',true),{enableHighAccuracy:true,timeout:10000});
 };
 async function addQuery(){
   const q=$('q').value.trim(); if(!q) return;
   status('Looking up '+q+'…');
   try{
     const r=await getJSON(`${ONEMAP}?searchVal=${encodeURIComponent(q)}&returnGeom=Y&getAddrDetails=Y&pageNum=1`);
-    const x=r.results && r.results[0];
-    if(!x){ status('Nothing found for '+q, true); return; }
-    const name = x.BUILDING && x.BUILDING!=='NIL' ? x.BUILDING : (x.ROAD_NAME || q);
-    addFriend(+x.LATITUDE, +x.LONGITUDE, titleCase(name)); map.panTo([+x.LATITUDE, +x.LONGITUDE]);
-    $('q').value=''; status('');
-  }catch(e){ status('Lookup failed. Check your connection.', true); }
+    const x=r.results&&r.results[0]; if(!x){ status('Nothing found for '+q,true); return; }
+    const name=x.BUILDING&&x.BUILDING!=='NIL'?x.BUILDING:(x.ROAD_NAME||q);
+    addFriend(+x.LATITUDE,+x.LONGITUDE,titleCase(name)); map.panTo([+x.LATITUDE,+x.LONGITUDE]); $('q').value=''; status('');
+  }catch(e){ status('Lookup failed. Check your connection.',true); }
 }
-const titleCase = s => s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
-$('addQ').onclick = addQuery;
-$('q').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addQuery(); $('q').blur(); } });
-const sheetH = () => $('sheet').getBoundingClientRect().height + 10;
+$('addQ').onclick=addQuery;
+$('q').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addQuery(); $('q').blur(); } });
 
-/* ---------- finding the fair middle ----------
-   1. Lay a grid of test points over the area between everyone.
-   2. One OSRM "table" call gives every friend's ride time to every test point,
-      and snaps each test point onto the nearest road.
-   3. Score = the LONGEST ride (nobody gets stuck far away), with the average as a tie-break.
-   4. Zoom the grid in around the winner and repeat, 3 rounds total.        */
-async function osrmTable(srcs, dsts){
-  const coords=[...srcs,...dsts].map(p=>p[1].toFixed(6)+','+p[0].toFixed(6)).join(';');
-  const s=srcs.map((_,i)=>i).join(';'), d=dsts.map((_,i)=>i+srcs.length).join(';');
-  const r=await getJSON(`${OSRM}/table/v1/driving/${coords}?sources=${s}&destinations=${d}&annotations=duration`);
-  if(r.code!=='Ok') throw new Error(r.message||r.code);
-  return r;
+/* ---------- 1. road network ---------- */
+function roadQuery(){
+  const la=friends.map(f=>f.lat), lo=friends.map(f=>f.lng);
+  const pLa=Math.max((Math.max(...la)-Math.min(...la))*.25,.02), pLo=Math.max((Math.max(...lo)-Math.min(...lo))*.25,.02);
+  const bb=[Math.min(...la)-pLa,Math.min(...lo)-pLo,Math.max(...la)+pLa,Math.max(...lo)+pLo].map(v=>v.toFixed(5)).join(',');
+  const local=friends.map(f=>`way["highway"~"^(unclassified|residential|living_street)$"](around:2500,${f.lat.toFixed(5)},${f.lng.toFixed(5)});`).join('');
+  return `[out:json][timeout:90];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary)(_link)?$"](${bb});${local});out body geom qt;`;
 }
-const score = c => c.max + 0.3*c.avg;
-async function findCandidates(){
-  const pts=friends.map(f=>[f.lat,f.lng]);
-  const la=pts.map(p=>p[0]), lo=pts.map(p=>p[1]);
-  let cLat=(Math.min(...la)+Math.max(...la))/2, cLng=(Math.min(...lo)+Math.max(...lo))/2;
-  let hLat=Math.max((Math.max(...la)-Math.min(...la))/2*0.8, 0.008);
-  let hLng=Math.max((Math.max(...lo)-Math.min(...lo))/2*0.8, 0.008);
-  const all=[];
-  for(let round=0; round<3; round++){
-    status(`Sampling the middle · round ${round+1} of 3`);
-    const n = round===0 ? 6 : 5, cands=[];
-    for(let i=0;i<n;i++) for(let j=0;j<n;j++)
-      cands.push([cLat-hLat+2*hLat*i/(n-1), cLng-hLng+2*hLng*j/(n-1)]);
-    const r=await osrmTable(pts,cands);
-    cands.forEach((_,j)=>{
-      const secs=pts.map((_,i)=>r.durations[i][j]);
-      const dst=r.destinations[j];
-      if(secs.some(v=>v==null) || dst.distance>350) return; // no road near this test point (sea, forest, reservoir)
-      const c={lat:dst.location[1], lng:dst.location[0], road:dst.name||'', secs,
-               max:Math.max(...secs), avg:secs.reduce((a,b)=>a+b,0)/secs.length};
-      c.score=score(c); all.push(c);
-    });
-    if(!all.length){ hLat*=1.5; hLng*=1.5; continue; }
-    all.sort((a,b)=>a.score-b.score);
-    cLat=all[0].lat; cLng=all[0].lng; hLat/=2.5; hLng/=2.5;
-    await sleep(250); // be polite to the free server
+function buildGraph(json){
+  const idx=new Map(), lat=[], lng=[], ok=[], name=[], E=[];
+  const node=(id,g)=>{ let i=idx.get(id); if(i===undefined){ i=lat.length; idx.set(id,i); lat.push(g.lat); lng.push(g.lon); ok.push(0); name.push(''); } return i; };
+  for(const w of json.elements){
+    if(w.type!=='way'||!w.geometry||!w.nodes) continue;
+    const t=w.tags||{}, hw=t.highway, sp=(SPEED[hw]||22)/3.6;
+    const ow=(t.oneway==='yes'||t.oneway==='1'||t.junction==='roundabout'||hw==='motorway'||hw==='motorway_link')?1:(t.oneway==='-1'?-1:0);
+    const hangable=!(hw==='motorway'||hw==='motorway_link'); // can't hang out on an expressway
+    let prev=-1;
+    for(let k=0;k<w.nodes.length;k++){
+      const g=w.geometry[k]; if(!g){ prev=-1; continue; }
+      const i=node(w.nodes[k],g);
+      if(hangable){ ok[i]=1; if(!name[i]&&t.name) name[i]=t.name; }
+      if(prev>=0){ const tt=hav([lat[prev],lng[prev]],[lat[i],lng[i]])/sp; if(ow!==-1) E.push(prev,i,tt); if(ow!==1) E.push(i,prev,tt); }
+      prev=i;
+    }
   }
-  if(!all.length) throw new Error('No rideable spot between you');
-  const out=[];
-  for(const c of all) if(!out.some(o=>hav([o.lat,o.lng],[c.lat,c.lng])<400)) out.push(c);
-  return out;
+  const n=lat.length, m=E.length/3, off=new Int32Array(n+1);
+  for(let e=0;e<m;e++) off[E[3*e]+1]++;
+  for(let i=0;i<n;i++) off[i+1]+=off[i];
+  const to=new Int32Array(m), wt=new Float32Array(m), fill=off.slice(0,n);
+  for(let e=0;e<m;e++){ const p=fill[E[3*e]]++; to[p]=E[3*e+1]; wt[p]=E[3*e+2]; }
+  // keep only the biggest connected road network (drops car parks / isolated bits)
+  const par=new Int32Array(n); for(let i=0;i<n;i++) par[i]=i;
+  const find=x=>{ while(par[x]!==x){ par[x]=par[par[x]]; x=par[x]; } return x; };
+  for(let a=0;a<n;a++) for(let e=off[a];e<off[a+1];e++){ const ra=find(a), rb=find(to[e]); if(ra!==rb) par[ra]=rb; }
+  const cnt=new Map(); let big=-1, bc=0;
+  for(let i=0;i<n;i++){ const r=find(i), c=(cnt.get(r)||0)+1; cnt.set(r,c); if(c>bc){ bc=c; big=r; } }
+  const main=new Uint8Array(n); for(let i=0;i<n;i++) if(find(i)===big) main[i]=1;
+  return {n, lat:Float64Array.from(lat), lng:Float64Array.from(lng), ok:Uint8Array.from(ok), name, off, to, wt, main};
+}
+function nearestNode(G,lat,lng){
+  const k=Math.cos(lat*Math.PI/180); let best=-1, bd=Infinity;
+  for(let i=0;i<G.n;i++){ if(!G.main[i]) continue; const a=G.lat[i]-lat, b=(G.lng[i]-lng)*k, d=a*a+b*b; if(d<bd){ bd=d; best=i; } }
+  return best;
 }
 
-async function routeOf(f,c){
-  const r=await getJSON(`${OSRM}/route/v1/driving/${f.lng},${f.lat};${c.lng},${c.lat}?overview=full&geometries=geojson`);
-  if(r.code!=='Ok' || !r.routes.length) throw new Error('No route');
-  const rt=r.routes[0];
-  return {coords:rt.geometry.coordinates.map(p=>[p[1],p[0]]), secs:rt.duration, dist:rt.distance};
+/* ---------- 2. the spreading (Dijkstra: visits roads in order of ride time) ---------- */
+function spread(G,src){
+  const n=G.n, dist=new Float64Array(n).fill(Infinity), pred=new Int32Array(n).fill(-1), done=new Uint8Array(n), order=[];
+  const hv=[], hd=[];
+  const push=(v,d)=>{ hv.push(v); hd.push(d); let i=hv.length-1;
+    while(i>0){ const p=(i-1)>>1; if(hd[p]<=hd[i]) break; [hv[p],hv[i]]=[hv[i],hv[p]]; [hd[p],hd[i]]=[hd[i],hd[p]]; i=p; } };
+  const pop=()=>{ const v=hv[0], lv=hv.pop(), ld=hd.pop();
+    if(hv.length){ hv[0]=lv; hd[0]=ld; let i=0;
+      for(;;){ const l=2*i+1, r=l+1; let s=i; if(l<hv.length&&hd[l]<hd[s]) s=l; if(r<hv.length&&hd[r]<hd[s]) s=r; if(s===i) break;
+        [hv[s],hv[i]]=[hv[i],hv[s]]; [hd[s],hd[i]]=[hd[i],hd[s]]; i=s; } }
+    return v; };
+  dist[src]=0; push(src,0);
+  while(hv.length){
+    const u=pop(); if(done[u]) continue; done[u]=1; order.push(u);
+    for(let e=G.off[u];e<G.off[u+1];e++){ const v=G.to[e], d=dist[u]+G.wt[e]; if(d<dist[v]){ dist[v]=d; pred[v]=u; push(v,d); } }
+  }
+  return {dist, pred, order:Int32Array.from(order)};
 }
 
+/* ---------- 3. soonest + equal spots ---------- */
+function pickSpots(G,runs){
+  let soon=-1, sMax=Infinity, sSum=Infinity;
+  for(let v=0;v<G.n;v++){
+    if(!G.ok[v]) continue; let mx=0, sm=0;
+    for(const R of runs){ const d=R.dist[v]; if(d>mx) mx=d; sm+=d; }
+    if(mx<sMax || (mx===sMax && sm<sSum)){ sMax=mx; sSum=sm; soon=v; }
+  }
+  if(soon<0||!isFinite(sMax)) return null;
+  const spreadAt=v=>{ let mx=0, mn=Infinity; for(const R of runs){ const d=R.dist[v]; if(d>mx) mx=d; if(d<mn) mn=d; } return [mx,mn]; };
+  const [s0,s1]=spreadAt(soon), limit=sMax*EQUAL_SLACK+60;
+  let eq=-1, eGap=Infinity, eMax=Infinity;
+  for(let v=0;v<G.n;v++){
+    if(!G.ok[v]) continue; const [mx,mn]=spreadAt(v); if(mx>limit) continue;
+    const gap=mx-mn; if(gap<eGap-1 || (Math.abs(gap-eGap)<=1 && mx<eMax)){ eGap=gap; eMax=mx; eq=v; }
+  }
+  const same = eq<0 || (s0-s1)-eGap<90 || hav([G.lat[eq],G.lng[eq]],[G.lat[soon],G.lng[soon]])<300;
+  return {soon, equal: same?null:eq};
+}
+function spotInfo(G,runs,v,kind){
+  const secs=runs.map(R=>R.dist[v]);
+  const paths=runs.map(R=>{ const pts=[]; let u=v; while(u>=0){ pts.push([G.lat[u],G.lng[u]]); u=R.pred[u]; } pts.reverse();
+    const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i])); return {pts,cum}; });
+  return {kind, v, ll:[G.lat[v],G.lng[v]], road:G.name[v]||nearbyName(G,v), secs, paths, places:undefined, filter:'All'};
+}
+function nearbyName(G,v){ let best='', bd=Infinity;
+  for(let i=0;i<G.n;i++){ if(!G.name[i]) continue; const d=hav([G.lat[i],G.lng[i]],[G.lat[v],G.lng[v]]); if(d<bd){ bd=d; best=G.name[i]; } }
+  return best; }
+
+/* ---------- drawing ---------- */
+const fx=$('fx'), ctx=fx.getContext('2d'), fl=$('flood'), fctx=fl.getContext('2d');
+function sizeCanvas(){ const d=Math.min(devicePixelRatio||1,2);
+  for(const [c,x] of [[fx,ctx],[fl,fctx]]){ c.width=innerWidth*d; c.height=innerHeight*d; x.setTransform(d,0,0,d,0,0); } }
+addEventListener('resize',sizeCanvas); sizeCanvas();
+const P = ll => map.latLngToContainerPoint(ll);
+const vis = {paths:[], spots:[], tips:null, seeds:null};
+
+function lockMap(on){ for(const k of ['dragging','touchZoom','doubleClickZoom','scrollWheelZoom','boxZoom','keyboard']) if(map[k]) on?map[k].disable():map[k].enable(); }
+
+function runFlood(G,runs,T){
+  return new Promise(done=>{
+    const ptr=runs.map(()=>0), t0=performance.now(), tEnd=T*1.04;
+    fl.style.transition='none'; fl.style.opacity=1; fctx.clearRect(0,0,innerWidth,innerHeight);
+    vis.seeds={t0, pts:friends.map(f=>[[f.lat,f.lng],f.color])};
+    const nodeP=v=>map.latLngToContainerPoint([G.lat[v],G.lng[v]]);
+    let bloomed=false;
+    const step=now=>{
+      const tau=Math.min(tEnd,(now-t0)/FLOOD_MS*T);
+      fctx.globalCompositeOperation='lighter'; fctx.lineCap='round';
+      const tips=[];
+      runs.forEach((R,i)=>{
+        const o=R.order; let k=ptr[i], c=0;
+        fctx.beginPath();
+        while(k<o.length && R.dist[o[k]]<=tau){
+          const v=o[k], u=R.pred[v];
+          if(u>=0){ const a=nodeP(u), b=nodeP(v); fctx.moveTo(a.x,a.y); fctx.lineTo(b.x,b.y); if((c++%3)===0 && tips.length<500) tips.push([b.x,b.y,R.color]); }
+          k++;
+        }
+        ptr[i]=k; fctx.strokeStyle=rgba(R.color,.55); fctx.lineWidth=1.15; fctx.stroke();
+      });
+      vis.tips=tips;
+      if(!bloomed){ friends.forEach((f,i)=>{ const el=$('tm'+i); if(el) el.textContent=fmtMin(tau); });
+        status(`Spreading · ${Math.max(1,Math.round(tau/60))} min`); }
+      if(!bloomed && tau>=T){ bloomed=true; done(); }
+      if(tau<tEnd) requestAnimationFrame(step); else vis.tips=null;
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+function showPaths(spot,growMs=1400,delay=0){
+  const t=performance.now()+delay;
+  vis.paths.forEach(p=>{ if(!p.fadeAt) p.fadeAt=performance.now(); });
+  spot.paths.forEach((p,i)=>vis.paths.push({...p,color:friends[i].color,t0:t,dur:growMs}));
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  ctx.globalCompositeOperation='lighter'; ctx.lineCap='round'; ctx.lineJoin='round';
+  // germination rings at each start
+  if(vis.seeds){ const u=(now-vis.seeds.t0)/1100;
+    if(u<1) vis.seeds.pts.forEach(([ll,c])=>{ const p=P(ll); for(let r=0;r<2;r++){ const uu=clamp(u*1.2-r*.2,0,1);
+      ctx.strokeStyle=rgba(c,.7*(1-uu)); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,6+46*uu,0,7); ctx.stroke(); } });
+    else vis.seeds=null; }
+  // spreading front sparkle
+  if(vis.tips) for(const [x,y,c] of vis.tips){ ctx.fillStyle=rgba(c,.85); ctx.beginPath(); ctx.arc(x,y,1.7,0,7); ctx.fill(); }
+  // surviving branches
+  vis.paths=vis.paths.filter(p=>!p.fadeAt || now-p.fadeAt<700);
+  for(const p of vis.paths){
+    const u=clamp((now-p.t0)/p.dur,0,1); if(u<=0) continue;
+    const a=p.fadeAt?1-(now-p.fadeAt)/700:1, L=p.cum[p.cum.length-1]*ease(u);
+    const pts=[]; for(let i=0;i<p.pts.length;i++){
+      if(p.cum[i]<=L){ pts.push(P(p.pts[i])); continue; }
+      const A=P(p.pts[i-1]), B=P(p.pts[i]), r=(L-p.cum[i-1])/((p.cum[i]-p.cum[i-1])||1); pts.push({x:A.x+(B.x-A.x)*r,y:A.y+(B.y-A.y)*r}); break; }
+    if(pts.length<2) continue;
+    for(const [w,al] of [[9,.16],[2.6,.95]]){ ctx.strokeStyle=rgba(p.color,al*a); ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(const q of pts) ctx.lineTo(q.x,q.y); ctx.stroke(); }
+    if(u<1){ const q=pts[pts.length-1], g=ctx.createRadialGradient(q.x,q.y,0,q.x,q.y,12); g.addColorStop(0,rgba(p.color,.9)); g.addColorStop(1,rgba(p.color,0)); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(q.x,q.y,12,0,7); ctx.fill(); }
+  }
+  // spots
+  for(const s of vis.spots){
+    let ll=s.ll;
+    if(s.move){ const u=clamp((now-s.move.t0)/s.move.dur,0,1), e=ease(u); ll=[s.move.from[0]+(s.ll[0]-s.move.from[0])*e, s.move.from[1]+(s.ll[1]-s.move.from[1])*e]; if(u>=1) s.move=null; }
+    const c=P(ll), bt=now-s.born;
+    if(bt<1500){ const u=bt/1500;
+      for(let r=0;r<3;r++){ const uu=clamp(u*1.3-r*.15,0,1); if(uu<=0) continue; ctx.strokeStyle=`rgba(255,226,160,${.7*(1-uu)})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(c.x,c.y,10+85*uu,0,7); ctx.stroke(); }
+      s.sparks.forEach(k=>{ const d=k.v*Math.sqrt(u)*1.4; ctx.fillStyle=rgba(k.c,.9*(1-u)); ctx.beginPath(); ctx.arc(c.x+Math.cos(k.a)*d,c.y+Math.sin(k.a)*d,2,0,7); ctx.fill(); }); }
+    const sel=res&&res.sel===s.kind, grow=clamp(bt/500,0,1);
+    if(sel){ const R=22*(1+.18*Math.sin(now/380))*grow, g=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,R);
+      g.addColorStop(0,'rgba(255,240,200,.95)'); g.addColorStop(.35,'rgba(255,210,122,.55)'); g.addColorStop(1,'rgba(255,210,122,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(c.x,c.y,R,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(255,210,122,.85)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(c.x,c.y,9+3*Math.sin(now/380),0,7); ctx.stroke(); }
+    else { ctx.strokeStyle='rgba(255,210,122,.45)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(c.x,c.y,7,0,7); ctx.stroke();
+      ctx.fillStyle='rgba(255,210,122,.4)'; ctx.beginPath(); ctx.arc(c.x,c.y,2.5,0,7); ctx.fill(); }
+    if(!s.move && grow>=1){ ctx.globalCompositeOperation='source-over'; ctx.font='600 10px "JetBrains Mono",monospace'; ctx.textAlign='center';
+      ctx.fillStyle=sel?'rgba(255,214,140,.95)':'rgba(255,214,140,.5)'; ctx.fillText(s.kind==='soon'?'SOONEST':'EQUAL',c.x,c.y+(sel?30:20)); ctx.globalCompositeOperation='lighter'; }
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+requestAnimationFrame(frame);
+const sparks = () => Array.from({length:44},()=>({a:rand(0,7),v:rand(25,95),c:friends[Math.floor(Math.random()*friends.length)].color}));
+function tweenTimes(from,to,ms){
+  const t0=performance.now();
+  const step=now=>{ const u=clamp((now-t0)/ms,0,1), e=ease(u);
+    friends.forEach((f,i)=>{ f.secs=from[i]+(to[i]-from[i])*e; const el=$('tm'+i); if(el) el.textContent=fmtMin(f.secs); });
+    if(u<1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+/* ---------- the run ---------- */
 $('go').onclick = async ()=>{
-  if(friends.length<2) return;
-  resetResult(); setBusy(true);
+  if(friends.length<2||busy) return;
+  reset(); busy=true; render(); lockMap(true);
   try{
-    const cands=await findCandidates();
-    state={cands, idx:0, shown:[0]};
-    await showCandidate(cands[0]);
-  }catch(e){ status(e.message==='No rideable spot between you' ? e.message : 'Routing server busy. Try again in a moment.', true); }
-  setBusy(false); render();
+    map.fitBounds(friends.map(f=>[f.lat,f.lng]),{padding:[50,50],paddingBottomRight:[0,sheetH()],animate:false});
+    status('Downloading roads…');
+    const json=await overpass(roadQuery(), n=>status(`Downloading roads · ${(n/1048576).toFixed(1)} MB`));
+    status('Mapping the roads…'); await sleep(30);
+    const G=buildGraph(json);
+    if(G.n<10) throw new Error('No roads found here');
+    const runs=friends.map((f,i)=>{ const s=nearestNode(G,f.lat,f.lng); const R=spread(G,s); R.color=f.color; return R; });
+    const spots=pickSpots(G,runs);
+    if(!spots) throw new Error('Spores never met. Is someone off the road network?');
+    const soon=spotInfo(G,runs,spots.soon,'soon');
+    const equal=spots.equal!=null?spotInfo(G,runs,spots.equal,'equal'):null;
+    res={G,runs,soon,equal,sel:'soon'};
+    // spread until every colour touches the soonest spot
+    await runFlood(G,runs,Math.max(...soon.secs));
+    vis.spots=[{kind:'soon',ll:soon.ll,born:performance.now(),sparks:sparks()}];
+    friends.forEach((f,i)=>f.secs=soon.secs[i]); render();
+    status('');
+    // keep only the branches that reached it; everything else withers
+    await sleep(350);
+    fl.style.transition='opacity 1.6s ease'; fl.style.opacity=0;
+    showPaths(soon,1300);
+    await sleep(1700);
+    fctx.clearRect(0,0,innerWidth,innerHeight);
+    renderResult();
+    if(equal){
+      await sleep(900);
+      status('Drifting to equal rides…');
+      res.sel='equal';
+      vis.spots.push({kind:'equal',ll:equal.ll,born:performance.now()+1e9,sparks:[],move:{from:soon.ll,t0:performance.now(),dur:1800}});
+      const eqSpot=vis.spots[1];
+      showPaths(equal,1500,250);
+      tweenTimes(soon.secs,equal.secs,1800);
+      await sleep(1850);
+      eqSpot.born=performance.now(); eqSpot.sparks=sparks();
+      friends.forEach((f,i)=>f.secs=equal.secs[i]);
+      status(''); renderResult();
+    } else {
+      toast('The soonest spot is already the fairest');
+    }
+  }catch(e){
+    console.error(e);
+    status(/Spores|No roads/.test(e.message)?e.message:'Road server busy. Try again in a moment.',true);
+  }
+  busy=false; lockMap(false); render();
 };
-$('reroll').onclick = async ()=>{
-  if(!state) return;
-  const best=state.cands[0].score;
-  // next spot that's still fair (within ~30% of the best) and not near one we've shown
-  let next=state.cands.findIndex((c,i)=>!state.shown.includes(i) && c.score<=best*1.3+180 &&
-     state.shown.every(s=>hav([c.lat,c.lng],[state.cands[s].lat,state.cands[s].lng])>900));
-  if(next<0){ state.shown=[]; next=0; toast('Back to the fairest spot'); }
-  state.shown.push(next); state.idx=next;
-  setBusy(true);
-  try{ await showCandidate(state.cands[next]); }catch(e){ status('Routing server busy. Try again.', true); }
-  setBusy(false); render();
-};
-function setBusy(b){ ['go','reroll','clear','addQ','addMe'].forEach(id=>$(id).disabled=b); if(!b) render(); }
 
-async function showCandidate(c){
-  growth=null; placeLayer.clearLayers(); $('out').innerHTML='';
-  friends.forEach(f=>f.secs=null); render();
-  status('Tracing the roads…');
-  const routes=[];
-  for(const f of friends){ routes.push(await routeOf(f,c)); await sleep(120); }
-  const center=[c.lat,c.lng];
-  map.fitBounds([...friends.map(f=>[f.lat,f.lng]), center], {padding:[50,50], paddingBottomRight:[0,sheetH()], animate:true});
-  await sleep(450);
-  const placesP = nearby(c).catch(()=>null);
-  status('Growing towards the middle…');
-  await grow(routes, center);
-  routes.forEach((r,i)=>friends[i].secs=r.secs); render();
-  const secs=routes.map(r=>r.secs);
-  const card=`<div class="card"><div class="k">Hangout spot</div>
-    <div class="road">${esc(c.road || 'Unnamed road')}</div>
-    <div class="sub">Everyone within ${fmtMin(Math.min(...secs))} to ${fmtMin(Math.max(...secs))} ride</div>
-    <a href="https://www.google.com/maps/search/?api=1&query=${c.lat.toFixed(6)},${c.lng.toFixed(6)}" target="_blank" rel="noopener">Open in Google Maps &rarr;</a></div>`;
-  $('out').innerHTML = card + '<div id="pl"><div class="empty">Looking around…</div></div>';
-  status('');
-  const res=await placesP;
-  state.places=res; state.filter='All'; state.center=center;
-  renderPlaces();
+/* ---------- result panel + nearby places ---------- */
+function renderResult(){
+  if(!res) return;
+  const s=res.sel==='equal'&&res.equal?res.equal:res.soon;
+  const lo=Math.min(...s.secs), hi=Math.max(...s.secs);
+  const tab=(k,label,sp)=>sp?`<button data-tab="${k}" class="${res.sel===k?'on':''}">${label}<small>${fmtMin(Math.min(...sp.secs)).replace(' min','')}–${fmtMin(Math.max(...sp.secs))}</small></button>`:'';
+  $('out').innerHTML=(res.equal?`<div class="tabs">${tab('soon','Soonest',res.soon)}${tab('equal','Equal',res.equal)}</div>`:'')+
+    `<div class="card"><div class="k">${s.kind==='soon'?'Soonest meetup':'Equal rides'}</div>
+     <div class="road">${esc(s.road||'Unnamed road')}</div>
+     <div class="sub">${s.kind==='soon'?`Everyone's there in ${fmtMin(hi)} · rides ${fmtMin(lo)} to ${fmtMin(hi)}`:`Everyone rides ${fmtMin(lo)} to ${fmtMin(hi)}`}</div>
+     <a href="https://www.google.com/maps/search/?api=1&query=${s.ll[0].toFixed(6)},${s.ll[1].toFixed(6)}" target="_blank" rel="noopener">Open in Google Maps &rarr;</a></div>
+     <div id="pl"><div class="empty">Looking around…</div></div>`;
+  friends.forEach((f,i)=>{ f.secs=s.secs[i]; const el=$('tm'+i); if(el) el.textContent=fmtMin(f.secs); });
+  if(s.places===undefined){ s.places=null; s.loading=nearby(s.ll).then(r=>{ s.places=r; }).catch(()=>{ s.places=false; }).then(()=>{ if(cur()===s) renderPlaces(); }); }
+  else renderPlaces();
 }
-
-/* ---------- what's nearby (OpenStreetMap via Overpass) ---------- */
+const cur = () => res && (res.sel==='equal'&&res.equal?res.equal:res.soon);
+$('out').addEventListener('click',e=>{
+  const tb=e.target.closest('[data-tab]');
+  if(tb&&!busy&&res.sel!==tb.dataset.tab){ res.sel=tb.dataset.tab; const s=cur(); showPaths(s,900); renderResult(); map.panTo(s.ll); return; }
+  const ch=e.target.closest('.chip'); if(ch){ cur().filter=ch.dataset.k; renderPlaces(); return; }
+  const pl=e.target.closest('.place'); if(!pl) return;
+  const p=cur().places.list.find(x=>x.name===pl.dataset.n); if(!p) return;
+  map.flyTo([p.lat,p.lng],17,{duration:.8});
+  placeLayer.eachLayer(l=>{ const q=l.getLatLng(); if(q.lat===p.lat&&q.lng===p.lng) setTimeout(()=>l.openPopup(),850); });
+});
 function catOf(t){
   if(t.amenity==='cafe'||t.amenity==='ice_cream') return 'Coffee';
   if(t.amenity==='bar') return 'Drinks';
@@ -318,175 +509,34 @@ function catOf(t){
   if(t.shop) return 'Malls';
   return 'Sights';
 }
-async function nearby(c){
-  let last=[], R0=0;
+async function nearby(ll){
+  let list=[], R0=0;
   for(const R of [800,1600,3000]){
-    const a=`(around:${R},${c.lat},${c.lng})`;
-    const q=`[out:json][timeout:20];(nwr${a}[amenity~"^(restaurant|cafe|fast_food|food_court|ice_cream|bar)$"][name];nwr${a}[leisure~"^(park|garden|nature_reserve)$"][name];nwr${a}[shop=mall][name];nwr${a}[tourism~"^(viewpoint|attraction|museum)$"][name];);out center 120;`;
-    const r=await getJSON(OVERPASS,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)},25000);
-    const seen=new Set();
-    last=r.elements.map(e=>{
-      const lat=e.lat??e.center?.lat, lng=e.lon??e.center?.lon, t=e.tags||{};
-      return {name:t.name, lat, lng, cat:catOf(t), halal:/^(yes|only)$/.test(t['diet:halal']||''), cuisine:t.cuisine||'',
-              d:lat?hav([c.lat,c.lng],[lat,lng]):1e9};
-    }).filter(p=>p.lat && !seen.has(p.name) && seen.add(p.name)).sort((a,b)=>a.d-b.d);
-    R0=R;
-    if(last.length>=4) break;
-    await sleep(400);
+    const a=`(around:${R},${ll[0]},${ll[1]})`;
+    const q=`[out:json][timeout:25];(nwr${a}[amenity~"^(restaurant|cafe|fast_food|food_court|ice_cream|bar)$"][name];nwr${a}[leisure~"^(park|garden|nature_reserve)$"][name];nwr${a}[shop=mall][name];nwr${a}[tourism~"^(viewpoint|attraction|museum)$"][name];);out center 120;`;
+    const r=await overpass(q,null,30000), seen=new Set();
+    list=r.elements.map(e=>{ const lat=e.lat??e.center?.lat, lng=e.lon??e.center?.lon, t=e.tags||{};
+      return {name:t.name,lat,lng,cat:catOf(t),halal:/^(yes|only)$/.test(t['diet:halal']||''),cuisine:t.cuisine||'',d:lat?hav(ll,[lat,lng]):1e9}; })
+      .filter(p=>p.lat&&!seen.has(p.name)&&seen.add(p.name)).sort((a,b)=>a.d-b.d);
+    R0=R; if(list.length>=4) break; await sleep(400);
   }
-  return {R:R0, list:last};
+  return {R:R0,list};
 }
 function renderPlaces(){
-  const el=$('pl'); if(!el) return;
-  const res=state.places;
-  if(!res){ el.innerHTML='<div class="empty">Couldn\'t load nearby places. Use Google Maps above.</div>'; return; }
-  if(!res.list.length){ el.innerHTML='<div class="empty">Nothing mapped within 3 km. Very mysterious. Try Reroll.</div>'; return; }
-  const cats=['All',...['Food','Coffee','Drinks','Parks','Malls','Sights'].filter(k=>res.list.some(p=>p.cat===k))];
-  const list=res.list.filter(p=>state.filter==='All'||p.cat===state.filter).slice(0,25);
-  el.innerHTML=`<div class="chips">${cats.map(k=>`<button class="chip${k===state.filter?' on':''}" data-k="${k}">${k}</button>`).join('')}</div>`+
+  const el=$('pl'); if(!el) return; const s=cur(), r=s.places;
+  placeLayer.clearLayers();
+  if(r===null){ el.innerHTML='<div class="empty">Looking around…</div>'; return; }
+  if(r===false){ el.innerHTML='<div class="empty">Couldn\'t load nearby places. Use Google Maps above.</div>'; return; }
+  if(!r.list.length){ el.innerHTML='<div class="empty">Nothing mapped within 3 km. Very mysterious.</div>'; return; }
+  const cats=['All',...['Food','Coffee','Drinks','Parks','Malls','Sights'].filter(k=>r.list.some(p=>p.cat===k))];
+  const list=r.list.filter(p=>s.filter==='All'||p.cat===s.filter).slice(0,25);
+  el.innerHTML=`<div class="chips">${cats.map(k=>`<button class="chip${k===s.filter?' on':''}" data-k="${k}">${k}</button>`).join('')}</div>`+
     list.map(p=>`<div class="place" data-n="${esc(p.name)}"><div class="pn"><b>${esc(p.name)}</b>
       <span>${p.cat}${p.cuisine?' · '+esc(p.cuisine.split(';')[0].replace(/_/g,' ')):''}</span>${p.halal?'<span class="tag">halal</span>':''}</div>
       <div class="pd">${fmtDist(p.d)}</div></div>`).join('');
-  placeLayer.clearLayers();
-  list.forEach(p=>{
-    L.circleMarker([p.lat,p.lng],{radius:5,color:'#FFD27A',weight:1.5,fillColor:'#FFD27A',fillOpacity:.55})
-      .bindPopup(`<b>${esc(p.name)}</b><br>${p.cat} · ${fmtDist(p.d)}<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=">Directions</a>`)
-      .addTo(placeLayer);
-  });
+  list.forEach(p=>L.circleMarker([p.lat,p.lng],{radius:5,color:'#FFD27A',weight:1.5,fillColor:'#FFD27A',fillOpacity:.55})
+    .bindPopup(`<b>${esc(p.name)}</b><br>${p.cat} · ${fmtDist(p.d)}<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name+' Singapore')}">Directions</a>`).addTo(placeLayer));
 }
-$('out').addEventListener('click', e=>{
-  const ch=e.target.closest('.chip'); if(ch){ state.filter=ch.dataset.k; renderPlaces(); return; }
-  const pl=e.target.closest('.place'); if(!pl) return;
-  const p=state.places.list.find(x=>x.name===pl.dataset.n); if(!p) return;
-  map.flyTo([p.lat,p.lng], 17, {duration:.8});
-  placeLayer.eachLayer(l=>{ const ll=l.getLatLng(); if(ll.lat===p.lat&&ll.lng===p.lng) setTimeout(()=>l.openPopup(),850); });
-});
-
-/* ---------- the fungi growth ----------
-   Each friend's route is the main hypha. It creeps along the real road at a speed set by
-   that friend's actual ride time, so a longer ride takes longer to arrive.
-   Side branches sprout off the main strand as the tip passes, wander, and sometimes fork.
-   When every strand has arrived, the middle blooms.                                  */
-function buildHypha(route, color, T){
-  const pts=route.coords, cum=[0];
-  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i]));
-  const L=cum[cum.length-1]||1;
-    const at=s=>{ // point + direction at distance s along the route
-    let i=1; while(i<cum.length-1 && cum[i]<s) i++;
-    const a=pts[i-1], b=pts[i], seg=(cum[i]-cum[i-1])||1, u=clamp((s-cum[i-1])/seg,0,1);
-    return {p:[a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u], ang:heading(a,b)};
-  };
-  const branches=[];
-  const spawn=(p,ang,len,born,depth)=>{
-    const segs=8, line=[p]; let cur=p, a=ang;
-    const br={line, born, dur:rand(500,1100)*(depth?0.7:1), w:depth?0.7:1.15};
-    for(let k=0;k<segs;k++){
-      a+=rand(-.45,.45); cur=offset(cur,a,len/segs); line.push(cur);
-      if(depth<2 && k>=1 && k<=6 && Math.random()<.3)
-        spawn(cur, a+(Math.random()<.5?-1:1)*rand(.5,1.1), len*rand(.4,.65), born+br.dur*(k+1)/segs, depth+1);
-    }
-    branches.push(br);
-  };
-  const count=clamp(Math.round(L/160),22,110);
-  for(let k=1;k<count;k++){
-    if(Math.random()<.15) continue;
-    const s=L*(k+rand(-.4,.4))/count;
-    const {p,ang}=at(s);
-    spawn(p, ang+(Math.random()<.5?-1:1)*rand(.55,1.35), clamp(L*rand(.025,.085),70,1600), s/L*T, 0);
-  }
-  return {pts, cum, L, T, color, branches, secs:route.secs};
-}
-
-const fx=$('fx'), ctx=fx.getContext('2d');
-function sizeCanvas(){ const d=Math.min(window.devicePixelRatio||1,2); fx.width=innerWidth*d; fx.height=innerHeight*d; ctx.setTransform(d,0,0,d,0,0); }
-addEventListener('resize', sizeCanvas); sizeCanvas();
-const P = ll => map.latLngToContainerPoint(ll);
-function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${n>>8&255},${n&255},${a})`; }
-
-function grow(routes, center){
-  const maxS=Math.max(...routes.map(r=>r.secs))||1;
-  // slowest friend's strand takes ~6.5 s; others scale by their real ride time
-  const hy=routes.map((r,i)=>buildHypha(r, friends[i].color, 1800+4700*(r.secs/maxS)));
-  const Tall=Math.max(...hy.map(h=>h.T));
-  const sparks=Array.from({length:46},()=>({a:rand(0,Math.PI*2), v:rand(25,95), c:hy[Math.floor(Math.random()*hy.length)].color}));
-  return new Promise(done=>{
-    growth={hy, center, t0:performance.now(), Tall, sparks, done, finished:false};
-  });
-}
-
-function drawStrand(pts, cum, upto){
-  ctx.beginPath(); let p=P(pts[0]); ctx.moveTo(p.x,p.y);
-  for(let i=1;i<pts.length;i++){
-    if(cum[i]<=upto){ p=P(pts[i]); ctx.lineTo(p.x,p.y); continue; }
-    const a=P(pts[i-1]), b=P(pts[i]), u=(upto-cum[i-1])/((cum[i]-cum[i-1])||1);
-    p={x:a.x+(b.x-a.x)*u, y:a.y+(b.y-a.y)*u}; ctx.lineTo(p.x,p.y); break;
-  }
-  return p;
-}
-function frame(now){
-  requestAnimationFrame(frame);
-  ctx.clearRect(0,0,innerWidth,innerHeight);
-  const g=growth; if(!g) return;
-  const t=now-g.t0;
-  ctx.globalCompositeOperation='lighter'; ctx.lineCap='round'; ctx.lineJoin='round';
-
-  // seed bursts at each friend's start
-  g.hy.forEach(h=>{
-    const s=P(h.pts[0]), u=clamp(t/900,0,1);
-    if(u<1){ ctx.strokeStyle=rgba(h.color,.6*(1-u)); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(s.x,s.y,8+40*u,0,7); ctx.stroke(); }
-  });
-
-  g.hy.forEach((h,i)=>{
-    const u=clamp(t/h.T,0,1);
-    const e=u<1 ? u*(0.85+0.15*u) : 1; // a touch of acceleration
-    const upto=h.L*e;
-    // side branches
-    for(const b of h.branches){
-      const f=clamp((t-b.born)/b.dur,0,1); if(f<=0) continue;
-      const n=b.line.length-1, k=f*n, kk=Math.floor(k);
-      ctx.beginPath(); let p=P(b.line[0]); ctx.moveTo(p.x,p.y);
-      for(let j=1;j<=kk;j++){ p=P(b.line[j]); ctx.lineTo(p.x,p.y); }
-      if(kk<n){ const a=P(b.line[kk]), c=P(b.line[kk+1]), r=k-kk; p={x:a.x+(c.x-a.x)*r,y:a.y+(c.y-a.y)*r}; ctx.lineTo(p.x,p.y); }
-      ctx.strokeStyle=rgba(h.color,b.w>1?.62:.4); ctx.lineWidth=b.w*1.25; ctx.stroke();
-      if(f<1){ ctx.fillStyle=rgba(h.color,.9); ctx.beginPath(); ctx.arc(p.x,p.y,1.6,0,7); ctx.fill(); }
-    }
-    // main strand: soft halo, then bright core
-    ctx.strokeStyle=rgba(h.color,.16); ctx.lineWidth=9; drawStrand(h.pts,h.cum,upto); ctx.stroke();
-    ctx.strokeStyle=rgba(h.color,.95); ctx.lineWidth=2.4; const tip=drawStrand(h.pts,h.cum,upto); ctx.stroke();
-    if(u<1){
-      const gr=ctx.createRadialGradient(tip.x,tip.y,0,tip.x,tip.y,14);
-      gr.addColorStop(0,rgba(h.color,.95)); gr.addColorStop(1,rgba(h.color,0));
-      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(tip.x,tip.y,14,0,7); ctx.fill();
-      // live ride-time counter in the list
-      const el=$('tm'+i); if(el) el.textContent=fmtMin(h.secs*u);
-    }
-  });
-
-  // bloom at the middle
-  const c=P(g.center), bt=t-g.Tall;
-  if(bt>0){
-    if(!g.finished){ g.finished=true; g.done(); }
-    if(bt<1600){
-      const u=bt/1600;
-      for(let r=0;r<3;r++){ const uu=clamp(u*1.3-r*.15,0,1); if(uu<=0) continue;
-        ctx.strokeStyle=`rgba(255,226,160,${.7*(1-uu)})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(c.x,c.y,10+90*uu,0,7); ctx.stroke(); }
-      g.sparks.forEach(s=>{ const d=s.v*Math.sqrt(u)*1.4; ctx.fillStyle=rgba(s.c,.9*(1-u));
-        ctx.beginPath(); ctx.arc(c.x+Math.cos(s.a)*d, c.y+Math.sin(s.a)*d, 2,0,7); ctx.fill(); });
-    }
-  }
-  // the spot itself: grows in with the strands, pulses once everyone's there
-  const near=clamp((t-g.Tall*0.7)/(g.Tall*0.3),0,1);
-  if(near>0){
-    const pulse=bt>0 ? 1+0.18*Math.sin(bt/380) : near;
-    const R=22*pulse;
-    const gr=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,R);
-    gr.addColorStop(0,'rgba(255,240,200,.95)'); gr.addColorStop(.35,'rgba(255,210,122,.55)'); gr.addColorStop(1,'rgba(255,210,122,0)');
-    ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(c.x,c.y,R,0,7); ctx.fill();
-    if(bt>0){ ctx.strokeStyle='rgba(255,210,122,.8)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(c.x,c.y,9+3*Math.sin(bt/380),0,7); ctx.stroke(); }
-  }
-  ctx.globalCompositeOperation='source-over';
-}
-requestAnimationFrame(frame);
 render();
 </script>
 </body>
