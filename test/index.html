@@ -49,7 +49,7 @@ header p{margin:2px 0 0;font:500 11px "JetBrains Mono",monospace;letter-spacing:
 .friend{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
 .dot{width:12px;height:12px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);flex:none}
 .friend .nm{flex:1;min-width:0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.friend .tm{font:600 13px "JetBrains Mono",monospace;color:var(--c);min-width:58px;text-align:right}
+.friend .tm{font:600 13px "JetBrains Mono",monospace;color:var(--c);min-width:58px;text-align:right;white-space:nowrap}
 .friend .x{border:0;background:none;color:var(--dim);font-size:20px;line-height:1;padding:0 2px;cursor:pointer}
 .row{display:flex;gap:8px;margin-bottom:8px}
 input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;color:var(--text);
@@ -152,7 +152,7 @@ body.poi-labels .poi b{display:block}
 <canvas id="roads"></canvas>
 <canvas id="flood"></canvas>
 <canvas id="fx"></canvas>
-<header><h1>SPORE</h1><p>meet in the middle</p></header>
+<header><h1>SPORE</h1><p>meet in the middle · v10</p></header>
 <div id="toast"></div>
 
 <button id="mute" aria-label="Sound on"></button>
@@ -169,6 +169,7 @@ body.poi-labels .poi b{display:block}
     <button class="b" id="savedBtn" aria-label="Saved places">&#9733;</button>
   </div>
   <div id="saved" hidden></div>
+  <div class="seg" id="viewSeg"><span>View</span><button data-v="0">Spores</button><button data-v="1">Workings</button></div>
   <div class="seg" id="mode"><span>Measure</span><button data-m="time" class="on">Time</button><button data-m="dist">Distance</button></div>
   <div class="row">
     <button class="b primary" id="go">Find hangout</button>
@@ -204,6 +205,24 @@ const FLOOD_MS = 7500;
 const EQUAL_SLACK = 1.3;
 
 const $ = id => document.getElementById(id);
+/* ---------- run log: a plain-text record of what happened, for "Copy log" ---------- */
+const VERSION='v10';
+let LOG=[], logT0=performance.now();
+function logMark(title){ logT0=performance.now(); LOG.push('', '==== '+title+' ===='); if(LOG.length>700) LOG=LOG.slice(-500); }
+function log(...a){ const t=((performance.now()-logT0)/1000).toFixed(2).padStart(6);
+  LOG.push(`${t}s ${a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')}`); }
+addEventListener('error',e=>log('JS ERROR',e.message,((e.error&&e.error.stack)||'').split('\n').slice(0,3).join(' | ')));
+addEventListener('unhandledrejection',e=>log('PROMISE ERROR',String((e.reason&&(e.reason.stack||e.reason.message))||e.reason).split('\n').slice(0,3).join(' | ')));
+function logText(){ const dev=(navigator.userAgent.match(/(iPhone|iPad|Android|Macintosh|Windows)[^;)]*/)||[''])[0];
+  return [`Spore ${VERSION} · ${new Date().toLocaleString('en-SG')} · ${dev}`, ...LOG].join('\n'); }
+async function copyLog(){
+  const t=logText();
+  try{ await navigator.clipboard.writeText(t); toast('Log copied'); return; }catch(e){}
+  const ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta);
+  ta.focus(); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(e){} ta.remove();
+  toast(ok?'Log copied':'Couldn\'t copy the log');
+}
+document.addEventListener('click',e=>{ if(e.target.closest('[data-copylog]')){ e.preventDefault(); copyLog(); } });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const frameWait = () => new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
@@ -212,7 +231,7 @@ const ease = u => u<.5 ? 2*u*u : 1-Math.pow(-2*u+2,2)/2;
 function hav(a,b){ const R=6371000, t=Math.PI/180, dLa=(b[0]-a[0])*t, dLo=(b[1]-a[1])*t;
   const s=Math.sin(dLa/2)**2+Math.cos(a[0]*t)*Math.cos(b[0]*t)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
-function status(m,err){ const s=$('status'); s.textContent=m||''; s.classList.toggle('err',!!err); updateBar(); }
+function status(m,err){ const s=$('status'); if(m&&m!==s.textContent&&!/^Spreading/.test(m)) log(err?'STATUS (error):':'status:',m); s.textContent=m||''; s.classList.toggle('err',!!err); updateBar(); }
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtMin = s => s==null||!isFinite(s) ? '' : Math.max(1, Math.round(s/60)) + ' min';
 let MODE='time';   // 'time' = ride minutes, 'dist' = road km
@@ -368,6 +387,7 @@ function render(){
   if(friends.length<2) $('go').disabled=true;
   $('go2').disabled=$('go').disabled;
   document.querySelectorAll('#mode button').forEach(b=>{ b.classList.toggle('on',b.dataset.m===MODE); b.disabled=busy; });
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.classList.toggle('on',(b.dataset.v==='1')===WORK));
   $('hint').style.display=friends.length?'none':'';
   updateBar();
 }
@@ -390,11 +410,14 @@ function updateBar(){
   $('bar').addEventListener('click',e=>{ if(e.target.closest('button')) return; if(busy&&!moved){ cycleSpeed(); return; } if(!moved) setCollapsed(false); moved=false; });
 })();
 $('go2').onclick=()=>$('go').click();
+let WORK=false; try{ WORK=localStorage.getItem('spore-work')==='1'; }catch(e){}
+$('viewSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; WORK=b.dataset.v==='1';
+  try{ localStorage.setItem('spore-work',WORK?'1':'0'); }catch(err){} render(); });
 $('mode').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||busy||b.dataset.m===MODE) return; switchMode(b.dataset.m); });
 // swap to the other measure: show its saved result instantly, or calculate it once if you were comparing
 function switchMode(m){
   if(busy||m===MODE) return;
-  const had=!!results[MODE]; MODE=m; clearVisuals(); render();
+  const had=!!results[MODE]; log('switch to', m==='time'?'Time':'Distance', results[m]?'(saved result)':had?'(auto-calculating)':''); MODE=m; clearVisuals(); render();
   if(results[m]){ res=results[m]; showSpots(); setPaths(curSpot(),700); renderResult(); render(); Snd.pop(); }
   else if(had&&friends.length>=2) $('go').click();
 }
@@ -546,14 +569,63 @@ async function getTile(z,x,y,prio='high'){
   tileCache.set(key,p); p.catch(()=>tileCache.delete(key));
   return p;
 }
+/* ---------- fix junctions inside a tile ----------
+   Simplified map tiles drop the shared point where two straight roads cross, so the roads only
+   *look* joined. Here we put a junction back wherever two roads cross (except bridges/tunnels),
+   and join a road that stops within 12 m of the side of another road.                            */
+function segX(p,p2,q,q2){ const r0=p2[0]-p[0], r1=p2[1]-p[1], s0=q2[0]-q[0], s1=q2[1]-q[1], d=r0*s1-r1*s0; if(Math.abs(d)<1e-9) return null;
+  const a=q[0]-p[0], b=q[1]-p[1], t=(a*s1-b*s0)/d, u=(a*r1-b*r0)/d, e=1e-6;
+  if(t<=e||t>=1-e||u<=e||u>=1-e) return null; return [t,u,[p[0]+t*r0,p[1]+t*r1]]; }
+function joinCrossings(rs,ext,z,ty){
+  const mpu=40075016*Math.cos(y2lat(ty+.5,z)*Math.PI/180)/2**z/ext, C=64, grid=new Map(), segs=[];
+  rs.forEach((r,ri)=>{ for(let i=0;i<r.pts.length-1;i++){ const a=r.pts[i], b=r.pts[i+1], id=segs.push({ri,i,a,b})-1;
+    const x0=Math.floor(Math.min(a[0],b[0])/C), x1=Math.floor(Math.max(a[0],b[0])/C), y0=Math.floor(Math.min(a[1],b[1])/C), y1=Math.floor(Math.max(a[1],b[1])/C);
+    if((x1-x0+1)*(y1-y0+1)>900) continue;
+    for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){ const k=x*100003+y; let L=grid.get(k); if(!L) grid.set(k,L=[]); L.push(id); } } });
+  const splits=rs.map(r=>r.pts.map(()=>[])), flat=r=>r.br||r.tun, mw=r=>r.cls==='motorway'&&!r.ramp, seen=new Set();
+  let crossings=0;
+  for(const L of grid.values()) for(let p=0;p<L.length;p++) for(let q=p+1;q<L.length;q++){
+    const A=segs[L[p]], B=segs[L[q]], key=L[p]<L[q]?L[p]+':'+L[q]:L[q]+':'+L[p]; if(seen.has(key)) continue; seen.add(key);
+    if(A.ri===B.ri&&Math.abs(A.i-B.i)<=1) continue;
+    const ra=rs[A.ri], rb=rs[B.ri]; if(flat(ra)||flat(rb)||mw(ra)!==mw(rb)) continue;
+    const X=segX(A.a,A.b,B.a,B.b); if(!X) continue;
+    splits[A.ri][A.i].push([X[0],X[2]]); splits[B.ri][B.i].push([X[1],X[2]]); crossings++;
+  }
+  // dangling road ends near the side of another road
+  const vcount=new Map(); for(const r of rs) for(const v of r.pts){ const k=v[0]+','+v[1]; vcount.set(k,(vcount.get(k)||0)+1); }
+  const D=12/mpu, extra=[];
+  rs.forEach((r,ri)=>{ if(flat(r)) return;
+    for(const E of [r.pts[0],r.pts[r.pts.length-1]]){
+      if(E[0]<=1||E[1]<=1||E[0]>=ext-1||E[1]>=ext-1) continue;          // tile edge: joined across tiles later
+      if((vcount.get(E[0]+','+E[1])||0)>1) continue;                      // already a junction
+      const cx=Math.floor(E[0]/C), cy=Math.floor(E[1]/C); let best=null, bd=D;
+      for(let x=cx-1;x<=cx+1;x++) for(let y=cy-1;y<=cy+1;y++){ const L=grid.get(x*100003+y); if(!L) continue;
+        for(const id of L){ const S=segs[id]; if(S.ri===ri||flat(rs[S.ri])) continue;
+          const dx=S.b[0]-S.a[0], dy=S.b[1]-S.a[1], l2=dx*dx+dy*dy; if(!l2) continue;
+          const t=clamp(((E[0]-S.a[0])*dx+(E[1]-S.a[1])*dy)/l2,0,1), P=[S.a[0]+t*dx,S.a[1]+t*dy], d=Math.hypot(E[0]-P[0],E[1]-P[1]);
+          if(d<bd&&d>1e-6){ bd=d; best={S,t,P}; } } }
+      if(!best) continue;
+      if(best.t>1e-6&&best.t<1-1e-6) splits[best.S.ri][best.S.i].push([best.t,best.P]);
+      const P=best.t<=1e-6?best.S.a:best.t>=1-1e-6?best.S.b:best.P;
+      extra.push({cls:r.cls, ramp:r.ramp, oneway:0, tun:0, br:0, pts:[E,P]});
+    } });
+  const out=rs.map((r,ri)=>{ const pts=[];
+    for(let i=0;i<r.pts.length;i++){ pts.push(r.pts[i]); if(i<r.pts.length-1&&splits[ri][i].length){ splits[ri][i].sort((a,b)=>a[0]-b[0]); for(const [,P] of splits[ri][i]) pts.push(P); } }
+    return {...r,pts}; });
+  return out.concat(extra);
+}
 function parseTile(L,z,tx,ty){
   const toLL=(ext,[px,py])=>[y2lat(ty+py/ext,z), x2lon(tx+px/ext,z)];
   const roads=[], names=[], pois=[];
   const T=L.transportation;
-  if(T) for(const f of T.features){
-    const c=f.props.class; if(f.type!==2||!(c in SPEED)) continue;
-    for(const ln of f.lines) for(const piece of clipLine(ln,0,T.extent))
-      roads.push({cls:c, ramp:f.props.ramp==1, oneway:+f.props.oneway||0, tun:f.props.brunnel==='tunnel'?1:0, pts:piece.map(p=>toLL(T.extent,p))});
+  if(T){
+    const rs=[];
+    for(const f of T.features){
+      const c=f.props.class; if(f.type!==2||!(c in SPEED)) continue;
+      for(const ln of f.lines) for(const piece of clipLine(ln,0,T.extent))
+        rs.push({cls:c, ramp:f.props.ramp==1, oneway:+f.props.oneway||0, tun:f.props.brunnel==='tunnel'?1:0, br:f.props.brunnel==='bridge'?1:0, pts:piece});
+    }
+    for(const r of joinCrossings(rs,T.extent,z,ty)) roads.push({cls:r.cls, ramp:r.ramp, oneway:r.oneway, tun:r.tun, pts:r.pts.map(p=>toLL(T.extent,p))});
   }
   const N=L.transportation_name;
   if(N) for(const f of N.features){ const nm=f.props['name:latin']||f.props.name_en||f.props.name; if(!nm) continue;
@@ -620,7 +692,7 @@ function makeRegion(scale){
   return {pad, span, outline, inside:ll=>dist(ll)<=pad, tileHits:(z,x,y)=>{ const c=[(y2lat(y,z)+y2lat(y+1,z))/2,(x2lon(x,z)+x2lon(x+1,z))/2];
       const half=hav([y2lat(y,z),x2lon(x,z)],[y2lat(y+1,z),x2lon(x+1,z)])/2; return dist(c)<=pad+half; }};
 }
-function makeNet(z,scale,mode){ return {z, mode, idx:new Map(), lat:[], lng:[], ok:[], deg:[], adj:[], grid:new Map(), names:[], tiles:new Set(), touched:null, inR:[], region:makeRegion(scale)}; }
+function makeNet(z,scale,mode){ return {z, mode, idx:new Map(), lat:[], lng:[], ok:[], deg:[], adj:[], grid:new Map(), names:[], tiles:new Set(), loaded:new Set(), touched:null, inR:[], region:makeRegion(scale)}; }
 const cellKey=(la,lo)=>Math.floor(la/CELL)+':'+Math.floor(lo/CELL);
 function netNode(N,la,lo){
   const k=Math.round(la*1e5)+':'+Math.round(lo*1e5); let i=N.idx.get(k);
@@ -672,7 +744,7 @@ async function loadKeys(N,keys){
   await Promise.all(Array.from({length:12},worker));
   const touched=new Set();
   for(const [T,x,y] of got){
-    for(const u of addTileToNet(N,T,x,y)) touched.add(u);
+    for(const u of addTileToNet(N,T,x,y)) touched.add(u); N.loaded.add(N.z+'/'+x+'/'+y);
     // quietly fetch the ring around it so the spores rarely have to wait
     for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){ const nx=x+dx, ny=y+dy, k=N.z+'/'+nx+'/'+ny;
       if(!N.tiles.has(k)&&!tileCache.has(k)&&N.region.tileHits(N.z,nx,ny)) getTile(N.z,nx,ny,'low').catch(()=>{}); }
@@ -688,7 +760,12 @@ function hPop(R){ const hv=R.hv, hd=R.hd, v=hv[0], lv=hv.pop(), ld=hd.pop();
       [hv[s],hv[i]]=[hv[i],hv[s]]; [hd[s],hd[i]]=[hd[i],hd[s]]; i=s; } }
   return v; }
 function relax(N,R,u){ const a=N.adj[u], du=R.dist[u];
-  for(let k=0;k<a.length;k+=3){ const v=a[k], d=du+a[k+1]; if(!N.inR[v]) continue; if(!(R.dist[v]<=d)){ R.dist[v]=d; R.pred[v]=u; R.tunE[v]=a[k+2]; hPush(R,v,d); } } }
+  for(let k=0;k<a.length;k+=3){ const v=a[k], d=du+a[k+1];
+    if(!N.inR[v]){ R.hitFence=true; continue; }
+    const cur=R.dist[v]; if(cur!==undefined&&cur<=d+(R.done[v]?1:0)) continue;
+    R.dist[v]=d; R.pred[v]=u; R.tunE[v]=a[k+2];
+    if(R.done[v]){ R.done[v]=0; R.reopened=(R.reopened||0)+1; if(R.flash&&R.flash.length<40) R.flash.push(v); }   // a quicker way: this spot regrows
+    hPush(R,v,d); } }
 // start each spore on the road nearest to the friend's own pin (never jump somewhere else)
 function nearestSnap(N,la,lo){ const k=Math.cos(la*Math.PI/180); let best=-1, bd=Infinity;
   for(let i=0;i<N.lat.length;i++){ if(!N.inR[i]||!N.deg[i]) continue; const a=N.lat[i]-la, b=(N.lng[i]-lo)*k, d=a*a+b*b; if(d<bd){ bd=d; best=i; } }
@@ -719,6 +796,7 @@ function drawSpore(N,R,list,alpha,tips){ const sx=N.sx, sy=N.sy; let n=0;
   fctx.globalCompositeOperation='lighter'; fctx.lineCap='round';
   for(const tun of [0,1]){ fctx.beginPath();
     for(const v of list){ const u=R.pred[v]; if(u==null||u<0||(R.tunE[v]||0)!==tun) continue;
+      if(R.drawn) R.drawn.add(u+'>'+v);
       fctx.moveTo(sx[u],sy[u]); fctx.lineTo(sx[v],sy[v]); n++; if(tips&&n%3===0&&tips.length<500) tips.push([sx[v],sy[v],R.color]); }
     fctx.setLineDash(tun?[2,3]:[]); fctx.strokeStyle=rgba(R.color,(tun?.5:.65)*alpha); fctx.lineWidth=tun?1.1:1.3; fctx.stroke(); }
   fctx.setLineDash([]); return n; }
@@ -726,6 +804,7 @@ function redrawLive(){ const L=floodSt, N=L.N;
   for(let i=0;i<N.lat.length;i++){ const p=map.project([N.lng[i],N.lat[i]]); N.sx[i]=p.x; N.sy[i]=p.y; }
   rctx.clearRect(0,0,innerWidth,innerHeight); drawEdgeRange(N,0,N.dEdges.length);
   fctx.clearRect(0,0,innerWidth,innerHeight); if(L.runs) L.runs.forEach(R=>drawSpore(N,R,R.order,1));
+  if(N.hops) for(let k=0;k<N.hops.length;k+=2) drawHop(N,N.hops[k],N.hops[k+1]);
   L.dirty=false; }
 function clearLive(){ floodSt=null; fence.show=false; vis.tips=null; fctx.clearRect(0,0,innerWidth,innerHeight); rctx.clearRect(0,0,innerWidth,innerHeight); }
 function finalize(N,runs,mode,scale){
@@ -736,35 +815,41 @@ function finalize(N,runs,mode,scale){
     return {dist, pred, tun, order:Int32Array.from(R.order), color:R.color}; });
   return {G, runs:out};
 }
-// exact second pass over the roads that were loaded: fixes any route the growing fence made slightly off
-function exactRuns(N,runs,cutoff){
-  return runs.map(R=>{ const Q={dist:[],pred:[],tunE:[],done:[],order:[],hv:[],hd:[],color:R.color}; Q.dist[R.src]=0; hPush(Q,R.src,0);
-    while(Q.hv.length){ if(Q.hd[0]>cutoff) break; const u=hPop(Q); if(Q.done[u]) continue; Q.done[u]=1; Q.order.push(u); relax(N,Q,u); }
-    return Q; });
-}
+// gap hop: when a spore runs out of road without touching the fence, look for another road within 80 m
+function findHop(N,R){ let best=null, bd=80; const r=4;
+  for(const u of R.order){ if(!R.done[u]) continue; const cy=Math.floor(N.lat[u]/CELL), cx=Math.floor(N.lng[u]/CELL);
+    for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){ const c=N.grid.get((cy+dy)+':'+(cx+dx)); if(!c) continue;
+      for(const w of c){ if(R.seen[w]||!N.inR[w]||!N.deg[w]) continue; const d=hav([N.lat[u],N.lng[u]],[N.lat[w],N.lng[w]]); if(d<bd){ bd=d; best=[u,w,d]; } } } }
+  return best; }
+function drawHop(N,u,w){ fctx.globalCompositeOperation='source-over'; fctx.setLineDash([3,4]); fctx.strokeStyle='rgba(255,210,122,.9)'; fctx.lineWidth=1.6;
+  fctx.beginPath(); fctx.moveTo(N.sx[u],N.sy[u]); fctx.lineTo(N.sx[w],N.sy[w]); fctx.stroke(); fctx.setLineDash([]); }
 async function liveRun(){
   const mode=MODE, la=friends.map(f=>f.lat), lo=friends.map(f=>f.lng);
   const span=hav([Math.min(...la),Math.min(...lo)],[Math.max(...la),Math.max(...lo)]);
   let scale=1;
   const N=makeNet(span<8000?14:13,scale,mode); N.sx=[]; N.sy=[]; N.dEdges=[];
+  log('engine', {zoom:N.z, spanKm:+(span/1000).toFixed(1), fencePadKm:+(N.region.pad/1000).toFixed(1), crossings:crossingsNeeded().length});
   const L={N,runs:null,dirty:false,loading:false,moving:false,finished:false}; floodSt=L;
   fctx.clearRect(0,0,innerWidth,innerHeight); rctx.clearRect(0,0,innerWidth,innerHeight);
   for(const c of [fl,rl]){ c.style.transition='none'; c.style.filter=''; c.style.opacity=1; }
   const t0=performance.now(), st={wait:0,calc:0,net0:TSTATS.net,disk0:TSTATS.disk};
   const init=new Set(); friends.forEach(f=>around(N,f.lat,f.lng,init));
   status('Reading roads…');
-  try{ await loadKeys(N,init); }catch(e){ return {error:'Couldn\'t load the map tiles. Check your connection and try again.'}; }
+  try{ await loadKeys(N,init); }catch(e){ log('first tiles FAILED',String(e&&e.message)); return {error:'Couldn\'t load the map tiles. Check your connection and try again.'}; }
   st.wait+=performance.now()-t0;
+  log('first tiles', {tiles:init.size, nodes:N.lat.length, ms:Math.round(st.wait)});
   if(floodSt!==L) return {cancel:true};
   drawEdgeRange(N,0,N.dEdges.length);
   const runs=[];
   for(let i=0;i<friends.length;i++){ const f=friends[i], [s0,d]=nearestSnap(N,f.lat,f.lng);
+    log('snap', f.label||'Friend '+(i+1), {pin:[+f.lat.toFixed(4),+f.lng.toFixed(4)], node:s0, metres:Math.round(d)});
     if(s0<0||d>1500) return {error:`${f.label||'Friend '+(i+1)} isn't near a road`, friend:i};
-    const R={dist:[],pred:[],tunE:[],done:[],order:[],hv:[],hd:[],color:f.color,src:s0}; R.dist[s0]=0; hPush(R,s0,0); runs.push(R); }
+    const R={dist:[],pred:[],tunE:[],done:[],seen:[],order:[],hv:[],hd:[],flash:[],hops:0,drawn:new Set(),color:f.color,src:s0}; R.dist[s0]=0; hPush(R,s0,0); runs.push(R); }
+  N.hops=[];
   L.runs=runs;
   friends.forEach((f,i)=>Snd.pop(i*.12));
   vis.seeds={t0:performance.now(),pts:friends.map(f=>[[f.lat,f.lng],f.color])};
-  const F=runs.length, reach=[], EXTRA=mode==='dist'?500:60, LIMIT=mode==='dist'?150000:3*3600, FINE=mode==='dist'?100:8;
+  const F=runs.length, reach=[], EXTRA=mode==='dist'?500:60, LIMIT=mode==='dist'?500000:8*3600, FINE=mode==='dist'?100:8;
   let tau=0, T=null, best=-1, bestMax=Infinity, last=performance.now(), acc=0, lastC=0;
   return await new Promise(resolve=>{
     const finish=v=>{ L.finished=true; L.loading=false; vis.tips=null; resolve(v); };
@@ -775,7 +860,8 @@ async function liveRun(){
       const c0=performance.now(), tips=[], needs=runs.map(()=>new Set()), fresh=runs.map(()=>[]);
       const settle=to=>runs.forEach((R,i)=>{
         while(R.hv.length&&R.hd[0]<=to){ const u=hPop(R); if(R.done[u]) continue; R.done[u]=1; R.order.push(u); fresh[i].push(u);
-          if((reach[u]=(reach[u]||0)+1)===F&&N.ok[u]){ let mx=0; for(const Q of runs) if(Q.dist[u]>mx) mx=Q.dist[u]; if(mx<bestMax){ bestMax=mx; best=u; } }
+          if(!R.seen[u]){ R.seen[u]=1; R.nSeen=(R.nSeen||0)+1; reach[u]=(reach[u]||0)+1; }
+          if(reach[u]===F&&N.ok[u]){ let mx=0; for(const Q of runs) if(Q.dist[u]>mx) mx=Q.dist[u]; if(mx<bestMax){ bestMax=mx; best=u; L.best=u; } }
           around(N,N.lat[u],N.lng[u],needs[i]); relax(N,R,u); } });
       const stuckNow=()=>T===null&&runs.some((R,i)=>!R.hv.length&&!needs[i].size);
       const limitT=()=>T*EQUAL_SLACK+EXTRA;
@@ -783,7 +869,7 @@ async function liveRun(){
         // as fast as the work allows: keep advancing for ~12 ms, then draw this frame
         const end=c0+12;
         do{ tau+=FINE; settle(tau); }
-        while(performance.now()<end && !(T===null&&best>=0) && !needs.some(x=>x.size) && !(T!==null&&tau>=limitT()) && !stuckNow() && tau<LIMIT);
+        while(performance.now()<end && !(T===null&&best>=0) && !needs.some(x=>x.size) && !(T!==null&&tau>=limitT()) && !stuckNow() && (T!==null||tau<LIMIT));
       } else { tau+=LIVE_RATE[mode]*speed*dt; settle(tau); }
       runs.forEach((R,i)=>{ acc+=drawSpore(N,R,fresh[i],T===null?1:.35,tips); });
       vis.tips=tips;
@@ -791,44 +877,64 @@ async function liveRun(){
       if(acc&&now-lastC>45){ Snd.crackle(Math.min(3,1+Math.floor(acc/60))); acc=0; lastC=now; }
       if(T===null&&best>=0){                                      // every colour has touched the same road
         T=tau; const ll=[N.lat[best],N.lng[best]];
+        log('MET', {at:[+ll[0].toFixed(4),+ll[1].toFixed(4)], tau:Math.round(tau), each:runs.map(R=>Math.round(R.dist[best])), tiles:N.tiles.size});
         vis.bursts.push({ll,t0:now,sparks:sparks()}); Snd.chime();
         addSpot('soon',ll); spotMarkers.soon.getElement().classList.add('sel');
         friends.forEach((f,i)=>{ const e=$('tm'+i); if(e) e.textContent=fmtV(runs[i].dist[best],mode); });
         status('Spores met · checking for a fairer spot…');
       } else if(T===null){
-        friends.forEach((f,i)=>{ const e=$('tm'+i); if(e) e.textContent=fmtV(tau,mode); });
-        status(`Spreading · ${fmtV(tau,mode)} · ${N.tiles.size} tiles · ${speedLabel()}`);
+        const kc=n=>n<1000?String(n):(n/1000).toFixed(1)+'k';
+        friends.forEach((f,i)=>{ const e=$('tm'+i); if(e) e.textContent=WORK?`${fmtV(tau,mode)} · ${kc(runs[i].nSeen||0)} pts`:fmtV(tau,mode); });
+        if(WORK){ let fr=0; runs.forEach(R=>fr+=R.hv.length);
+          status(`clock ${fmtV(tau,mode)} · tiles ${N.loaded.size}/${N.tiles.size} · frontier ${fr} · ${speedLabel()}`); }
+        else status(`Spreading · ${fmtV(tau,mode)} · ${N.tiles.size} tiles · ${speedLabel()}`);
       }
+      for(const R of runs){ if(R.flash.length){ for(const v of R.flash) vis.flashes.push({x:N.sx[v],y:N.sy[v],t0:now}); R.flash.length=0; } }
       const need=new Set(); needs.forEach(x=>x.forEach(k=>need.add(k)));
       if(T!==null&&(tau>=limitT()||(runs.every(R=>!R.hv.length)&&!need.size))){
-        const c1=performance.now(), exact=exactRuns(N,runs,limitT()*1.05); st.calc+=performance.now()-c1;
+        log('finished spreading', {tau:Math.round(tau), limit:Math.round(limitT()), reached:runs.map(R=>R.nSeen||0), regrown:runs.map(R=>R.reopened||0), hops:N.hops.length/2});
         st.total=performance.now()-t0; st.tiles=N.tiles.size; st.net=TSTATS.net-st.net0; st.disk=TSTATS.disk-st.disk0;
-        finish({ok:true,stats:st,...finalize(N,exact,mode,scale)}); return; }
+        finish({ok:true,stats:st,drawn:runs.map(R=>R.drawn),...finalize(N,runs,mode,scale)}); return; }
       if(stuckNow()){
         const stuck=runs.map((R,i)=>!R.hv.length&&!needs[i].size?i:-1).filter(i=>i>=0);
-        const who=stuck.map(i=>friends[i].label||'Friend '+(i+1));
+        const nm=i=>friends[i].label||'Friend '+(i+1);
+        // spores that never touched the fence: the fence isn't the problem, so try hopping a small gap
+        let hopped=false; const lost=[];
+        for(const i of stuck){ const R=runs[i]; if(R.hitFence) continue;
+          const h=R.hops<6?findHop(N,R):null;
+          if(h){ const [u,w,d]=h, c=mode==='dist'?d:d/5+5; N.adj[u].push(w,c,0); N.adj[w].push(u,c,0); N.deg[u]++; N.deg[w]++; N.hops.push(u,w); R.hops++;
+            drawHop(N,u,w); relax(N,R,u); hopped=true; log('hop', nm(i), {metres:Math.round(d), at:[+N.lat[w].toFixed(4),+N.lng[w].toFixed(4)]}); }
+          else lost.push(i); }
+        if(lost.length){ const who=lost.map(nm);
+          log('DISCONNECTED', {who, reached:lost.map(i=>runs[i].order.length), tiles:N.tiles.size});
+          vis.alarms.push(...lost.map(i=>({ll:[friends[i].lat,friends[i].lng],t0:performance.now()}))); Snd.fail();
+          finish({fail:true,who,reason:'disconnected'}); return; }
+        if(hopped){ requestAnimationFrame(step); return; }
+        const who=stuck.map(nm);
+        log('BLOCKED by fence', {who, scale, tau:Math.round(tau), reached:runs.map(R=>R.order.length), heapLeft:runs.map(R=>R.hv.length), tiles:N.tiles.size});
         vis.alarms.push(...stuck.map(i=>({ll:[friends[i].lat,friends[i].lng],t0:performance.now()})));
         stuck.forEach(i=>{ const el=friends[i].el; el.classList.add('alarm'); setTimeout(()=>el.classList.remove('alarm'),1600); });
         Snd.fail();
-        if(scale>=16){ finish({fail:true,who}); return; }
+        if(scale>=16){ log('giving up after max fence'); finish({fail:true,who,reason:'fence'}); return; }
         // grow the fence in place: the spores carry on from where they are
         status(`${who.join(' & ')} ${who.length>1?'are':'is'} blocked · widening the fence`);
         scale*=2; N.region=makeRegion(scale);
         for(let i=0;i<N.lat.length;i++) N.inR[i]=N.region.inside([N.lat[i],N.lng[i]])?1:0;
-        for(const R of runs) for(const u of R.order) relax(N,R,u);
+        for(const R of runs){ R.hitFence=false; for(const u of R.order) if(R.done[u]) relax(N,R,u); }
         fence.from=fence.pad; fence.pad=N.region.pad; fence.t0=performance.now();
         L.moving=true; fl.style.transition=rl.style.transition='opacity .25s'; fl.style.opacity=rl.style.opacity=.15;
         fitTo(N.region.outline(N.region.pad),700);
         setTimeout(()=>{ if(floodSt!==L) return; redrawLive(); fl.style.opacity=rl.style.opacity=1; L.moving=false; },760);
         requestAnimationFrame(step); return;
       }
-      if(tau>LIMIT){ finish({fail:true,who:[]}); return; }
+      // safety limit only applies BEFORE the spores meet; once met, the run always finishes with a result
+      if(T===null&&tau>LIMIT){ log('time limit reached', {tau:Math.round(tau)}); finish({fail:true,who:[]}); return; }
       if(need.size){ L.loading=true; const e0=N.dEdges.length, w0=performance.now();
         loadKeys(N,need).then(touched=>{ st.wait+=performance.now()-w0; if(floodSt!==L||L.finished) return;
             drawEdgeRange(N,e0,N.dEdges.length);
             for(const R of runs) for(const u of touched) if(R.done[u]) relax(N,R,u);
             L.loading=false; })
-          .catch(()=>finish({error:'Couldn\'t load the map tiles. Check your connection and try again.'})); }
+          .catch(e=>{ log('tiles FAILED',String(e&&e.message),{need:need.size}); finish({error:'Couldn\'t load the map tiles. Check your connection and try again.'}); }); }
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -863,7 +969,7 @@ function sizeCanvas(){ const d=Math.min(devicePixelRatio||1,2);
   for(const [c,x] of [[fx,ctx],[fl,fctx],[rl,rctx]]){ c.width=innerWidth*d; c.height=innerHeight*d; x.setTransform(d,0,0,d,0,0); }
   if(floodSt) floodSt.dirty=true; }
 addEventListener('resize',sizeCanvas); sizeCanvas();
-const vis={tips:null,seeds:null,bursts:[]};
+const vis={tips:null,seeds:null,bursts:[],flashes:[],alarms:[]};
 const pathAnim={cur:null,old:null};
 const sparks=()=>Array.from({length:44},()=>({a:rand(0,7),v:rand(25,95),c:friends[Math.floor(Math.random()*friends.length)].color}));
 
@@ -888,12 +994,12 @@ function frame(now){
   ctx.clearRect(0,0,innerWidth,innerHeight);
   if(!mapReady) return;
   ctx.globalCompositeOperation='lighter';
-  if(vis.seeds){ const u=(now-vis.seeds.t0)/1100;
+  if(vis.seeds&&!WORK){ const u=(now-vis.seeds.t0)/1100;
     if(u<1) vis.seeds.pts.forEach(([ll,c])=>{ const p=P(ll); for(let r=0;r<2;r++){ const uu=clamp(u*1.2-r*.2,0,1);
       ctx.strokeStyle=rgba(c,.7*(1-uu)); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,6+46*uu,0,7); ctx.stroke(); } });
     else vis.seeds=null; }
   if(floodSt&&floodSt.dirty&&floodSt.N) redrawLive();
-  if(vis.tips){ const wait=floodSt&&floodSt.loading, r=wait?1.7+1.6*(.5+.5*Math.sin(now/140)):1.7;
+  if(vis.tips&&!WORK){ const wait=floodSt&&floodSt.loading, r=wait?1.7+1.6*(.5+.5*Math.sin(now/140)):1.7;
     for(const [x,y,c] of vis.tips){ ctx.fillStyle=rgba(c,.85); ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); } }
   if(fence.show&&fence.region){ const u=clamp((now-fence.t0)/900,0,1), pd=fence.from+(fence.pad-fence.from)*ease(u), o=fence.region.outline(pd);
     ctx.globalCompositeOperation='source-over'; ctx.setLineDash([6,7]); ctx.lineWidth=1.3; ctx.strokeStyle=u<1?'rgba(255,214,140,.55)':'rgba(124,255,178,.22)';
@@ -902,7 +1008,18 @@ function frame(now){
   vis.alarms=(vis.alarms||[]).filter(a=>now-a.t0<1800);
   for(const a of vis.alarms){ const p=P(a.ll), u=((now-a.t0)%600)/600;
     ctx.strokeStyle=`rgba(255,90,90,${.8*(1-u)})`; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(p.x,p.y,14+30*u,0,7); ctx.stroke(); }
-  vis.bursts=vis.bursts.filter(b=>now-b.t0<1500);
+  vis.flashes=vis.flashes.filter(f=>now-f.t0<600);
+  for(const f of vis.flashes){ const u=(now-f.t0)/600; ctx.strokeStyle=`rgba(255,255,255,${.8*(1-u)})`; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(f.x,f.y,3+9*u,0,7); ctx.stroke(); }
+  if(WORK&&floodSt&&floodSt.N&&floodSt.N.sx){ const N=floodSt.N; ctx.globalCompositeOperation='source-over';
+    for(const k of N.tiles){ const [z,x,y]=k.split('/').map(Number), a=P([y2lat(y,z),x2lon(x,z)]), b=P([y2lat(y+1,z),x2lon(x+1,z)]), ok=N.loaded.has(k);
+      ctx.setLineDash(ok?[]:[4,4]); ctx.strokeStyle=ok?'rgba(255,255,255,.14)':'rgba(255,210,122,.75)'; ctx.lineWidth=1; ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y); }
+    ctx.setLineDash([]);
+    if(floodSt.runs&&!floodSt.moving) for(const R of floodSt.runs){ ctx.strokeStyle=rgba(R.color,.95); ctx.lineWidth=1; ctx.beginPath(); let n=0;
+      for(let i=0;i<R.hv.length&&n<800;i++){ const v=R.hv[i]; if(R.done[v]) continue; n++; ctx.moveTo(N.sx[v]+2.2,N.sy[v]); ctx.arc(N.sx[v],N.sy[v],2.2,0,7); } ctx.stroke(); }
+    if(floodSt.best!=null&&!floodSt.moving){ const x=N.sx[floodSt.best], y=N.sy[floodSt.best]; ctx.strokeStyle='#fff'; ctx.lineWidth=1.3; ctx.beginPath();
+      ctx.moveTo(x-10,y); ctx.lineTo(x+10,y); ctx.moveTo(x,y-10); ctx.lineTo(x,y+10); ctx.stroke(); ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.stroke(); }
+    ctx.globalCompositeOperation='lighter'; }
+  vis.bursts=vis.bursts.filter(b=>now-b.t0<1500&&!WORK);
   for(const b of vis.bursts){ const c=P(b.ll), u=(now-b.t0)/1500;
     for(let r=0;r<3;r++){ const uu=clamp(u*1.3-r*.15,0,1); if(uu<=0) continue; ctx.strokeStyle=`rgba(255,226,160,${.7*(1-uu)})`; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(c.x,c.y,10+85*uu,0,7); ctx.stroke(); }
     b.sparks.forEach(k=>{ const d=k.v*Math.sqrt(u)*1.4; ctx.fillStyle=rgba(k.c,.9*(1-u)); ctx.beginPath(); ctx.arc(c.x+Math.cos(k.a)*d,c.y+Math.sin(k.a)*d,2,0,7); ctx.fill(); }); }
@@ -943,6 +1060,8 @@ $('go').onclick=async()=>{
   if(friends.length<2||busy) return;
   if(!mapReady||!TILE_URL){ status('Map still loading. Try again in a moment.',true); return; }
   Snd.init();
+  logMark(`Find hangout · ${MODE==='time'?'Time':'Distance'} · speed ${speedLabel()}`);
+  log('friends', friends.map(f=>[f.label||'', +f.lat.toFixed(4), +f.lng.toFixed(4)]));
   results[MODE]=null; clearVisuals(); $('saved').hidden=true; busy=true; render(); lockMap(true); setCollapsed(true); await frameWait();
   let ok=false, keep=false;
   try{
@@ -951,20 +1070,25 @@ $('go').onclick=async()=>{
     Object.assign(fence,{region:reg,pad:reg.pad,from:reg.pad,t0:0,show:true});
     let out=null;
     const r=await liveRun();
+    log('run result', r.ok?'ok':(r.error?'error: '+r.error:r.fail?'fail: '+JSON.stringify(r.who):r.cancel?'cancelled':'unknown'));
     if(r.ok) out=r;
     else if(r.error){
       if(r.friend!=null){ const f=friends[r.friend]; vis.alarms.push({ll:[f.lat,f.lng],t0:performance.now()}); f.el.classList.add('alarm'); setTimeout(()=>f.el.classList.remove('alarm'),1600); Snd.fail(); }
       status(r.error,true); keep=true; }
     else if(r.fail){
       vis.tips=null; fl.style.transition='filter 1s ease'; fl.style.filter='grayscale(.6) brightness(.8)';
-      status(`Spores couldn't reach each other${r.who.length?' · '+r.who.join(' & ')+' cut off':''}`,true); keep=true; }
+      status(r.reason==='disconnected'?`${r.who.join(' & ')}'s roads don't connect to the rest`:`Spores couldn't reach each other${r.who.length?' · '+r.who.join(' & ')+' cut off':''}`,true); keep=true; }
     if(out){
       const {G,runs}=out;
       const spots=pickSpots(G,runs);
+      log('pick spots', spots?{soon:spots.soon, equal:spots.equal}:'NONE FOUND');
+      if(spots){ const unlit=runs.map((R,i)=>{ let n=0; for(const sp of [spots.soon,spots.equal]){ if(sp==null) continue; let v=sp, guard=0; while(v>=0&&guard++<G.n){ const u=R.pred[v]; if(u>=0&&!out.drawn[i].has(u+'>'+v)) n++; v=u; } } return n; });
+        log('kept branches on unlit roads (should be 0)', unlit); }
       if(!spots) throw new Error('Spores never met. Is someone off the road network?');
       const soon=spotInfo(G,runs,spots.soon,'soon');
       const equal=spots.equal!=null?spotInfo(G,runs,spots.equal,'equal'):null;
       res={soon,equal,sel:'soon',mode:MODE,stats:out.stats}; results[MODE]=res;
+      log('result', {soon:soon.road, soonEach:soon.secs.map(Math.round), equal:equal?equal.road:null, equalEach:equal?equal.secs.map(Math.round):null, stats:statsTxt(out.stats)});
       if(spotMarkers.soon) spotMarkers.soon.setLngLat([soon.ll[1],soon.ll[0]]); else addSpot('soon',soon.ll);
       markSelected();
       friends.forEach((f,i)=>f.secs=soon.secs[i]); render(); status('');
@@ -990,13 +1114,14 @@ $('go').onclick=async()=>{
       ok=true;
     }
   }catch(e){
-    console.error(e);
+    console.error(e); log('ERROR', e.message, (e.stack||'').split('\n').slice(0,3).join(' | '));
     status(/Spores|No roads|near a road/.test(e.message)?e.message:'Couldn\'t load the map tiles. Check your connection and try again.',true);
     keep=true;
   }
   busy=false; lockMap(false); render();
-  if(keep){ setCollapsed(false); map.once('movestart',()=>{ if(!busy&&!res) clearLive(); }); }
-  if(ok){ setCollapsed(false); await frameWait(); fitTo([...friends.map(f=>[f.lat,f.lng]),res.soon.ll,...(res.equal?[res.equal.ll]:[])],800); }
+  if(keep){ setCollapsed(false); map.once('movestart',()=>{ if(!busy&&!res) clearLive(); });
+    $('out').innerHTML=`<div class="card"><div class="k">Couldn't finish</div><div class="sub">${esc($('status').textContent)}</div><button class="b" data-copylog style="margin-top:10px;width:100%">Copy log</button></div>`; }
+  if(ok){ setCollapsed(false); await frameWait(); const R=res; if(R) fitTo([...friends.map(f=>[f.lat,f.lng]),R.soon.ll,...(R.equal?[R.equal.ll]:[])],800); }
 };
 
 /* ---------- result panel + nearby places (also from the map tiles) ---------- */
@@ -1023,7 +1148,7 @@ function renderResult(){
      <div class="road">${esc(s.road||'Unnamed road')}</div>
      <div class="sub">${sub}</div>
      ${dirHTML(s.ll[0],s.ll[1])}</div>
-     ${res.stats?`<div class="stats">${statsTxt(res.stats)}</div>`:''}
+     ${res.stats?`<div class="stats">${statsTxt(res.stats)} · <a href="#" data-copylog style="color:var(--dim)">Copy log</a></div>`:''}
      <div id="pl"><div class="empty">Looking around…</div></div>`;
   friends.forEach((f,i)=>{ f.secs=s.secs[i]; const el=$('tm'+i); if(el) el.textContent=fmtV(f.secs,s.mode); });
   updateBar();
