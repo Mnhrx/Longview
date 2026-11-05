@@ -86,6 +86,7 @@ button.b:disabled{opacity:.35;box-shadow:none}
 
 .pin{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#06100b;
   font:700 13px "JetBrains Mono",monospace;box-shadow:0 0 0 4px rgba(0,0,0,.45),0 0 18px var(--c);border:2px solid rgba(255,255,255,.75)}
+.stats{font:500 11px "JetBrains Mono",monospace;color:var(--dim);line-height:1.5;margin:-2px 2px 10px}
 .cmp{display:flex;gap:6px;margin:4px 0 8px}
 .cmp button{flex:1;min-width:0;text-align:left;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:none;color:var(--text);cursor:pointer;font-family:inherit}
 .cmp button.on{border-color:rgba(124,255,178,.5);background:rgba(124,255,178,.07)}
@@ -319,7 +320,7 @@ async function initMap(){
   });
   // where the vector tiles live (also the source of roads + places)
   try{ const src=Object.values(style.sources).find(s=>s.type==='vector');
-    if(src){ TILE_URL = src.tiles ? src.tiles[0] : (await getJSON(src.url)).tiles[0]; } }catch(e){}
+    if(src){ TILE_URL = src.tiles ? src.tiles[0] : (await getJSON(src.url)).tiles[0]; pruneStore(); } }catch(e){}
 }
 function lockMap(on){
   for(const h of ['dragPan','scrollZoom','boxZoom','keyboard','doubleClickZoom','touchZoomRotate']) on?map[h].disable():map[h].enable();
@@ -386,7 +387,7 @@ function updateBar(){
     if(dy>30){ setCollapsed(true); moved=true; } else if(dy<-30){ setCollapsed(false); moved=true; } };
   for(const el of [$('grip'),$('bar')]){ el.addEventListener('touchstart',start,{passive:true}); el.addEventListener('touchend',end); }
   $('grip').addEventListener('click',()=>{ if(!moved) setCollapsed(!$('sheet').classList.contains('collapsed')); moved=false; });
-  $('bar').addEventListener('click',e=>{ if(e.target.closest('button')) return; if(!moved) setCollapsed(false); moved=false; });
+  $('bar').addEventListener('click',e=>{ if(e.target.closest('button')) return; if(busy&&!moved){ cycleSpeed(); return; } if(!moved) setCollapsed(false); moved=false; });
 })();
 $('go2').onclick=()=>$('go').click();
 $('mode').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||busy||b.dataset.m===MODE) return; switchMode(b.dataset.m); });
@@ -505,16 +506,37 @@ function clipLine(pts,a,b){
   return out.filter(l=>l.length>1);
 }
 const tileCache=new Map();
-async function getTile(z,x,y){
-  const key=z+'/'+x+'/'+y; if(tileCache.has(key)) return tileCache.get(key);
+const TSTATS={net:0,disk:0};
+// download slots: 12 for tiles the spores need now, 4 for tiles fetched ahead of time.
+// If a tile waiting in the "ahead" queue is suddenly needed, it jumps to the front.
+const pool={high:12,low:4}, queue={high:[],low:[]};
+function takeSlot(prio,key){ if(pool[prio]>0){ pool[prio]--; return Promise.resolve(prio); }
+  return new Promise(r=>queue[prio].push({key,go:r})); }
+function freeSlot(kind){ const q=queue[kind].shift(); if(q) q.go(kind); else pool[kind]++; }
+function promote(key){ const i=queue.low.findIndex(q=>q.key===key); if(i<0) return; const [q]=queue.low.splice(i,1);
+  if(pool.high>0){ pool.high--; q.go('high'); } else queue.high.unshift(q); }
+let tileStore=null;
+function openStore(){ if(!tileStore) tileStore=(window.caches?caches.open('spore-tiles-v1'):Promise.reject()).catch(()=>null); return tileStore; }
+async function pruneStore(){ try{ const c=await openStore(); if(!c||!TILE_URL) return; const keep=TILE_URL.split('{z}')[0];
+  for(const r of await c.keys()) if(!r.url.startsWith(keep)) c.delete(r); }catch(e){} }
+async function tileBytes(url,key,prio){
+  const c=await openStore();
+  if(c){ try{ const hit=await c.match(url); if(hit){ TSTATS.disk++; return new Uint8Array(await hit.arrayBuffer()); } }catch(e){} }
+  const kind=await takeSlot(prio,key);
+  try{ const r=await fetch(url); if(r.status===204||r.status===404) return null; if(!r.ok) throw new Error('HTTP '+r.status);
+    const ab=await r.arrayBuffer(); TSTATS.net++;
+    if(c) c.put(url,new Response(ab.slice(0),{headers:{'Content-Type':'application/x-protobuf'}})).catch(()=>{});
+    return new Uint8Array(ab);
+  } finally{ freeSlot(kind); }
+}
+async function getTile(z,x,y,prio='high'){
+  const key=z+'/'+x+'/'+y; if(tileCache.has(key)){ if(prio==='high') promote(key); return tileCache.get(key); }
   const p=(async()=>{
     const url=TILE_URL.replace('{z}',z).replace('{x}',x).replace('{y}',y);
     let lastErr;
     for(let attempt=0;attempt<3;attempt++){
       try{
-        const r=await fetch(url); if(r.status===204||r.status===404) return {roads:[],names:[],pois:[]};
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        let buf=new Uint8Array(await r.arrayBuffer());
+        let buf=await tileBytes(url,key,prio); if(!buf) return {roads:[],names:[],pois:[]};
         if(buf[0]===0x1f&&buf[1]===0x8b) buf=new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
         return parseTile(decodeMVT(buf,{transportation:1,transportation_name:1,poi:1}),z,x,y);
       }catch(e){ lastErr=e; await sleep(400*(attempt+1)); }
@@ -557,7 +579,7 @@ async function loadTiles(z,bb,onProg){
   const jobs=[]; for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++) jobs.push([x,y]);
   const out=[]; let done=0, i=0;
   const worker=async()=>{ while(i<jobs.length){ const [x,y]=jobs[i++]; out.push(await getTile(z,x,y)); done++; onProg&&onProg(done,jobs.length); } };
-  await Promise.all(Array.from({length:8},worker));
+  await Promise.all(Array.from({length:12},worker));
   return out;
 }
 const tileCount=(z,bb)=>(Math.floor(lon2x(bb.e,z))-Math.floor(lon2x(bb.w,z))+1)*(Math.floor(lat2y(bb.s,z))-Math.floor(lat2y(bb.n,z))+1);
@@ -569,9 +591,16 @@ const tileCount=(z,bb)=>(Math.floor(lon2x(bb.e,z))-Math.floor(lon2x(bb.w,z))+1)*
    Downloading stops once the spores have met (plus ~30% more, needed for the equal spot).   */
 const CELL=2e-4; // ~22 m grid used to join road ends
 // the useful zone: the shape around all friends, padded. Spores never spread away from the group.
+// rough centreline of the Johor Strait, west to east: north of it = Malaysia side
+const STRAIT=[[103.59,1.33],[103.63,1.36],[103.67,1.40],[103.72,1.44],[103.77,1.456],[103.82,1.465],[103.88,1.46],[103.94,1.435],[104.0,1.42],[104.1,1.40]];
+function northOfStrait(la,lo){ const S=STRAIT; if(lo<=S[0][0]) return la>S[0][1]; if(lo>=S[S.length-1][0]) return la>S[S.length-1][1];
+  for(let i=1;i<S.length;i++) if(lo<=S[i][0]){ const t=(lo-S[i-1][0])/(S[i][0]-S[i-1][0]); return la>S[i-1][1]+t*(S[i][1]-S[i-1][1]); } }
+const CAUSEWAY=[1.4517,103.7697], SECOND_LINK=[1.3502,103.6345];
+function crossingsNeeded(){ const sides=new Set(friends.map(f=>northOfStrait(f.lat,f.lng))); if(sides.size<2) return [];
+  return friends.some(f=>f.lng<103.72)?[CAUSEWAY,SECOND_LINK]:[CAUSEWAY]; }
 function makeRegion(scale){
   const k=Math.cos(friends[0].lat*Math.PI/180), xy=([la,lo])=>[lo*111320*k, la*110540];
-  let pts=friends.map(f=>xy([f.lat,f.lng]));
+  let pts=[...friends.map(f=>[f.lat,f.lng]),...crossingsNeeded()].map(xy);
   pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
   const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]); const lo_=[],hi=[];
   for(const p of pts){ while(lo_.length>=2&&cross(lo_[lo_.length-2],lo_[lo_.length-1],p)<=0) lo_.pop(); lo_.push(p); }
@@ -633,16 +662,21 @@ function addTileToNet(N,T,tx,ty){
 const tileOf=(N,la,lo)=>[Math.floor(lon2x(lo,N.z)),Math.floor(lat2y(la,N.z))];
 // load ahead: the tile itself, plus a neighbour only when the spore is within 25% of that edge
 function around(N,la,lo,set){
-  const fx=lon2x(lo,N.z), fy=lat2y(la,N.z), tx=Math.floor(fx), ty=Math.floor(fy), rx=fx-tx, ry=fy-ty, m=.25;
+  const fx=lon2x(lo,N.z), fy=lat2y(la,N.z), tx=Math.floor(fx), ty=Math.floor(fy), rx=fx-tx, ry=fy-ty, m=.4;
   const xs=[0], ys=[0]; if(rx<m) xs.push(-1); if(rx>1-m) xs.push(1); if(ry<m) ys.push(-1); if(ry>1-m) ys.push(1);
   for(const dx of xs) for(const dy of ys){ const x=tx+dx, y=ty+dy, k=N.z+'/'+x+'/'+y; if(!N.tiles.has(k)&&(dx===0&&dy===0||N.region.tileHits(N.z,x,y))) set.add(k); } }
 async function loadKeys(N,keys){
   const list=[...keys].filter(k=>!N.tiles.has(k)); list.forEach(k=>N.tiles.add(k));
   const got=new Array(list.length); let i=0;
   const worker=async()=>{ while(i<list.length){ const j=i++, [z,x,y]=list[j].split('/').map(Number); got[j]=[await getTile(z,x,y),x,y]; } };
-  await Promise.all(Array.from({length:8},worker));
+  await Promise.all(Array.from({length:12},worker));
   const touched=new Set();
-  for(const [T,x,y] of got) for(const u of addTileToNet(N,T,x,y)) touched.add(u);
+  for(const [T,x,y] of got){
+    for(const u of addTileToNet(N,T,x,y)) touched.add(u);
+    // quietly fetch the ring around it so the spores rarely have to wait
+    for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){ const nx=x+dx, ny=y+dy, k=N.z+'/'+nx+'/'+ny;
+      if(!N.tiles.has(k)&&!tileCache.has(k)&&N.region.tileHits(N.z,nx,ny)) getTile(N.z,nx,ny,'low').catch(()=>{}); }
+  }
   return touched;
 }
 // per-friend Dijkstra state (one spreading front per friend)
@@ -670,7 +704,11 @@ function compSizes(N){ const n=N.lat.length, par=new Int32Array(n); for(let i=0;
    reach in that time and draws it immediately. When a spore needs roads that aren't downloaded yet,
    the clock pauses (tips pulse) until the tiles arrive. If a spore gets trapped, the attempt fails
    visibly and the caller widens the fence and tries again.                                        */
-const LIVE_RATE={time:240, dist:2000};   // spreading speed per real second: 4 ride-minutes, or 2 km
+const LIVE_RATE={time:240, dist:2000};   // 1× speed per real second: 4 ride-minutes, or 2 km
+const SPEEDS=['max',1,2,4]; let speed='max';
+try{ const v=localStorage.getItem('spore-speed'); if(v) speed=v==='max'?'max':(+v||'max'); }catch(e){}
+const speedLabel=()=>speed==='max'?'Max':speed+'×';
+function cycleSpeed(){ speed=SPEEDS[(SPEEDS.indexOf(speed)+1)%SPEEDS.length]; try{ localStorage.setItem('spore-speed',String(speed)); }catch(e){} toast('Speed: '+speedLabel()); }
 const fence={region:null,pad:0,from:0,t0:0,show:false};
 function drawEdgeRange(N,a,b){ const e=N.dEdges, sx=N.sx, sy=N.sy; rctx.lineCap='round'; rctx.lineWidth=.9;
   for(const tun of [0,1]){ rctx.beginPath();
@@ -698,42 +736,58 @@ function finalize(N,runs,mode,scale){
     return {dist, pred, tun, order:Int32Array.from(R.order), color:R.color}; });
   return {G, runs:out};
 }
-async function liveAttempt(scale,replayUntil){
+// exact second pass over the roads that were loaded: fixes any route the growing fence made slightly off
+function exactRuns(N,runs,cutoff){
+  return runs.map(R=>{ const Q={dist:[],pred:[],tunE:[],done:[],order:[],hv:[],hd:[],color:R.color}; Q.dist[R.src]=0; hPush(Q,R.src,0);
+    while(Q.hv.length){ if(Q.hd[0]>cutoff) break; const u=hPop(Q); if(Q.done[u]) continue; Q.done[u]=1; Q.order.push(u); relax(N,Q,u); }
+    return Q; });
+}
+async function liveRun(){
   const mode=MODE, la=friends.map(f=>f.lat), lo=friends.map(f=>f.lng);
   const span=hav([Math.min(...la),Math.min(...lo)],[Math.max(...la),Math.max(...lo)]);
+  let scale=1;
   const N=makeNet(span<8000?14:13,scale,mode); N.sx=[]; N.sy=[]; N.dEdges=[];
-  const L={N,runs:null,dirty:false,loading:false,finished:false}; floodSt=L;
+  const L={N,runs:null,dirty:false,loading:false,moving:false,finished:false}; floodSt=L;
   fctx.clearRect(0,0,innerWidth,innerHeight); rctx.clearRect(0,0,innerWidth,innerHeight);
   for(const c of [fl,rl]){ c.style.transition='none'; c.style.filter=''; c.style.opacity=1; }
+  const t0=performance.now(), st={wait:0,calc:0,net0:TSTATS.net,disk0:TSTATS.disk};
   const init=new Set(); friends.forEach(f=>around(N,f.lat,f.lng,init));
   status('Reading roads…');
   try{ await loadKeys(N,init); }catch(e){ return {error:'Couldn\'t load the map tiles. Check your connection and try again.'}; }
+  st.wait+=performance.now()-t0;
   if(floodSt!==L) return {cancel:true};
   drawEdgeRange(N,0,N.dEdges.length);
   const runs=[];
-  for(let i=0;i<friends.length;i++){ const f=friends[i], [s,d]=nearestSnap(N,f.lat,f.lng);
-    if(s<0||d>1500) return {error:`${f.label||'Friend '+(i+1)} isn't near a road`, friend:i};
-    const R={dist:[],pred:[],tunE:[],done:[],order:[],hv:[],hd:[],color:f.color}; R.dist[s]=0; hPush(R,s,0); runs.push(R); }
+  for(let i=0;i<friends.length;i++){ const f=friends[i], [s0,d]=nearestSnap(N,f.lat,f.lng);
+    if(s0<0||d>1500) return {error:`${f.label||'Friend '+(i+1)} isn't near a road`, friend:i};
+    const R={dist:[],pred:[],tunE:[],done:[],order:[],hv:[],hd:[],color:f.color,src:s0}; R.dist[s0]=0; hPush(R,s0,0); runs.push(R); }
   L.runs=runs;
   friends.forEach((f,i)=>Snd.pop(i*.12));
   vis.seeds={t0:performance.now(),pts:friends.map(f=>[[f.lat,f.lng],f.color])};
-  const F=runs.length, reach=[], EXTRA=mode==='dist'?500:60, LIMIT=mode==='dist'?150000:3*3600;
-  let tau=0, T=null, best=-1, bestMax=Infinity, last=performance.now(), acc=0, lastC=0; const t0=last;
+  const F=runs.length, reach=[], EXTRA=mode==='dist'?500:60, LIMIT=mode==='dist'?150000:3*3600, FINE=mode==='dist'?100:8;
+  let tau=0, T=null, best=-1, bestMax=Infinity, last=performance.now(), acc=0, lastC=0;
   return await new Promise(resolve=>{
     const finish=v=>{ L.finished=true; L.loading=false; vis.tips=null; resolve(v); };
     const step=now=>{
       if(floodSt!==L||L.finished) return;
       const dt=Math.min(.1,(now-last)/1000); last=now;
-      if(L.loading){ requestAnimationFrame(step); return; }      // waiting for roads: tips pulse
-      const el=(now-t0)/1000; let rate=LIVE_RATE[mode]*(1+Math.max(0,el-8)/4); if(tau<replayUntil) rate*=4;
-      tau+=rate*dt;
-      const tips=[], needs=runs.map(()=>new Set());
-      runs.forEach((R,i)=>{ const fresh=[];
-        while(R.hv.length&&R.hd[0]<=tau){ const u=hPop(R); if(R.done[u]) continue; R.done[u]=1; R.order.push(u); fresh.push(u);
+      if(L.loading||L.moving){ requestAnimationFrame(step); return; }   // waiting for roads / fence move: tips pulse
+      const c0=performance.now(), tips=[], needs=runs.map(()=>new Set()), fresh=runs.map(()=>[]);
+      const settle=to=>runs.forEach((R,i)=>{
+        while(R.hv.length&&R.hd[0]<=to){ const u=hPop(R); if(R.done[u]) continue; R.done[u]=1; R.order.push(u); fresh[i].push(u);
           if((reach[u]=(reach[u]||0)+1)===F&&N.ok[u]){ let mx=0; for(const Q of runs) if(Q.dist[u]>mx) mx=Q.dist[u]; if(mx<bestMax){ bestMax=mx; best=u; } }
-          around(N,N.lat[u],N.lng[u],needs[i]); relax(N,R,u); }
-        acc+=drawSpore(N,R,fresh,T===null?1:.35,tips); });
+          around(N,N.lat[u],N.lng[u],needs[i]); relax(N,R,u); } });
+      const stuckNow=()=>T===null&&runs.some((R,i)=>!R.hv.length&&!needs[i].size);
+      const limitT=()=>T*EQUAL_SLACK+EXTRA;
+      if(speed==='max'||T!==null){
+        // as fast as the work allows: keep advancing for ~12 ms, then draw this frame
+        const end=c0+12;
+        do{ tau+=FINE; settle(tau); }
+        while(performance.now()<end && !(T===null&&best>=0) && !needs.some(x=>x.size) && !(T!==null&&tau>=limitT()) && !stuckNow() && tau<LIMIT);
+      } else { tau+=LIVE_RATE[mode]*speed*dt; settle(tau); }
+      runs.forEach((R,i)=>{ acc+=drawSpore(N,R,fresh[i],T===null?1:.35,tips); });
       vis.tips=tips;
+      st.calc+=performance.now()-c0;
       if(acc&&now-lastC>45){ Snd.crackle(Math.min(3,1+Math.floor(acc/60))); acc=0; lastC=now; }
       if(T===null&&best>=0){                                      // every colour has touched the same road
         T=tau; const ll=[N.lat[best],N.lng[best]];
@@ -743,15 +797,34 @@ async function liveAttempt(scale,replayUntil){
         status('Spores met · checking for a fairer spot…');
       } else if(T===null){
         friends.forEach((f,i)=>{ const e=$('tm'+i); if(e) e.textContent=fmtV(tau,mode); });
-        status(`Spreading · ${fmtV(tau,mode)} · ${N.tiles.size} tiles`);
+        status(`Spreading · ${fmtV(tau,mode)} · ${N.tiles.size} tiles · ${speedLabel()}`);
       }
       const need=new Set(); needs.forEach(x=>x.forEach(k=>need.add(k)));
-      if(T!==null&&(tau>=T*EQUAL_SLACK+EXTRA||(runs.every(R=>!R.hv.length)&&!need.size))){ finish({ok:true,...finalize(N,runs,mode,scale)}); return; }
-      if(T===null){ const stuck=runs.map((R,i)=>!R.hv.length&&!needs[i].size?i:-1).filter(i=>i>=0);
-        if(stuck.length){ finish({trapped:stuck,tau}); return; } }
-      if(tau>LIMIT){ finish({trapped:[],tau}); return; }
-      if(need.size){ L.loading=true; const e0=N.dEdges.length;
-        loadKeys(N,need).then(touched=>{ if(floodSt!==L||L.finished) return;
+      if(T!==null&&(tau>=limitT()||(runs.every(R=>!R.hv.length)&&!need.size))){
+        const c1=performance.now(), exact=exactRuns(N,runs,limitT()*1.05); st.calc+=performance.now()-c1;
+        st.total=performance.now()-t0; st.tiles=N.tiles.size; st.net=TSTATS.net-st.net0; st.disk=TSTATS.disk-st.disk0;
+        finish({ok:true,stats:st,...finalize(N,exact,mode,scale)}); return; }
+      if(stuckNow()){
+        const stuck=runs.map((R,i)=>!R.hv.length&&!needs[i].size?i:-1).filter(i=>i>=0);
+        const who=stuck.map(i=>friends[i].label||'Friend '+(i+1));
+        vis.alarms.push(...stuck.map(i=>({ll:[friends[i].lat,friends[i].lng],t0:performance.now()})));
+        stuck.forEach(i=>{ const el=friends[i].el; el.classList.add('alarm'); setTimeout(()=>el.classList.remove('alarm'),1600); });
+        Snd.fail();
+        if(scale>=16){ finish({fail:true,who}); return; }
+        // grow the fence in place: the spores carry on from where they are
+        status(`${who.join(' & ')} ${who.length>1?'are':'is'} blocked · widening the fence`);
+        scale*=2; N.region=makeRegion(scale);
+        for(let i=0;i<N.lat.length;i++) N.inR[i]=N.region.inside([N.lat[i],N.lng[i]])?1:0;
+        for(const R of runs) for(const u of R.order) relax(N,R,u);
+        fence.from=fence.pad; fence.pad=N.region.pad; fence.t0=performance.now();
+        L.moving=true; fl.style.transition=rl.style.transition='opacity .25s'; fl.style.opacity=rl.style.opacity=.15;
+        fitTo(N.region.outline(N.region.pad),700);
+        setTimeout(()=>{ if(floodSt!==L) return; redrawLive(); fl.style.opacity=rl.style.opacity=1; L.moving=false; },760);
+        requestAnimationFrame(step); return;
+      }
+      if(tau>LIMIT){ finish({fail:true,who:[]}); return; }
+      if(need.size){ L.loading=true; const e0=N.dEdges.length, w0=performance.now();
+        loadKeys(N,need).then(touched=>{ st.wait+=performance.now()-w0; if(floodSt!==L||L.finished) return;
             drawEdgeRange(N,e0,N.dEdges.length);
             for(const R of runs) for(const u of touched) if(R.done[u]) relax(N,R,u);
             L.loading=false; })
@@ -876,35 +949,22 @@ $('go').onclick=async()=>{
     const reg=makeRegion(1);
     fitOutline(reg.outline(reg.pad)); await frameWait();
     Object.assign(fence,{region:reg,pad:reg.pad,from:reg.pad,t0:0,show:true});
-    let replay=0, out=null;
-    for(let scale=1;;scale*=2){
-      const r=await liveAttempt(scale,replay);
-      if(r.cancel) break;
-      if(r.ok){ out=r; break; }
-      if(r.error){
-        if(r.friend!=null){ const f=friends[r.friend]; vis.alarms.push({ll:[f.lat,f.lng],t0:performance.now()}); f.el.classList.add('alarm'); setTimeout(()=>f.el.classList.remove('alarm'),1600); Snd.fail(); }
-        status(r.error,true); keep=true; break; }
-      // trapped: the spores wither, the fence grows, and everything regrows
-      const who=r.trapped.map(i=>friends[i].label||'Friend '+(i+1));
-      vis.alarms.push(...r.trapped.map(i=>({ll:[friends[i].lat,friends[i].lng],t0:performance.now()})));
-      r.trapped.forEach(i=>{ const el=friends[i].el; el.classList.add('alarm'); setTimeout(()=>el.classList.remove('alarm'),1600); });
-      Snd.fail(); vis.tips=null;
-      fl.style.transition='filter 1s ease, opacity 1s ease'; fl.style.filter='grayscale(1) brightness(.7)'; fl.style.opacity=.3;
-      if(scale>=16){ status(`Spores couldn't reach each other${who.length?' · '+who.join(' & ')+' cut off':''}`,true); keep=true; break; }
-      status(`${who.length?who.join(' & ')+(who.length>1?' are':' is'):'Spores are'} blocked · widening the search`);
-      await sleep(1200);
-      rl.style.transition='opacity .4s ease'; rl.style.opacity=0; fl.style.opacity=0;
-      fence.from=fence.pad; fence.pad*=2; fence.t0=performance.now();
-      fitOutline(fence.region.outline(fence.pad),900); await sleep(1050);
-      replay=r.tau;
-    }
+    let out=null;
+    const r=await liveRun();
+    if(r.ok) out=r;
+    else if(r.error){
+      if(r.friend!=null){ const f=friends[r.friend]; vis.alarms.push({ll:[f.lat,f.lng],t0:performance.now()}); f.el.classList.add('alarm'); setTimeout(()=>f.el.classList.remove('alarm'),1600); Snd.fail(); }
+      status(r.error,true); keep=true; }
+    else if(r.fail){
+      vis.tips=null; fl.style.transition='filter 1s ease'; fl.style.filter='grayscale(.6) brightness(.8)';
+      status(`Spores couldn't reach each other${r.who.length?' · '+r.who.join(' & ')+' cut off':''}`,true); keep=true; }
     if(out){
       const {G,runs}=out;
       const spots=pickSpots(G,runs);
       if(!spots) throw new Error('Spores never met. Is someone off the road network?');
       const soon=spotInfo(G,runs,spots.soon,'soon');
       const equal=spots.equal!=null?spotInfo(G,runs,spots.equal,'equal'):null;
-      res={soon,equal,sel:'soon',mode:MODE}; results[MODE]=res;
+      res={soon,equal,sel:'soon',mode:MODE,stats:out.stats}; results[MODE]=res;
       if(spotMarkers.soon) spotMarkers.soon.setLngLat([soon.ll[1],soon.ll[0]]); else addSpot('soon',soon.ll);
       markSelected();
       friends.forEach((f,i)=>f.secs=soon.secs[i]); render(); status('');
@@ -945,6 +1005,8 @@ function selectSpot(kind){
   if(busy||!res||res.sel===kind||(kind==='equal'&&!res.equal)) return;
   res.sel=kind; const s=curSpot(); setPaths(s,900); Snd.pop(); markSelected(); renderResult(); render(); map.easeTo({center:[s.ll[1],s.ll[0]]});
 }
+const sec=ms=>(ms/1000).toFixed(1)+' s';
+function statsTxt(t){ return `${sec(t.total)} total · ${sec(t.wait)} waiting for map tiles · ${sec(t.calc)} calculating · ${t.tiles} tiles (${t.net} downloaded, ${t.tiles-t.net>0?t.tiles-t.net:0} already on phone)`; }
 function renderResult(){
   if(!res) return; markSelected();
   const s=curSpot(), lo=Math.min(...s.secs), hi=Math.max(...s.secs);
@@ -961,6 +1023,7 @@ function renderResult(){
      <div class="road">${esc(s.road||'Unnamed road')}</div>
      <div class="sub">${sub}</div>
      ${dirHTML(s.ll[0],s.ll[1])}</div>
+     ${res.stats?`<div class="stats">${statsTxt(res.stats)}</div>`:''}
      <div id="pl"><div class="empty">Looking around…</div></div>`;
   friends.forEach((f,i)=>{ f.secs=s.secs[i]; const el=$('tm'+i); if(el) el.textContent=fmtV(f.secs,s.mode); });
   updateBar();
