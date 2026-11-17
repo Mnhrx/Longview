@@ -17,12 +17,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script defer src="core.js?v=33"></script>
-<script defer src="scan.js?v=33"></script>
-<script defer src="school.js?v=33"></script>
-<script defer src="extras.js?v=33"></script>
-<script defer src="start.js?v=33"></script>
-<link rel="stylesheet" href="app.css?v=33">
+<script defer src="core.js?v=34"></script>
+<script defer src="scan.js?v=34"></script>
+<script defer src="school.js?v=34"></script>
+<script defer src="extras.js?v=34"></script>
+<script defer src="start.js?v=34"></script>
+<link rel="stylesheet" href="app.css?v=34">
 </head>
 <body class="booting">
 <div id="rotate" role="alert"><div class="rotPhone"><i></i></div><p>Turn your phone upright</p><small>Home Time works in portrait</small></div>
@@ -152,6 +152,14 @@
       <button class="pill pillBtn" id="remindBtn" type="button">🔔 Remind me at leave time</button>
       <button class="payPill pillBtn" id="payPillAct" type="button" hidden></button>
     </div>
+    <div class="bankRow" id="bankRow" hidden>
+      <button class="bankHead" id="bankHead" type="button" aria-expanded="false"><span class="bkDot" aria-hidden="true"></span><span id="bankTxt"></span><svg class="bkChev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="bankSl" id="bankSl" hidden>
+        <input type="range" id="bankRange" min="0" max="0" step="1" value="0" aria-label="Minutes of banked time to use today">
+        <div class="bkEnds"><span id="bkMin"></span><span id="bkMax"></span></div>
+        <p id="bankOut"></p>
+      </div>
+    </div>
     <div class="facts" id="facts">
       <div class="fact"><span>Clocked in</span><b id="inTxt"></b></div>
       <div class="fact"><span>Day length</span><b id="lenTxt"></b></div>
@@ -184,6 +192,15 @@
       <button class="payPill pillBtn" id="payPillMonth" type="button" hidden></button>
       <button class="linkish" id="slipBtn" type="button">🧾 Enter payslip</button>
       <button class="payPill pillBtn wrapPill" id="wrapBtn" type="button" hidden>✨ Your month in review</button>
+    </div>
+    <div class="card bankCard" id="bankCard" hidden>
+      <button class="bkCap" id="bkCap" type="button" aria-label="Time bank: see the days behind it">
+        <span class="bkLiquid" aria-hidden="true"><i></i><i></i></span>
+        <span class="bkGloss" aria-hidden="true"></span>
+        <span class="bkVal"><small id="bkLbl">Time bank</small><b id="bkAmt">0m</b><em id="bkSub"></em></span>
+      </button>
+      <p class="bkWarn" id="bkWarn" hidden></p>
+      <p class="note bkNote">Your own tally of extra and short time this pay period. Unofficial. Tap for the days behind it.</p>
     </div>
     <div class="card chartCard" id="mChart">
       <canvas id="chart" aria-label="Hours worked each day in this pay period" role="img"></canvas>
@@ -250,6 +267,10 @@
           <label class="lab">Earliest clock-in<input type="time" class="fld" id="sFrom"></label>
           <label class="lab">Latest clock-in<input type="time" class="fld" id="sTo"></label>
         </div>
+      </div>
+      <div class="card">
+        <label class="toggle"><span>Time bank</span><span class="switch"><input type="checkbox" id="sBank" aria-label="Time bank"><span></span></span></label>
+        <p class="note" style="margin:6px 0 0">Keeps a tally of extra and short time each pay period, so you can leave early when you have time banked. A short day your bank covers isn't docked from your pay. Unofficial: only useful if your workplace looks at overall hours.</p>
       </div>
     </div>
 
@@ -623,6 +644,15 @@
     <button class="btn ghost" id="askNo" type="button">Cancel</button>
     <button class="btn solid" id="askYes" type="button">OK</button>
   </div>
+</div>
+
+<div class="sheet" id="bankSheet" role="dialog" aria-modal="true" aria-labelledby="bankTitle">
+  <h2 id="bankTitle">Time bank</h2>
+  <p class="note" id="bankIntro"></p>
+  <div class="bkList" id="bkList"></div>
+  <p class="bkSec" id="bkHistT">Past pay periods</p>
+  <div class="bkList" id="bkHist"></div>
+  <div class="actions"><button class="btn solid" id="bankDone" type="button">Done</button></div>
 </div>
 
 <div class="sheet" id="timeSheet" role="dialog" aria-modal="true" aria-labelledby="timeTitle">

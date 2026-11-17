@@ -2,10 +2,10 @@
    Keeps a copy of the app and its libraries on the phone so it opens with no signal.
    The app page itself is always fetched fresh when there is signal (so updates show up),
    and falls back to the saved copy when there isn't. */
-const V = 'home-time-34';
+const V = 'home-time-35';
 const CORE = [
   './', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
-  './app.css?v=33', './core.js?v=33', './scan.js?v=33', './school.js?v=33', './extras.js?v=33', './start.js?v=33',
+  './app.css?v=34', './core.js?v=34', './scan.js?v=34', './school.js?v=34', './extras.js?v=34', './start.js?v=34',
   'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
 ];

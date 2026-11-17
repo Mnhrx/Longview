@@ -85,7 +85,7 @@ function tick(){
     if(!ring.animating) ring.set(p);
     world&&world.setProgress(p);
     updateLive();
-    if(!state.active.celebrated&&now.getTime()>=state.active.in+SHIFT()) celebrate();
+    if(!state.active.celebrated&&now.getTime()>=leaveTs()) celebrate();
   }
 }
 $('clockIn').addEventListener('click',e=>startDay(Date.now(),e.currentTarget));

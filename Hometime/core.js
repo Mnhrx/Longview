@@ -162,7 +162,7 @@ function syncFromStorage(){ const cur=load(); if(cur&&(cur.savedAt||0)>loadedAt)
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) syncFromStorage(); });
 addEventListener('pageshow',syncFromStorage); addEventListener('focus',syncFromStorage);
 addEventListener('storage',e=>{ if(e.key===KEY) syncFromStorage(); });
-const DEF={start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,payFor:'this',payEarly:false,shg:'',al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
+const DEF={bank:true,start:'08:00',end:'17:35',flex:true,from:'07:00',to:'09:00',pay:'none',amt:'',brk:60,days:5,cpf:false,cpfRate:20,ot:false,otMult:1.5,otMin:100,otBlock:60,payDay:1,startDate:'',late:false,lateBlock:1,lateAfter:'09:00',payday:28,payFor:'this',payEarly:false,shg:'',al:14,mc:14,leaveAfter:3,eaMc:false,age:0,sfx:true,amb:true,vol:60};
 let state=load()||{}; loadedAt=state.savedAt||0;
 if(!Array.isArray(state.history)) state.history=[];
 if(state.active===undefined) state.active=null;
@@ -736,7 +736,9 @@ function roll(el,text,delay=0){
 }
 
 /* ================= views ================= */
-const progress=()=>state.active?(Date.now()-state.active.in)/SHIFT():0;
+// when you use banked time the leave time moves earlier (or later, to pay back time you owe)
+const leaveTs=()=>state.active.in+SHIFT()-(state.active.bank||0)*60000;
+const progress=()=>state.active?(Date.now()-state.active.in)/Math.max(60000,leaveTs()-state.active.in):0;
 function flexWarning(ts){
   const s=S(); if(!s.flex) return '';
   const d=new Date(ts), m=d.getHours()*60+d.getMinutes();
@@ -754,7 +756,7 @@ function setExcited(on){
 }
 function updateLive(){
   if(!state.active) return;
-  const left=state.active.in+SHIFT()-Date.now(), done=left<=0;
+  const left=leaveTs()-Date.now(), done=left<=0;
   $('countdown').textContent=done?`Free for ${dur(-left)}`:`${dur(left,true)} to go`;
   $('outSub').textContent=done?'Time to go!':`${dur(left)} early`;
   $('leaveLbl').textContent=done?'You could leave at':'Leave at';
@@ -775,13 +777,13 @@ function fillActive(){
   const a=state.active;
   $('inTxt').textContent=fmt(a.in); $('lenTxt').textContent=dur(SHIFT());
   const w=flexWarning(a.in); $('warn').hidden=!w; $('warn').textContent=w;
-  excited=null; updateLive();
+  excited=null; updateLive(); renderBankRow();
 }
 function showActive(animate){
   $('idle').hidden=true; $('active').hidden=false;
-  if(G) G.set(['#leaveHead','#ringStage','#outBtn','#pills','#facts','#warn','#editBtn','#leaveLbl'],{clearProps:'all'});
+  if(G) G.set(['#leaveHead','#ringStage','#outBtn','#pills','#bankRow','#facts','#warn','#editBtn','#leaveLbl'],{clearProps:'all'});
   fillActive(); orbOut.resize();
-  const txt=fmt(state.active.in+SHIFT()), p=progress();
+  const txt=fmt(leaveTs()), p=progress();
   world&&world.setProgress(p);
   ring.intro(p);
   if(!animate||!ANIM){ $('leaveTime').textContent=txt; $('leaveTime').setAttribute('aria-label',txt); return; }
@@ -791,8 +793,35 @@ function showActive(animate){
     .from('#ringStage',{scale:.6,opacity:0,duration:.6,ease:'back.out(1.6)'},0)
     .fromTo('#outBtn',{scale:.2},{scale:1,duration:.8,ease:'elastic.out(1,.45)'},.05)
     .from('#pills',{scale:.6,opacity:0,duration:.45,ease:'back.out(2)'},.35)
-    .from(['#facts','#warn','#editBtn'],{y:26,opacity:0,stagger:.05,duration:.4,ease:'power4.out'},.4);
+    .from(['#bankRow','#facts','#warn','#editBtn'],{y:26,opacity:0,stagger:.05,duration:.4,ease:'power4.out'},.4);
 }
+let bankOpen=false, bankSaveT=null;
+function bankNow(){ return bankOn()?bankOf(periodOf(state.active?state.active.in:Date.now())).bal:0; }
+function renderBankRow(){
+  const row=$('bankRow'); if(!state.active||!bankOn()){ row.hidden=true; return; }
+  const bal=Math.round(bankNow()/60000), normal=state.active.in+SHIFT();
+  const maxUse=Math.max(0,Math.min(bal,Math.floor(SHIFT()/60000)-60)), minUse=Math.min(0,bal);
+  let use=Math.max(minUse,Math.min(maxUse,state.active.bank||0)); if(use!==(state.active.bank||0)){ state.active.bank=use; save(); }
+  row.hidden=false; row.classList.toggle('bkNeg',bal<0); row.classList.toggle('open',bankOpen&&maxUse!==minUse);
+  const rg=$('bankRange'); rg.min=minUse; rg.max=maxUse; rg.value=use;
+  rg.style.setProperty('--f',maxUse===minUse?'0%':((use-minUse)/(maxUse-minUse)*100)+'%');
+  $('bankTxt').innerHTML=bal>0?`Time bank <b>+${dur(bal*60000)}</b><small>Leave early</small>`:bal<0?`You owe <b>${dur(-bal*60000)}</b><small>Stay till ${fmt(normal-bal*60000)} to clear it</small>`:`Time bank <b>0m</b><small>Stay later to build it up</small>`;
+  $('bkMin').textContent=bal<0?`Clear ${dur(-bal*60000)}`:'Normal'; $('bkMax').textContent=bal<0?'Normal':`Use all ${dur(maxUse*60000)}`;
+  const lt=leaveTs(), after=bal-use;
+  $('bankOut').innerHTML=use===0?`Leave at <b>${fmt(normal)}</b> · bank stays ${bankFmt(bal*60000)}`
+    :use>0?`Leave at <b>${fmt(lt)}</b> · ${dur(after*60000)} left in bank<small>Normal leave time ${fmt(normal)}</small>`
+    :`Stay till <b>${fmt(lt)}</b> · bank back to ${bankFmt(after*60000)}<small>Normal leave time ${fmt(normal)}</small>`;
+  $('bankSl').hidden=!(bankOpen&&maxUse!==minUse); $('bankHead').setAttribute('aria-expanded',String(!$('bankSl').hidden));
+}
+$('bankHead').onclick=()=>{ bankOpen=!bankOpen; renderBankRow(); if(!$('bankSl').hidden&&ANIM) G.from('#bankSl',{height:0,opacity:0,duration:.35,ease:'power3.out',clearProps:'height,opacity'}); Sound.pop&&Sound.pop(); haptic(); };
+$('bankRange').addEventListener('input',()=>{
+  if(!state.active) return; state.active.bank=+$('bankRange').value;
+  if(Date.now()<leaveTs()) state.active.celebrated=false;
+  const t=fmt(leaveTs()); $('leaveTime').textContent=t; $('leaveTime').setAttribute('aria-label',t);
+  renderBankRow(); updateLive(); const p=progress(); if(!ring.animating) ring.set(p); world&&world.setProgress(p);
+  clearTimeout(bankSaveT); bankSaveT=setTimeout(save,400);
+});
+$('bankRange').addEventListener('change',()=>{ save(); Sound.pop&&Sound.pop(); haptic(); });
 function todayRec(){ const r=state.history.find(r=>typeOf(r)==='work'&&r.out&&sameDay(r.in,Date.now())); return state.active?null:r||null; }
 function showIdle(animate){
   $('active').hidden=true; $('idle').hidden=false;
@@ -839,22 +868,23 @@ $('toastAct').onclick=()=>{ const f=toastFn; clearTimeout(toastTimer); hideToast
 function clockOut(){
   if(busy||!state.active) return;
   const out=flMin(Date.now());
-  const rec=priceRec({in:state.active.in,out,shift:SHIFT(),rate:rates()}), e=rec.earn??null;
+  const rec=priceRec({in:state.active.in,out,shift:SHIFT(),rate:rates()}); let e=rec.earn??null;
   undoData={active:state.active};
-  state.history.unshift(rec); sortHist();
+  state.history.unshift(rec); sortHist(); rebank(); e=rec.earn??null;
+  const bk=bankOn()?` · bank ${bankFmt(bankOf(periodOf(rec.in)).bal)}`:'';
   state.active=null; save(); renderDays();
   const [x,y]=centerOf($('outBtn'));
   setExcited(false); orbOut.squish(); haptic(); Sound.down(); Sound.zone('home');
   world&&world.travel(false);
   setTimeout(()=>{ burst(x,y,130,'c'); rain(90); },120);
-  toast(e!=null?`Saved: ${fmt(rec.in)} – ${fmt(out)}, ${money(e)}`:`Saved: ${fmt(rec.in)} – ${fmt(out)}`,true);
+  toast((e!=null?`Saved: ${fmt(rec.in)} – ${fmt(out)}, ${money(e)}`:`Saved: ${fmt(rec.in)} – ${fmt(out)}`)+bk,true);
   if(!ANIM){ showIdle(false); return; }
   busy=true;
   G.timeline({onComplete:()=>{ busy=false; showIdle(true); }})
     .to('#outBtn',{scale:1.12,duration:.18,ease:'power2.out'})
     .to('#outBtn',{scale:0,duration:.28,ease:'back.in(1.7)'})
     .to('#ringStage',{scale:.4,opacity:0,rotation:120,duration:.35,ease:'back.in(1.4)'},.15)
-    .to(['#leaveHead','#pills','#facts','#warn','#editBtn'],{y:24,opacity:0,stagger:.03,duration:.2},.1)
+    .to(['#leaveHead','#pills','#bankRow','#facts','#warn','#editBtn'],{y:24,opacity:0,stagger:.03,duration:.2},.1)
     .to({},{duration:.25});
 }
 $('undoBtn').onclick=()=>{
@@ -913,7 +943,7 @@ function setOtBlock(v){ otBlock=+v; document.querySelectorAll('#otSeg button').f
 document.querySelectorAll('#otSeg button').forEach(b=>b.onclick=()=>setOtBlock(b.dataset.v));
 function setPayType(v){ payType=v; document.querySelectorAll('#paySeg button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v))); updatePreview(); }
 document.querySelectorAll('#paySeg button').forEach(b=>b.onclick=()=>setPayType(b.dataset.v));
-function readSet(){ return {start:$('sStart').value,end:$('sEnd').value,flex:$('sFlex').checked,from:$('sFrom').value,to:$('sTo').value,
+function readSet(){ return {start:$('sStart').value,end:$('sEnd').value,flex:$('sFlex').checked,bank:$('sBank').checked,from:$('sFrom').value,to:$('sTo').value,
   pay:payType,amt:$('sAmt').value,brk:+$('sBrk').value||0,days:+$('sDays').value||5,cpf:$('sCpf').checked,cpfRate:+$('sCpfRate').value||0,ot:$('sOt').checked,otMult:+$('sOtMult').value||1.5,otMin:Math.max(0,+$('sOtMin').value||0),otBlock,payDay:Math.min(28,Math.max(1,Math.round(+$('sPayDay').value||1))),startDate:$('sStartDate').value,late:$('sLate').checked,lateBlock,lateAfter:$('sLateAfter').value||'09:00',payday:Math.min(31,Math.max(1,Math.round(+$('sPayday').value||28))),payEarly:$('sPayEarly').checked,payFor:$('sPayFor').value||'this',shg:$('sShg').value,al:Math.max(0,+$('sAL').value||0),mc:Math.max(0,+$('sMC').value||0),leaveAfter:Math.max(0,+$('sLeaveAfter').value||0),eaMc:$('sEaMc').checked,age:+$('sAge').value||0,sfx:$('sSfx').checked,amb:$('sAmb').checked,vol:+$('sVol').value}; }
 function updatePreview(){
   const s=readSet(), ok=s.start&&s.end&&s.start!==s.end;
@@ -937,7 +967,7 @@ function updatePreview(){
 }
 function fillSettings(){
   const s=S();
-  $('sStart').value=s.start; $('sEnd').value=s.end; $('sFlex').checked=s.flex; $('sFrom').value=s.from; $('sTo').value=s.to;
+  $('sStart').value=s.start; $('sEnd').value=s.end; $('sFlex').checked=s.flex; $('sBank').checked=s.bank!==false; $('sFrom').value=s.from; $('sTo').value=s.to;
   $('sAmt').value=s.amt; $('sBrk').value=s.brk; $('sDays').value=s.days; $('sCpf').checked=s.cpf; $('sCpfRate').value=s.cpfRate; $('sOt').checked=s.ot; $('sOtMult').value=s.otMult; $('sOtMin').value=s.otMin; $('sPayDay').value=s.payDay; $('sStartDate').value=s.startDate||''; $('sLate').checked=!!s.late; $('sLateAfter').value=s.lateAfter||s.to||'09:00';
   $('sPayday').value=s.payday; $('sPayEarly').checked=!!s.payEarly; $('sPayFor').value=s.payFor||'this'; $('sShg').value=s.shg||''; $('sAL').value=s.al; $('sMC').value=s.mc; $('sLeaveAfter').value=s.leaveAfter; $('sEaMc').checked=!!s.eaMc; $('sAge').value=s.age; $('sSfx').checked=s.sfx; $('sAmb').checked=s.amb; $('sVol').value=s.vol;
   lateBlock=+s.lateBlock||1; otBlock=+s.otBlock||60; payType=s.pay;
@@ -953,15 +983,15 @@ function commitSettings(){
   const s=readSet(); if(!s.start||!s.end||s.start===s.end){ $('savedTag').textContent='Not saved: start and end need to be different times.'; return; }
   if(s.flex&&(!s.from||!s.to)) s.flex=false;
   state.settings=Object.assign({},DEF,s);
-  if(state.active) state.active.celebrated=Date.now()>=state.active.in+SHIFT();
-  save(); updateIdleSub(); Sound.apply(); updatePayPills();
+  if(state.active) state.active.celebrated=Date.now()>=leaveTs();
+  save(); updateIdleSub(); try{ renderBankRow(); }catch(e){} Sound.apply(); updatePayPills();
   $('savedTag').textContent='Saved ✓';
   if(ANIM) G.fromTo('#savedTag',{scale:.8,opacity:.3},{scale:1,opacity:1,duration:.5,ease:'back.out(3)'});
   clearTimeout(savedTimer); savedTimer=setTimeout(()=>$('savedTag').textContent='',1800);
 }
 const _up=updatePreview;
 updatePreview=function(){ _up(); commitSettings(); setSummaries(); if(inSetup()&&setCat) setupDecorate(setCat); };
-['sStart','sEnd','sFlex','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sPayFor','sPayEarly','sShg','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
+['sStart','sEnd','sFlex','sBank','sFrom','sTo','sAmt','sBrk','sDays','sCpf','sCpfRate','sOt','sOtMult','sOtMin','sPayDay','sStartDate','sLate','sLateAfter','sPayday','sPayFor','sPayEarly','sShg','sAL','sMC','sLeaveAfter','sEaMc','sAge','sSfx','sAmb','sVol'].forEach(id=>{ $(id).addEventListener('input',()=>updatePreview()); $(id).addEventListener('change',()=>updatePreview()); });
 $('sAge').addEventListener('change',()=>{ $('sCpfRate').value=CPF_RATES[+$('sAge').value][0]; updatePreview(); });
 /* guided setup */
 const setupSteps=()=>['hours','pay'].concat(S().pay!=='none'?['ot','cpf']:[],['leave']);
@@ -1045,6 +1075,31 @@ function priceRec(r){
 state.history.forEach(r=>{ if(!r.rate&&rates()) r.rate=rates(); priceRec(r); });
 sortHist(); save();
 
+/* ================= time bank ================= */
+// Your own tally, per pay period, of time past a normal day (adds) and time short of it (takes away).
+// Paid OT is left out so it isn't counted twice; leave, MC and holidays don't count either way.
+// It's unofficial: it follows the "they look at your overall hours" practice, not a payroll rule.
+const bankOn=()=>S().bank!==false;
+function bankRows(p){
+  return state.history.filter(r=>typeOf(r)==='work'&&r.out&&r.in>=p.start&&r.in<p.end).sort((a,b)=>a.in-b.in)
+    .map(r=>{ const sh=r.shift||SHIFT(); let d=(r.out-r.in)-sh; if(d>0) d=Math.max(0,d-(r.otMs||0)); return {r,d:Math.round(d/60000)*60000}; });
+}
+function bankOf(p){ const rows=bankRows(p); return {rows,bal:rows.reduce((a,x)=>a+x.d,0)}; }
+// a short day is paid in full when the extra time you put in that period covers it
+function rebank(){
+  const seen={};
+  state.history.forEach(h=>{ if(typeOf(h)!=='work'||!h.out) return; const p=periodOf(h.in); if(seen[p.start]) return; seen[p.start]=1;
+    const inP=state.history.filter(r=>typeOf(r)==='work'&&r.out&&r.in>=p.start&&r.in<p.end);
+    inP.forEach(r=>{ delete r.banked; priceRec(r); });
+    if(!bankOn()) return;
+    const rows=bankRows(p); let pool=rows.reduce((a,x)=>a+Math.max(0,x.d),0);
+    rows.forEach(({r,d})=>{ if(d>=0||!r.rate||r.base==null) return; const c=Math.min(-d,pool); if(c<=0) return; pool-=c;
+      const add=dailyBase(r.rate,r.in)*r.rate.keep*c/(r.shift||r.rate.shift); r.base+=add; r.earn+=add; r.banked=c; });
+  });
+}
+const bankFmt=ms=>ms>0?'+'+dur(ms):ms<0?'−'+dur(-ms):'0m';
+rebank();
+
 /* ================= pay periods ================= */
 function periodOf(ts,off=0){
   const d=new Date(ts), pd=Math.min(28,Math.max(1,+S().payDay||1));
@@ -1058,6 +1113,7 @@ const rangeTxt=p=>`${shortDate(p.start)} – ${shortDate(p.end-86400000)}`;
 
 /* ================= days page ================= */
 function renderDays(){
+  try{ rebank(); }catch(e){}
   const h=state.history, box=$('dayGroups');
   renderLeave(); try{ renderDSum(); }catch(e){}
   $('dEmpty').hidden=!!h.length; $('clearBtn').hidden=!h.length; disarmClear();
@@ -1430,7 +1486,38 @@ function monthData(off){
   return out;
 }
 function stat(label,val,wide,sub){ return `<div class="card stat${wide?' wide':''}"><span>${label}</span><b>${val}</b>${sub?`<small>${sub}</small>`:''}</div>`; }
+const bkLv={v:.12};
+function renderBankCard(animate){
+  const card=$('bankCard'); if(!bankOn()){ card.hidden=true; return; }
+  const p=periodOf(Date.now(),pOff), b=bankOf(p), bal=b.bal;
+  card.hidden=false; card.classList.toggle('bkNeg',bal<0);
+  const mon=new Date(p.start+15*DAY).toLocaleDateString(undefined,{month:'short'}), endD=new Date(p.end-DAY);
+  $('bkLbl').textContent=bal<0?'You owe':'Time bank';
+  $('bkSub').textContent=pOff===0?`${mon} · resets ${new Date(p.end).toLocaleDateString(undefined,{day:'numeric',month:'short'})}`:`${mon} · ${p.end<=Date.now()?'ended':'so far'}`;
+  let warn='';
+  if(pOff===0){ const daysLeft=Math.ceil((p.end-Date.now())/DAY);
+    if(bal>0&&daysLeft<=5) warn=`${bankFmt(bal)} left. Use it by ${endD.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}, it resets after that.`;
+    else if(bal<0) warn=`You're ${dur(-bal)} short this period. Stay a little later on your next days to clear it.`; }
+  $('bkWarn').hidden=!warn; $('bkWarn').textContent=warn;
+  const amt=v=>bankFmt(Math.round(v/60000)*60000);
+  const lv=bal>=0?.12+Math.min(1,bal/7.2e6)*.66:.12+Math.min(1,-bal/3.6e6)*.5;
+  const paint=()=>card.style.setProperty('--lv',(bkLv.v*100).toFixed(1)+'%');
+  G&&G.killTweensOf(bkLv);
+  if(animate&&ANIM){ const o={v:0}; G.to(o,{v:bal,duration:1.2,delay:.2,ease:'power3.out',onUpdate:()=>$('bkAmt').textContent=amt(o.v)}); G.fromTo(bkLv,{v:.04},{v:lv,duration:1.6,delay:.2,ease:'elastic.out(1,.6)',onUpdate:paint}); }
+  else { $('bkAmt').textContent=amt(bal); bkLv.v=lv; paint(); }
+}
+$('bkCap').onclick=()=>{
+  const p=periodOf(Date.now(),pOff), b=bankOf(p);
+  $('bankTitle').textContent=`Time bank · ${rangeTxt(p)}`;
+  $('bankIntro').textContent=`Each day against your normal ${dur(SHIFT())}. Extra time adds, short days take away. Paid overtime is left out, and leave, MC and holidays don't count. Balance: ${bankFmt(b.bal)}.`;
+  $('bkList').innerHTML=b.rows.length?b.rows.slice().reverse().map(({r,d})=>`<div class="bkR"><span><b>${dayName(r.in)}</b><small>${fmt(r.in)} – ${fmt(r.out)}${r.banked?' · covered, not docked':''}${r.otMs?' · paid OT left out':''}</small></span><em class="${d>0?'p':d<0?'n':''}">${bankFmt(d)}</em></div>`).join(''):'<p class="note" style="text-align:center;margin:8px 0">No finished workdays in this period yet.</p>';
+  const hist=[]; for(let k=1;k<=12;k++){ const q=periodOf(p.start,-k), qb=bankOf(q); if(!qb.rows.length) continue; hist.push(`<div class="bkR"><span><b>${new Date(q.start+15*DAY).toLocaleDateString(undefined,{month:'long',year:'numeric'})}</b><small>${qb.rows.length} workday${qb.rows.length>1?'s':''}</small></span><em class="${qb.bal>0?'p':qb.bal<0?'n':''}">ended ${bankFmt(qb.bal)}</em></div>`); if(hist.length>=6) break; }
+  $('bkHist').innerHTML=hist.join(''); $('bkHist').hidden=$('bkHistT').hidden=!hist.length;
+  Sound.pop&&Sound.pop(); haptic(); openSheet('bankSheet');
+};
+$('bankDone').onclick=()=>closeSheet();
 function renderMonth(animate){
+  try{ renderBankCard(animate); }catch(e){}
   const m=monthData(pOff); chartData=m;
   $('pRange').textContent=rangeTxt(m.p)+(pOff===0?' (now)':'');
   $('nextP').disabled=pOff>=0;
@@ -2251,7 +2338,7 @@ $('pdClose').onclick=()=>{
 function icsTime(ts){ const d=new Date(ts); return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`; }
 $('remindBtn').onclick=()=>{
   if(!state.active) return;
-  const leave=state.active.in+SHIFT();
+  const leave=leaveTs();
   if(leave<=Date.now()){ toast('Your leave time has already passed. Go home! 🏠',false); return; }
   const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Home Time//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','BEGIN:VEVENT',
     `UID:home-time-${state.active.in}@hometime`,`DTSTAMP:${icsTime(Date.now())}`,`DTSTART:${icsTime(leave)}`,`DTEND:${icsTime(leave+15*60000)}`,
