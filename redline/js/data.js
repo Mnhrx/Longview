@@ -114,16 +114,16 @@ function itemCost(it) { const sv = S.services.filter(s => (s.items || []).includ
 function odoReadings() {
   const at = o => { const day = +new Date(o.date + 'T00:00'); return o.ts && todayISO(new Date(o.ts)) === o.date ? { t: o.ts, exact: true } : { t: day, exact: false }; };
   const r = [];
-  S.fuel.forEach((f, i) => f.odo != null && !isNaN(f.odo) && r.push({ ...at(f), odo: +f.odo, src: 'fuel', id: f.id, p: 1, i }));
-  S.services.forEach((s, i) => s.odo != null && !isNaN(s.odo) && r.push({ ...at(s), odo: +s.odo, src: 'service', id: s.id, p: 2, i }));
-  S.odoLog.forEach((o, i) => o.odo != null && !isNaN(o.odo) && r.push({ ...at(o), odo: +o.odo, src: o.setup ? 'setup' : 'odo', id: o.id, p: 3, i }));
+  S.fuel.forEach((f, i) => f.odo != null && !isNaN(f.odo) && r.push({ ...at(f), odo: +f.odo, src: 'fuel', id: f.id, p: 1, i, est: !!f.odoEst }));
+  S.services.forEach((s, i) => s.odo != null && !isNaN(s.odo) && r.push({ ...at(s), odo: +s.odo, src: 'service', id: s.id, p: 2, i, est: !!s.odoEst }));
+  S.odoLog.forEach((o, i) => o.odo != null && !isNaN(o.odo) && r.push({ ...at(o), odo: +o.odo, src: o.setup ? 'setup' : 'odo', id: o.id, p: 3, i, est: !!o.odoEst }));
   return r.sort((a, b) => a.t - b.t || a.p - b.p || a.i - b.i);
 }
 // the most recent reading wins (not the highest), so correcting a typo always takes effect
 function lastActual() { const r = odoReadings(); return r.length ? r[r.length - 1] : null; }
 // Learned correction: real odo km ÷ tracked km between two readings (catches rides that weren't logged + routing error)
 function correction() {
-  const r = odoReadings(); if (r.length < 2) return 1;
+  const r = odoReadings().filter(x => !x.est); if (r.length < 2) return 1; // learn only from numbers you actually read off the bike
   let act = 0, trk = 0;
   for (let i = 1; i < r.length; i++) {
     const d = r[i].odo - r[i - 1].odo; if (d <= 0) continue;
@@ -142,6 +142,29 @@ function odoInfo() {
   return { la, rides, since, c, odo: Math.round(la.odo + since * c) };
 }
 function estOdo() { const o = odoInfo(); return o ? o.odo : null; }
+// the saved entry behind a reading (fill-up, service or odometer check)
+function odoRecord(x) { return ({ fuel: S.fuel, service: S.services }[x.src] || S.odoLog).find(y => y.id === x.id); }
+// Guessed readings (you saved Redline's pre-filled estimate without changing it) are worked out backwards
+// once a real reading comes after them: shared out between the real readings either side by the km you rode.
+// Returns what changed, so the app can say so.
+function reestimate() {
+  const all = odoReadings(), real = all.filter(x => !x.est), fixed = [];
+  const rodeKm = (t0, t1) => S.rides.filter(r => r.end && r.end.t > t0 && r.end.t <= t1).reduce((s, r) => s + (+r.km || 0), 0);
+  for (const x of all.filter(x => x.est)) {
+    const b = real.find(r => r.t > x.t); if (!b) continue; // nothing real after it yet: the guess is still the best we have
+    const a = real.filter(r => r.t <= x.t).pop();
+    let v;
+    if (!a) v = b.odo - rodeKm(x.t, b.t) * correction();
+    else { const tot = rodeKm(a.t, b.t), f = tot > 0 ? rodeKm(a.t, x.t) / tot : (x.t - a.t) / Math.max(1, b.t - a.t); v = a.odo + (b.odo - a.odo) * f; }
+    v = Math.round(v); if (a) v = Math.max(a.odo, v); v = Math.min(b.odo, v);
+    const o = odoRecord(x); if (!o || o.odo === v) continue;
+    fixed.push({ src: x.src, from: o.odo, to: v });
+    // a service's countdowns started from the guessed number: move them to the worked-out one
+    if (x.src === 'service') S.items.forEach(it => { if (it.lastOdo === o.odo && it.lastDate === o.date && (o.items || []).includes(it.id)) it.lastOdo = v; });
+    o.odo = v;
+  }
+  return fixed;
+}
 
 /* ---------- status ---------- */
 function itemStatus(it) {

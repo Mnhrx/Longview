@@ -350,15 +350,28 @@ function liveHome() {
   const w = LIVE.wx; if (!w || w.err) return '';
   return `<div class="wxover ${wet(w.text) ? 'wet' : ''}">${wxIcon(w.text)}<span><b>${esc(w.text.replace(/\s*\((Day|Night)\)/i, ''))}</b><small>${esc(w.area)}${w.until ? ' · till ' + w.until : ''}</small></span><em>${wet(w.text) ? 'Rain gear' : 'Good to ride'}</em></div>`;
 }
+// which rides the Rides tab shows: a month (opens on this one) or all time. The map, distance and stats all follow it.
+let rideMon = null, rideAll = false; // rideMon null = this month
+const thisMon = () => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; };
+function viewRides() { if (rideAll) return S.rides; const v = rideMon || thisMon(); return monthRides(v.y, v.m); }
+function firstMon() { const t = Math.min(...S.rides.map(r => r.start.t)); if (!isFinite(t)) return thisMon(); const d = new Date(t); return { y: d.getFullYear(), m: d.getMonth() }; }
+const monIdx = v => v.y * 12 + v.m;
+function stepMon(d) { const v = rideMon || thisMon(), i = Math.min(monIdx(thisMon()), Math.max(monIdx(firstMon()), monIdx(v) + d)); rideMon = { y: Math.floor(i / 12), m: i % 12 }; }
+function monLabel(v) { return new Date(v.y, v.m, 1).toLocaleDateString('en-SG', v.y === new Date().getFullYear() ? { month: 'long' } : { month: 'short', year: 'numeric' }); }
+// show a ride's month if it isn't on the map right now
+function showRideMonth(id) { const r = S.rides.find(x => x.id === id); if (!r || viewRides().includes(r)) return false;
+  const d = new Date(r.start.t); rideAll = false; rideMon = { y: d.getFullYear(), m: d.getMonth() }; return true; }
 function abroadKm(r) { if (!r.path || r.path.length < 2 || !window.MAP) return 0; return (r.km || 0) * r.path.filter(([la, lo]) => !MAP.inSG(la, lo)).length / r.path.length; }
 function ridesHTML() {
-  const mr = monthRides(), km = mr.reduce((s, r) => s + (r.km || 0), 0), longest = mr.reduce((a, r) => Math.max(a, r.km || 0), 0);
-  const rides = [...S.rides].sort((a, b) => b.start.t - a.start.t), abroad = rides.reduce((s, r) => s + abroadKm(r), 0);
+  const mr = viewRides(), km = mr.reduce((s, r) => s + (r.km || 0), 0), longest = mr.reduce((a, r) => Math.max(a, r.km || 0), 0);
+  const rides = [...S.rides].sort((a, b) => b.start.t - a.start.t), abroad = mr.reduce((s, r) => s + abroadKm(r), 0);
+  const mon = rideMon || thisMon(), atFirst = monIdx(mon) <= monIdx(firstMon()), atNow = monIdx(mon) >= monIdx(thisMon());
   return `<div class="hi"><div><h1>Rides</h1></div></div>
     <div class="hcol a"><section class="card mapcard" id="mapcard"><canvas id="mapcv" aria-label="Map of your rides"></canvas>
-      <div class="mo"><span>${new Date().toLocaleDateString('en-SG', { month: 'long' })}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
+      <div class="mo"><span>${rideAll ? 'All time' : monLabel(mon)}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
       ${window.RADAR ? RADAR.ATTR : ''}<div class="mfocus" id="mfocus" hidden></div><button type="button" class="mfs" id="mfs" aria-label="Full-screen map">${ic('full', 2.6)}</button><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
-    ${S.rides.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${S.rides.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
+    ${S.rides.length ? `<div class="segs sm mper"><button type="button" data-rper="prev" aria-label="Previous month"${rideAll || atFirst ? ' disabled' : ''}>${ic('chev', 2.6)}</button><button type="button" data-rper="mon" class="${rideAll ? '' : 'on'}">${monLabel(mon)}</button><button type="button" data-rper="next" aria-label="Next month"${rideAll || atNow ? ' disabled' : ''}>${ic('chev', 2.6)}</button><button type="button" data-rper="all" class="${rideAll ? 'on' : ''}">All time</button></div>` : ''}
+    ${mr.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${mr.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
     <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div>
     ${goalHTML()}</div>
     <div class="hcol b"><h2 class="sec">Road check</h2>
@@ -514,7 +527,7 @@ function saveScan(t, quick) {
   const date = todayISO(new Date(x.t));
   if (d.kind === 'odo') { S.odoLog.push({ id: uid(), date, odo: Math.round(+d.odo), ts: x.t }); toast('Odometer saved'); }
   else { const rm = d.currency === 'MYR' || STATION_OF(d.station) === 'Malaysia', r = (S.fx && S.fx.rate) || .3;
-    S.fuel.push({ id: uid(), date, ts: x.t, odo: d.odo ? Math.round(+d.odo) : estOdo(), litres: +d.litres, cost: d.cost != null ? +d.cost : null, cur: rm ? 'MYR' : 'SGD', fx: rm ? r : undefined, costSgd: rm && d.cost ? +(d.cost * r).toFixed(2) : null, station: STATION_OF(d.station), full: true });
+    S.fuel.push({ id: uid(), date, ts: x.t, odo: d.odo ? Math.round(+d.odo) : estOdo(), odoEst: !d.odo, litres: +d.litres, cost: d.cost != null ? +d.cost : null, cur: rm ? 'MYR' : 'SGD', fx: rm ? r : undefined, costSgd: rm && d.cost ? +(d.cost * r).toFixed(2) : null, station: STATION_OF(d.station), full: true });
     toast('Fill-up saved as a full tank. Tap it in Fuel to change'); }
   save(); refresh(); celebrate();
 }
@@ -583,12 +596,15 @@ function adoptOdo() {
   const first = r[0].odo; S.items.forEach(i => { if (i.lastOdo == null && i.base) i.lastOdo = first; }); S.odoPending = false; save();
   setTimeout(() => toast('Odometer added · km countdowns started'), 500);
 }
-function refresh() { adoptOdo(); syncWorld(); const y = viewEl.scrollTop; render(false); viewEl.scrollTop = y; }
+function fixGuesses(quiet) { const f = reestimate(); if (!f.length) return; save();
+  if (!quiet) setTimeout(() => toast(f.length === 1 ? `Worked out your earlier ${SRC[f[0].src].toLowerCase()} reading: ${num(f[0].from)} → ${num(f[0].to)} km` : `Worked out ${f.length} earlier guessed readings from this one`), 700); }
+function refresh() { adoptOdo(); fixGuesses(); syncWorld(); const y = viewEl.scrollTop; render(false); viewEl.scrollTop = y; }
 let going = false;
 function go(i) { if (document.body.classList.contains('mapfs')) mapFull(false);
   if (i === place) { viewEl.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (going) return; going = true; haptic(); Snd.click && Snd.click(1);
   if (window.MAP && place === 1) MAP.focus(null);
+  if (i === 1) { rideMon = null; rideAll = false; syncWorld(); }
   const dir = i > place ? 1 : -1, old = $('.pad', viewEl); place = i; navTo(i);
   const done = () => { viewEl.scrollTop = 0; render(true, dir); going = false; };
   if (old && !RM) old.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-dir * 18}%) scale(.97)`, opacity: 0 }], { duration: 170, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' }).onfinish = done; else done();
@@ -598,7 +614,7 @@ function navTo(i) {
   requestAnimationFrame(() => { const b = $(`#nav [data-i="${i}"]`), ind = $('#navInd'); if (!b || !ind) return; ind.style.width = b.offsetWidth + 'px'; ind.style.height = b.offsetHeight + 'px'; ind.style.transform = `translate(${b.offsetLeft}px,${b.offsetTop}px)`; });
 }
 addEventListener('resize', () => navTo(place));
-function syncWorld() { if (window.MAP) MAP.setRides(S.rides.map(r => ({ id: r.id, t: r.start.t, path: r.path, kind: rideKind(r), gps: r.gps }))); }
+function syncWorld() { if (window.MAP) MAP.setRides(viewRides().map(r => ({ id: r.id, t: r.start.t, path: r.path, kind: rideKind(r), gps: r.gps }))); }
 // open a ride on the Rides map (from All rides, a ride's mini map…)
 function showOnMap(id, full) { closeSheet(); const go2 = () => { if (window.MAP && MAP.focused !== id) focusRide(id); viewEl.scrollTo({ top: 0, behavior: 'smooth' }); if (full) setTimeout(() => mapFull(true), 450); };
   if (place !== 1) { go(1); setTimeout(go2, 650); } else go2(); }
@@ -617,6 +633,7 @@ function miniRoute(cv, r) { if (!cv || !window.MAP || !r.path || r.path.length <
 }
 function focusRide(id) {
   if (!window.MAP) return; if (MAP.focused === id) id = null;
+  if (id && showRideMonth(id)) refresh();
   MAP.focus(id); $$('.rrow[data-focus]', viewEl).forEach(x => x.classList.toggle('sel', x.dataset.focus === id)); showFocus();
   if (id) $('#mapcard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -649,6 +666,9 @@ viewEl.addEventListener('mapmoved', e => { const b = $('#mre'); if (b) { b.hidde
 viewEl.addEventListener('click', e => {
   if (e.target.closest('#mfs')) { mapFull(!document.body.classList.contains('mapfs')); return; }
   if (e.target.closest('#mre')) { haptic(); MAP.recentre(); return; }
+  const rpb = e.target.closest('[data-rper]'); if (rpb) { const k = rpb.dataset.rper; haptic();
+    if (k === 'all') rideAll = true; else if (k === 'mon') rideAll = false; else { rideAll = false; stepMon(k === 'prev' ? -1 : 1); }
+    if (window.MAP) MAP.focus(null); refresh(); return; }
   const trb = e.target.closest('[data-trip]'); if (trb) { haptic(); trb.disabled = true; answerTrip(trb.dataset.trip, !!trb.dataset.yes).then(r => { if (r) showResults([r]); else { toast('Got it, not a bike trip'); refresh(); } }); return; }
   const rtb = e.target.closest('[data-route]'); if (rtb) { haptic(); routePicker(S.rides.find(x => x.id === rtb.dataset.route)); return; }
   const stb = e.target.closest('[data-stat]'); if (stb) { haptic(); statSheet(stb.dataset.stat); return; }
@@ -706,10 +726,12 @@ function form({ title, lede, fields, cta = 'Save', onSave, onDelete, bin, check,
       for (const x of fields.flatMap(x => x.type === 'row' ? x.f : [x])) if (x.req && (v[x.k] == null || v[x.k] === '' || (typeof v[x.k] === 'number' && isNaN(v[x.k])))) { toast(`Add ${x.l.toLowerCase()}`, 'over'); return; }
       // looks like a typo? say so once, with Fix or Save anyway
       const warn = check && !sh._ok ? check(v) : null;
-      if (warn) { const wb = $('#wb', sh); wb.hidden = false; wb.innerHTML = `<b>${ic('alert', 2.4)} Double-check this</b><span>${warn}</span><div class="wbb"><button type="button" class="btn ghost sm" id="wbFix">Fix it</button><button type="button" class="btn sm" id="wbOk">Save anyway</button></div>`;
+      // a warning is text, or { text, alt: [label, fn] } to offer a third choice (fn runs, then it saves)
+      if (warn) { const wb = $('#wb', sh), alt = typeof warn === 'object' && warn.alt; wb.hidden = false; wb.innerHTML = `<b>${ic('alert', 2.4)} Double-check this</b><span>${alt ? warn.text : warn}</span><div class="wbb"><button type="button" class="btn ghost sm" id="wbFix">Fix it</button>${alt ? `<button type="button" class="btn sm" id="wbAlt">${alt[0]}</button>` : `<button type="button" class="btn sm" id="wbOk">Save anyway</button>`}</div>`;
         if (!RM) wb.animate([{ transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'none' }], { duration: 300 }); haptic(); wb.scrollIntoView({ block: 'center', behavior: 'smooth' });
         $('#wbFix', sh).onclick = () => { wb.hidden = true; const f = $('input[name]', sh); f && f.focus(); };
-        $('#wbOk', sh).onclick = () => { sh._ok = true; $('#fm', sh).requestSubmit(); }; return; }
+        if (alt) $('#wbAlt', sh).onclick = () => { alt[1](); sh._ok = true; $('#fm', sh).requestSubmit(); };
+        else $('#wbOk', sh).onclick = () => { sh._ok = true; $('#fm', sh).requestSubmit(); }; return; }
       sh._ok = false;
       if (onSave(v) === false) return;
       save(); closeSheet(); refresh(); celebrate();
@@ -872,11 +894,13 @@ function openScan(d, x = {}) {
   setTimeout(() => { const r = fillFromScan(sheetEl, kind, d), res = $('.scanres', sheetEl); if (res) scanResult(res, r.n, r.notes, x.raw || '', { kind, seen: x.seen || d.seen, unsure: x.unsure ?? d.unsure }); }, 80);
 }
 // the reading just before a date (ignoring the entry being edited), to judge an odometer number
-function odoBefore(date, skipId) { const t = +new Date(date + 'T12:00'); const r = odoReadings().filter(x => x.id !== skipId && x.t <= t); return r.length ? r[r.length - 1] : null; }
+// (guessed readings don't count: they get worked out backwards from this one anyway)
+function odoBefore(date, skipId) { const t = +new Date(date + 'T12:00'); const r = odoReadings().filter(x => x.id !== skipId && !x.est && x.t <= t); return r.length ? r[r.length - 1] : null; }
 function odoCheck(odo, date, skipId) {
   if (odo == null || isNaN(odo)) return null; const prev = odoBefore(date || todayISO(), skipId); if (!prev) return null;
   const days = Math.max(1, (+new Date((date || todayISO()) + 'T12:00') - prev.t) / 864e5), diff = odo - prev.odo;
-  if (diff < -5) return `That’s ${num(-diff)} km <b>lower</b> than your last reading (${num(prev.odo)} km on ${fmtDs(todayISO(new Date(prev.t)))}). Odometers only go up. A typo?`;
+  if (diff < -5) return { text: `That’s ${num(-diff)} km <b>lower</b> than your ${SRC[prev.src].toLowerCase()} reading of ${num(prev.odo)} km on ${fmtDs(todayISO(new Date(prev.t)))}. Odometers only go up. A typo here, or was that earlier number a guess?`,
+    alt: ['Earlier was a guess', () => { const o = odoRecord(prev); if (o) o.odoEst = true; }] };
   if (diff > Math.max(1500, days * 600)) return `That’s ${num(diff)} km more than ${num(prev.odo)} km, ${Math.round(days)} day${days >= 2 ? 's' : ''} ago. That’s a lot of riding. A typo?`;
   return null;
 }
@@ -901,6 +925,7 @@ function wireCur(sh) {
 const STATIONS = ['Shell', 'Esso', 'SPC', 'Caltex', 'Sinopec', 'Malaysia'].map(s => ({ v: s, l: s }));
 const MOODS = ['Chill', 'Spirited', 'Rainy', 'Night', 'Touring', 'Jammed'].map(v => ({ v, l: v }));
 function fuelForm(e) {
+  const g0 = e ? null : odoGuess();
   form({ title: e ? 'Edit fill-up' : 'Fill-up', lede: 'The odometer reading powers km/L, range and every service countdown.',
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: e?.date || todayISO(), req: 1 }, { k: 'odo', l: 'Odometer (km)', type: 'number', v: e?.odo ?? odoGuess(), req: 1 }] },
       { type: 'row', f: [{ k: 'litres', l: 'Litres', type: 'number', v: e?.litres, req: 1 }, { k: 'cost', l: 'Cost ($)', type: 'number', v: e?.cost }] },
@@ -913,7 +938,8 @@ function fuelForm(e) {
       if (v.cost && v.litres) { const pl = v.cost / v.litres, rm = v.cur === 'MYR';
         if (rm ? (pl < 1.5 || pl > 5) : (pl < 2.3 || pl > 4.5)) return `That works out to ${rm ? 'RM ' : '$'}${num(pl, 2)} a litre. ${rm ? 'Malaysian pump prices are usually RM 2–4.' : 'Pump prices are usually $2.50–$4.'} Check the litres, cost and currency.`; } return null; },
     onSave: v => { if (v.cur === 'MYR') { const r = v.fx > .1 && v.fx < 1 ? v.fx : ((S.fx && S.fx.rate) || .3); v.costSgd = v.cost ? +(v.cost * r).toFixed(2) : null; v.fx = r; } else { delete v.fx; v.costSgd = null; }
-      if (e) { Object.assign(e, v); return; }
+      if (e) { if (v.odo !== e.odo) v.odoEst = false; Object.assign(e, v); return; }
+      v.odoEst = g0 !== '' && v.odo === g0; // you didn't change Redline's guess
       // after the fuel light: learn this bike's real reserve from how much went in
       const fl = S.fuelLight, k = fuelStats().kpl;
       if (fl && v.full && k && v.litres && v.odo >= fl.odo) { const est = (+S.bike.tank - v.litres) + (v.odo - fl.odo) / k; if (est > .3 && est < S.bike.tank * .5) S.bike.reserve = Math.round(((+S.bike.reserve || 2.5) * 2 + est) / 3 * 10) / 10; }
@@ -923,6 +949,7 @@ function fuelForm(e) {
     onDelete: e && (() => S.fuel = S.fuel.filter(x => x !== e)), bin: e && { list: 'fuel', obj: e, label: `Fill-up on ${fmtD(e.date)}` } });
 }
 function serviceForm(e, preset) {
+  const g0 = e ? null : odoGuess();
   form({ title: e ? 'Edit service' : 'Log a service', lede: 'Pick what was done. Those countdowns restart from this odometer reading.',
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: e?.date || todayISO(), req: 1 }, { k: 'odo', l: 'Odometer (km)', type: 'number', v: e?.odo ?? odoGuess(), req: 1 }] },
       { k: 'items', l: 'What was done', type: 'chips', multi: 1, o: S.items.map(i => ({ v: i.id, l: i.name })), v: e?.items || preset || [] },
@@ -931,7 +958,7 @@ function serviceForm(e, preset) {
     extra: e ? '' : scanBtn('service', 'Scan the invoice'), onOpen: sh => wireScan(sh, 'service'),
     check: v => odoCheck(v.odo, v.date, e && e.id),
     onSave: v => { if (!v.items.length && !v.notes) { toast('Pick at least one item', 'over'); return false; }
-      if (e) Object.assign(e, v); else { S.services.push({ id: uid(), ...v, ts: Date.now() }); if (S.needFull && v.items.length >= Math.min(4, S.items.length)) { S.needFull = null; toast('Full service logged · every countdown starts fresh'); } else toast('Service logged · countdowns reset'); } syncItems(); },
+      if (e) { if (v.odo !== e.odo) v.odoEst = false; Object.assign(e, v); } else { S.services.push({ id: uid(), ...v, odoEst: g0 !== '' && v.odo === g0, ts: Date.now() }); if (S.needFull && v.items.length >= Math.min(4, S.items.length)) { S.needFull = null; toast('Full service logged · every countdown starts fresh'); } else toast('Service logged · countdowns reset'); } syncItems(); },
     onDelete: e && (() => { S.services = S.services.filter(x => x !== e); syncItems(); }), bin: e && { list: 'services', obj: e, label: `Service on ${fmtD(e.date)}`, note: 'The countdowns it reset go back to the service before it.' } });
 }
 function syncItems() {
@@ -1238,8 +1265,8 @@ function myDataSheet(tab = 'odo') {
       const oi = odoInfo();
       return r.length ? `${oi ? `<div class="calc odoc"><span>${num(oi.la.odo)} km</span><span>reading ${fmtDs(todayISO(new Date(oi.la.t)))}${oi.la.exact ? ', ' + fmtTime(oi.la.t) : ''}</span><b>+ ${num(oi.since, 1)} km</b><span>from ${oi.rides.length} ride${oi.rides.length === 1 ? '' : 's'} since${oi.c !== 1 ? ` × ${num(oi.c, 2)} (matched to your real odometer)` : ''}</span><b>= ${num(oi.odo)} km now</b></div>` : ''}
         ${oi && oi.rides.length ? `<div class="bl">Rides counted</div><div class="list">${oi.rides.map(x => `<button type="button" class="li" data-src="ride" data-id="${x.id}">${statusDot('ok')}<span class="grow"><span class="t">${esc(x.title || 'Ride')} · ${num(x.km, 1)} km</span><span class="s">${fmtDT(x.end.t)}</span></span>${ic('chev')}</button>`).join('')}</div>` : ''}
-        <div class="bl">Readings</div><p class="gnote">Redline uses the <b>most recent</b> reading, plus rides since then. Tap any reading to fix or delete it.</p><div class="list">${r.map((x, i) => { const nx = r[i + 1], bad = nx && x.odo < nx.odo - 5;
-        return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}">${statusDot(bad ? 'over' : i ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(x.odo)} km</span><span class="s">${fmtD(todayISO(new Date(x.t)))} · ${SRC[x.src]}${bad ? ' · lower than the one before' : ''}${i === 0 ? ' · in use' : ''}</span></span>${ic('chev')}</button>`; }).join('')}</div><button type="button" class="btn ghost" id="mdAdd">+ Add a reading</button>` : `<div class="empty">No odometer readings yet.</div><button type="button" class="btn" id="mdAdd">Add a reading</button>`; }
+        <div class="bl">Readings</div><p class="gnote">Redline uses the <b>most recent</b> reading, plus rides since then. Tap any reading to fix or delete it.</p><div class="list">${r.map((x, i) => { const nx = r[i + 1], bad = !x.est && nx && !nx.est && x.odo < nx.odo - 5;
+        return `<button type="button" class="li" data-src="${x.src}" data-id="${x.id}">${statusDot(bad ? 'over' : i ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(x.odo)} km</span><span class="s">${fmtD(todayISO(new Date(x.t)))} · ${SRC[x.src]}${x.est ? ' · Redline’s guess' : ''}${bad ? ' · lower than the one before' : ''}${i === 0 ? ' · in use' : ''}</span></span>${ic('chev')}</button>`; }).join('')}</div><button type="button" class="btn ghost" id="mdAdd">+ Add a reading</button>` : `<div class="empty">No odometer readings yet.</div><button type="button" class="btn" id="mdAdd">Add a reading</button>`; }
     if (tab === 'fuel') { const l = [...S.fuel].sort((a, b) => (b.date > a.date ? 1 : -1) || b.odo - a.odo);
       return l.length ? `<div class="list">${l.map(f => `<button type="button" class="li" data-src="fuel" data-id="${f.id}">${statusDot(f.full ? 'ok' : 'soon')}<span class="grow"><span class="t">${num(f.litres, 2)} L · ${num(f.odo)} km</span><span class="s">${fmtD(f.date)}${f.station ? ' · ' + esc(f.station) : ''}${f.full ? '' : ' · partial'}</span></span><span class="r">${f.cost ? costTxt(f) : ''}</span></button>`).join('')}</div>` : '<div class="empty">No fill-ups yet.</div>'; }
     if (tab === 'service') { const l = [...S.services].sort((a, b) => (b.date > a.date ? 1 : -1));
@@ -1264,7 +1291,7 @@ function odoEditForm(o) {
   form({ title: o.setup ? 'Setup reading' : 'Odometer check', lede: 'Fix the number or the date, or delete it if it was wrong.',
     fields: [{ type: 'row', f: [{ k: 'date', l: 'Date', type: 'date', v: o.date, req: 1 }, { k: 'odo', l: 'Reading (km)', type: 'number', v: o.odo, req: 1 }] }],
     check: v => odoCheck(v.odo, v.date, o.id),
-    onSave: v => { Object.assign(o, v); toast('Reading updated'); },
+    onSave: v => { if (v.odo !== o.odo) v.odoEst = false; Object.assign(o, v); toast('Reading updated'); },
     onDelete: () => { S.odoLog = S.odoLog.filter(x => x !== o); }, bin: { list: 'odoLog', obj: o, label: `Reading ${num(o.odo)} km` } });
 }
 // where a number comes from, with the entries behind it
@@ -1716,7 +1743,7 @@ function fuelLight() {
   if (fs.light) { S.fuelLight = null; save(); refresh(); toast('Fuel light cleared'); return; }
   form({ title: 'Fuel light on?', lede: `Range resets to your reserve (${num(S.bike.reserve || 2.5, 1)} L) and counts down from here.`,
     fields: [{ k: 'odo', l: 'Odometer now (km)', type: 'number', v: estOdo() ?? '', req: 1 }], cta: 'Fuel light’s on',
-    onSave: v => { S.fuelLight = { odo: v.odo, date: todayISO() }; S.lightLog = [...(S.lightLog || []), { odo: v.odo, t: Date.now() }].slice(-30); if (v.odo > (estOdo() || 0)) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, ts: Date.now() }); toast('Counting down from reserve');
+    onSave: v => { S.fuelLight = { odo: v.odo, date: todayISO() }; S.lightLog = [...(S.lightLog || []), { odo: v.odo, t: Date.now() }].slice(-30); if (v.odo !== estOdo()) S.odoLog.push({ id: uid(), date: todayISO(), odo: v.odo, ts: Date.now() }); toast('Counting down from reserve');
       setTimeout(() => { const l = $('#hLamp') || $('#fLamp'); if (l) l.animate([{ transform: 'translateX(-50%) scale(1)' }, { transform: 'translateX(-50%) scale(1.6)' }, { transform: 'translateX(-50%) scale(1)' }], { duration: 500, easing: 'ease-out' }); }, 300); } });
 }
 // after a fill-up: the needle climbs from where it was, and the fuel lamp clicks off
@@ -2166,7 +2193,7 @@ function seedPreview() {
 
 (function boot() {
   if (window.PREVIEW) seedPreview();
-  syncWorld(); applyLite();
+  fixGuesses(true); syncWorld(); applyLite();
   const sp = $('#splash');
   const start = () => { if (sp) sp.classList.add('out'); if (!S.setupDone) startSetup(); else { render(true); processURL(); pullLog(true); } };
   // wait for fonts so the big numbers don't jump, but never more than a moment
