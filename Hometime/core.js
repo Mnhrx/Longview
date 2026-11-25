@@ -825,7 +825,7 @@ $('bankRange').addEventListener('change',()=>{ save(); Sound.pop&&Sound.pop(); h
 function todayRec(){ const r=state.history.find(r=>typeOf(r)==='work'&&r.out&&sameDay(r.in,Date.now())); return state.active?null:r||null; }
 function showIdle(animate){
   $('active').hidden=true; $('idle').hidden=false;
-  $('resumeLink').hidden=!todayRec();
+  $('resumeLink').hidden=!todayRec(); renderMissing();
   if(G) G.set(['#idleHead','#inStage','#clockIn','#manualBtn','#resumeLink'],{clearProps:'all'});
   orbIn.resize();
   if(animate&&ANIM){
@@ -1154,6 +1154,30 @@ function virtualPH(from,to){
     out.push({in:ts,type:'ph',virtual:true,name:PH[k]}); });
   return out;
 }
+// workdays this pay period with nothing logged (not before your first entry or start date, never today,
+// not public holidays, not days you said you were off). The start screen asks about them so gaps get filled.
+function missingDays(){
+  if(!state.history.length) return [];
+  const p=periodOf(Date.now()), first=Math.min(...state.history.map(r=>r.in)), skip=state.skipDays||[], out=[];
+  const d=new Date(Math.max(p.start,startTs()||0,first)); d.setHours(12,0,0,0);
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(;d<today;d.setDate(d.getDate()+1)){ const ts=d.getTime(), iso=isoDate(ts);
+    if(!isWorkday(ts)||PH[iso]||skip.includes(iso)) continue;
+    if(state.history.some(r=>sameDay(r.in,ts))||(state.active&&sameDay(state.active.in,ts))) continue;
+    out.push(ts); }
+  return out;
+}
+function renderMissing(){
+  const box=$('missCard'); if(!box) return; const m=state.active?[]:missingDays();
+  if(!m.length){ box.hidden=true; return; }
+  const ts=m[m.length-1], more=m.length-1; box.hidden=false; // the most recent one first
+  box.innerHTML=`<p class="missT">Nothing logged on <b>${dayName(ts)}</b>${more?`<small>and ${more} more workday${more>1?'s':''} this pay period</small>`:''}</p>
+    <div class="missB"><button type="button" data-miss="work">Add hours</button><button type="button" data-miss="al">Leave</button><button type="button" data-miss="mc">MC</button><button type="button" data-miss="off">Day off</button></div>`;
+  box.querySelectorAll('[data-miss]').forEach(b=>b.onclick=()=>{ const k=b.dataset.miss, iso=isoDate(ts);
+    if(k==='off'){ state.skipDays=[...(state.skipDays||[]),iso].slice(-200); save(); renderMissing();
+      toast(`${dayName(ts)} counted as a day off. Nothing changes in your pay or time bank.`,false,{label:'Undo',fn:()=>{ state.skipDays=(state.skipDays||[]).filter(x=>x!==iso); save(); renderMissing(); }}); return; }
+    openDay(null); $('dDate').value=iso; setType(k); setDayHint(`Filling in ${dayName(ts)}.`); dayPreview(); });
+}
 const hhmm=ts=>{ const d=new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 let dType='work';
 function autoMcPaid(){ if(dType!=='mc'||editIdx!=null) return; const v=$('dDate').value; if(!v) return; const [y,m,d]=v.split('-').map(Number), ts=new Date(y,m-1,d,12).getTime(); $('dMcPaid').checked=mcEntitled(ts)>mcUsedPaid(y); }
@@ -1286,7 +1310,7 @@ function renderDSum(){ const y=new Date().getFullYear(), ls=leaveStart(), starte
   let lw=null; try{ lw=longWeekends().find(o=>o.need>0); }catch(e){}
   $('dSum').innerHTML=(started?`<span>Leave <b>${left}</b> left</span><span>MC <b>${mcLeft}</b> left</span>`:`<span>Leave starts <b>${new Date(ls).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</b></span>`)+(lw?`<span><i>Next long weekend: ${lw.len} days →</i></span>`:''); }
 function animateDays(){ if(ANIM&&page==='days') G.from('#dayGroups .dayItem',{y:24,opacity:0,scale:.96,stagger:.035,duration:.45,ease:'back.out(1.6)',clearProps:'all'}); }
-function refreshToday(){ if(!state.active&&!$('idle').hidden) $('resumeLink').hidden=!todayRec(); }
+function refreshToday(){ if(!state.active&&!$('idle').hidden) $('resumeLink').hidden=!todayRec(); renderMissing(); }
 
 /* ================= shared liquid engine =================
    One hidden graphics context draws every liquid widget (chart tubes, jars, progress bars)
