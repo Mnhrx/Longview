@@ -237,6 +237,82 @@ function monthRides(y = new Date().getFullYear(), m = new Date().getMonth()) {
   return S.rides.filter(r => { const d = new Date(r.start.t); return d.getFullYear() === y && d.getMonth() === m; });
 }
 
+/* ---------- traffic jams: your own speed, about 100 m at a time ---------- */
+// Every GPS-tracked ride leaves one speed per short stretch of road (a ~110 m square, split by which way you were heading).
+// A stretch "jams" when you were well under YOUR usual speed there, so filtering between lanes doesn't hide it.
+// Only these small numbers are kept (never the raw GPS), so years of riding fit on the phone.
+const JAM = { cell: .001, slow: .5, minObs: 4, learn: 15, keep: 20, epoch: Date.UTC(2026, 0, 1) };
+const jamKey = (la, lo, dir) => `${Math.round(la / JAM.cell)}_${Math.round(lo / JAM.cell)}_${dir}`;
+const jamPos = k => { const [a, b] = k.split('_'); return { lat: +a * JAM.cell, lon: +b * JAM.cell }; };
+function bearing(a, b) { const r = x => x * Math.PI / 180, dl = r(b.lon - a.lon);
+  return (Math.atan2(Math.sin(dl) * Math.cos(r(b.lat)), Math.cos(r(a.lat)) * Math.sin(r(b.lat)) - Math.sin(r(a.lat)) * Math.cos(r(b.lat)) * Math.cos(dl)) * 180 / Math.PI + 360) % 360; }
+// one observation packed into one number: days since 2026 · hour of the week (0 = Sun 00:00) · km/h
+const jamPack = (t, kmh) => { const d = new Date(t); return Math.floor((t - JAM.epoch) / 864e5) * 1e6 + (d.getDay() * 24 + d.getHours()) * 1e3 + Math.min(999, Math.round(kmh)); };
+const jamUnpack = o => ({ day: Math.floor(o / 1e6), how: Math.floor(o / 1e3) % 1e3, kmh: o % 1e3 });
+// your "free-flow" speed on a stretch: the 85th percentile of your speeds there, i.e. how fast you go when it's clear.
+// (Not the median: on a road that jams most evenings, the median IS the jam.)
+const pct = (a, p) => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y), i = (b.length - 1) * p, lo = Math.floor(i); return b[lo] + (b[Math.ceil(i)] - b[lo]) * (i - lo); };
+const freeFlow = a => pct(a, .85);
+const median = a => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+// your average speed through each stretch on one ride → { key: { kmh, t } }
+function rideCells(trail, start, end) {
+  const pts = trail.filter(p => p.t >= start.t - 3e4 && p.t <= end.t + 3e4), acc = {};
+  for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i], h = (b.t - a.t) / 36e5, km = haversine(a, b);
+    if (h <= 0 || h > 5 / 60 || km < .01) continue; // a long gap (tunnel, no signal) says nothing about one stretch
+    const dir = Math.round(bearing(a, b) / 45) % 8, n = Math.max(1, Math.ceil(km / .05)); // walk the line in 50 m steps
+    for (let j = 0; j < n; j++) { const f = (j + .5) / n, k = jamKey(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f, dir), c = acc[k] || (acc[k] = { km: 0, h: 0, t: a.t + (b.t - a.t) * f });
+      c.km += km / n; c.h += h / n; } }
+  const out = {}; for (const k in acc) out[k] = { kmh: acc[k].km / acc[k].h, t: acc[k].t }; return out;
+}
+// add one ride to what Redline knows, and mark where that ride jammed (against the rides before it)
+function learnJams(ride, trail) {
+  if (ride.jamT) return; const cells = rideCells(trail, ride.start, ride.end), keys = Object.keys(cells); if (!keys.length) return;
+  const J = S.jam || (S.jam = { c: {}, n: 0 }), jams = [];
+  for (const k of keys) { const prev = (J.c[k] || []).map(o => jamUnpack(o).kmh), c = cells[k];
+    if (prev.length >= JAM.minObs - 1) { const u = freeFlow(prev); if (u > 8 && c.kmh < u * JAM.slow) jams.push([k, Math.round(c.kmh), Math.round(u)]); }
+    J.c[k] = [...(J.c[k] || []), jamPack(c.t, c.kmh)].slice(-JAM.keep); }
+  // a red light slows one or two stretches; a jam runs for 300 m or more. Keep only slow stretches with company.
+  const pos = jams.map(([k]) => jamPos(k));
+  J.n++; ride.jamT = Date.now(); ride.jams = jams.filter((_, i) => pos.filter(q => haversine(q, pos[i]) < .35).length >= 3); pruneJams();
+}
+// forget stretches you rode once, long ago; keep the store small
+function pruneJams() { const J = S.jam; if (!J) return; const today = Math.floor((Date.now() - JAM.epoch) / 864e5), ks = Object.keys(J.c);
+  for (const k of ks) { const o = J.c[k]; if (o.length < 3 && today - jamUnpack(o[o.length - 1]).day > 120) delete J.c[k]; }
+  const left = Object.keys(J.c); if (left.length > 6000) left.sort((a, b) => J.c[a][J.c[a].length - 1] - J.c[b][J.c[b].length - 1]).slice(0, left.length - 6000).forEach(k => delete J.c[k]); }
+// when a stretch jams: weekdays / weekends and the hours it happens most
+function jamWhen(hows) { if (!hows.length) return '';
+  const wk = hows.filter(h => { const d = Math.floor(h / 24); return d > 0 && d < 6; }).length, hrs = hows.map(h => h % 24), hc = {}; hrs.forEach(h => hc[h] = (hc[h] || 0) + 1);
+  const top = +Object.keys(hc).sort((a, b) => hc[b] - hc[a])[0], near = hrs.filter(h => Math.abs(h - top) <= 1);
+  const lo = Math.min(...near), hi = Math.max(...near) + 1, f = h => { const x = h % 24, ap = x < 12 ? 'am' : 'pm'; return (x % 12 || 12) + ap; };
+  return `${wk >= hows.length * .7 ? 'weekdays' : wk <= hows.length * .3 ? 'weekends' : 'any day'}, ${f(lo)}–${f(hi)}`; }
+// stretches that jam often: neighbouring squares are merged into one spot so a long queue counts once
+function jamSpots(max = 5) {
+  const J = S.jam; if (!J) return []; const hot = [];
+  for (const k in J.c) { const o = J.c[k].map(jamUnpack); if (o.length < JAM.minObs) continue; const u = freeFlow(o.map(x => x.kmh)); if (u < 8) continue;
+    const slow = o.filter(x => x.kmh < u * JAM.slow); if (slow.length < 2 || slow.length / o.length < .3) continue;
+    hot.push({ k, ...jamPos(k), n: o.length, j: slow.length, rate: slow.length / o.length, usual: Math.round(u), slow: Math.round(median(slow.map(x => x.kmh))), hows: slow.map(x => x.how) }); }
+  // chain neighbouring slow stretches (within ~160 m of each other) into one spot, so one long queue counts once
+  const groups = [];
+  for (const h of hot) { const near = groups.filter(g => g.some(x => haversine(x, h) < .16)); if (!near.length) { groups.push([h]); continue; }
+    const g0 = near[0]; g0.push(h); for (const g of near.slice(1)) { g0.push(...g); groups.splice(groups.indexOf(g), 1); } }
+  return groups.filter(g => g.length >= 3).map(g => { const lead = g.reduce((a, b) => (b.j * b.rate > a.j * a.rate ? b : a));
+    let len = 0; for (const a of g) for (const b of g) len = Math.max(len, haversine(a, b));
+    const hows = g.flatMap(x => x.hows); return { ...lead, cells: g.length, len: len + .1, j: Math.round(hows.length / g.length), slow: Math.round(median(g.map(x => x.slow))), when: jamWhen(hows) }; })
+    .sort((a, b) => b.j * b.len - a.j * a.len).slice(0, max);
+}
+// your usual trips (same start and end, about 1 km either way): how long they take by the hour you leave
+function leaveAdvice() {
+  const trips = []; for (const r of S.rides) { if (!r.start || !r.end || r.start.lat == null || r.end.lat == null) continue; const d = new Date(r.start.t), wd = d.getDay() > 0 && d.getDay() < 6; if (!wd) continue;
+    let t = trips.find(x => haversine(x.a, r.start) < 1 && haversine(x.b, r.end) < 1); if (!t) trips.push(t = { a: r.start, b: r.end, rides: [] }); t.rides.push(r); }
+  const out = [];
+  for (const t of trips) { if (t.rides.length < 8) continue; const by = {};
+    t.rides.forEach(r => { const d = new Date(r.start.t), slot = d.getHours() * 2 + (d.getMinutes() >= 30 ? 1 : 0); (by[slot] = by[slot] || []).push((r.end.t - r.start.t) / 6e4); });
+    const slots = Object.keys(by).filter(k => by[k].length >= 3).map(k => ({ slot: +k, mins: median(by[k]), n: by[k].length })); if (slots.length < 2) continue;
+    slots.sort((a, b) => a.mins - b.mins); const best = slots[0], worst = slots[slots.length - 1]; if (worst.mins - best.mins < 4) continue;
+    out.push({ a: t.a, b: t.b, n: t.rides.length, best, worst, title: t.rides.map(r => r.title).filter(Boolean).pop() || '' }); }
+  return out.sort((a, b) => (b.worst.mins - b.best.mins) - (a.worst.mins - a.best.mins)).slice(0, 2);
+}
+
 /* ---------- distance ---------- */
 function haversine(a, b) {
   const R = 6371, r = x => x * Math.PI / 180, dLa = r(b.lat - a.lat), dLo = r(b.lon - a.lon);
@@ -328,7 +404,7 @@ async function logRide(start, end) {
   const ride = { id: uid(), start, end, km: 0, src: 'auto', loop: straight < 1 && mins >= 15 && !marks.length && !tracked, title: '', note: '', mood: '' };
   if (r.alts) { ride.alts = r.alts.map(a => ({ km: a.km, mins: a.mins, path: a.path, roads: a.roads })); const pick = rememberedChoice(start, end, r.alts); applyRoute(ride, r.alts[pick], pick ? 'remembered' : 'route'); ride.pick = pick; }
   else applyRoute(ride, r, tracked ? 'tracked' : r.src);
-  if (tracked) { ride.gps = keepGps(trail); ride.gpsN = trail.length; ride.gpsDrop = cl.dropped; trimKm(ride, trail); }
+  if (tracked) { ride.gps = keepGps(trail); ride.gpsN = trail.length; ride.gpsDrop = cl.dropped; trimKm(ride, trail); learnJams(ride, trail); }
   else ride.gpsN = raw.length;
   S.rides.push(ride); save();
   return { ride };
@@ -345,7 +421,7 @@ async function applyEvents(items) {
     const sig = 'relay:' + x.id; if (S.seen.includes(sig)) continue; S.seen = [...S.seen.slice(-120), sig];
     const lat = parseFloat(x.lat), lon = parseFloat(x.lon);
     if (x.e === 'scan') { let d = null; try { d = JSON.parse(x.data); } catch (e) {} if (d && d.kind) { S.scanQ = [...(S.scanQ || []), { t: x.t, data: d }].slice(-10); out.push({ msg: 'A photo you scanned is ready to save' }); } continue; }
-    if (x.e === 'pt') { const la = parseFloat(x.lat), lo = parseFloat(x.lon); if (!isNaN(la)) { S.pts = (S.pts || []).filter(p => x.t - p.t < 3 * 864e5).concat({ lat: la, lon: lo, t: x.t, acc: x.acc || 0 }).slice(-5000); S.al = Object.assign({}, S.al, { pt: x.t }); } continue; }
+    if (x.e === 'pt') { const la = parseFloat(x.lat), lo = parseFloat(x.lon); if (!isNaN(la)) { S.pts = (S.pts || []).filter(p => x.t - p.t < 3 * 864e5).concat({ lat: la, lon: lo, t: x.t, acc: x.acc || 0, v: +x.vel || 0 }).slice(-5000); S.al = Object.assign({}, S.al, { pt: x.t }); } continue; }
     if (x.e === 'start' || x.e === 'end') { S.al = Object.assign({ added: x.t }, S.al, { [x.e]: x.t }); }
     if (x.e !== 'pt') S.log = [...(S.log || []).filter(l => Date.now() - l.t < 3 * DAY), { t: x.t, e: x.e, got: Date.now(), loc: !isNaN(lat) }].slice(-200);
     if (x.e === 'start') {
@@ -400,7 +476,7 @@ async function refineRides(out) {
   for (const r of S.rides.filter(r => r.start && r.end && r.start.lat != null && r.est !== 'tracked' && r.est !== 'manual' && Date.now() - r.end.t < 2 * 864e5)) {
     const cl = cleanTrail(trailFor(r.start, r.end)), trail = cl.pts; if (trail.length < 3) continue;
     const res = await routeKm([r.start, ...sampleTrail(trail), r.end]); if (res.src !== 'route') continue;
-    applyRoute(r, res, 'tracked'); r.gps = keepGps(trail); r.gpsN = trail.length; r.gpsDrop = cl.dropped; trimKm(r, trail); delete r.alts; out.push({ msg: 'A ride was redrawn with your real route' });
+    applyRoute(r, res, 'tracked'); r.gps = keepGps(trail); r.gpsN = trail.length; r.gpsDrop = cl.dropped; trimKm(r, trail); learnJams(r, trail); delete r.alts; out.push({ msg: 'A ride was redrawn with your real route' });
   }
 }
 async function handleURL() {
