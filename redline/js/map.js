@@ -6,7 +6,7 @@ const K = Math.cos(1.35 * Math.PI / 180); // squash longitude so the island isn'
 const SG = [103.6, 1.21, 104.06, 1.48];
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let cv = null, g = null, W = 0, H = 0, DPR = 1, cam = null, home = null, rides = [], focus = null, drawIn = 1, raf = 0, last = 0;
-let fly = null, vel = null, dot = null, moved = false;
+let fly = null, vel = null, dot = null, moved = false, spots = [];
 const px = (lo, la) => [(lo - cam.x) * K * cam.z + W / 2, (cam.y - la) * cam.z + H / 2];
 const unpx = (x, y) => [(x - W / 2) / (K * cam.z) + cam.x, cam.y - (y - H / 2) / cam.z];
 function boundsOf(list, withSG) {
@@ -76,6 +76,12 @@ function draw() {
   if (!focus) for (const r of rides) trail(r, Math.max(.4, 1 - (now - r.t) / 864e5 / 120), false);
   const f = focus && rides.find(r => r.id === focus); if (f) trail(f, 1, true);
   g.globalCompositeOperation = 'source-over';
+  // traffic: red where you usually jam (overview), or where this ride jammed (one ride tapped)
+  const red = (lo, la, rr, a) => { const [x, y] = px(lo, la), gr = g.createRadialGradient(x, y, 0, x, y, rr * 2.4);
+    gr.addColorStop(0, `rgba(255,77,77,${.55 * a})`); gr.addColorStop(1, 'rgba(255,77,77,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, rr * 2.4, 0, 7); g.fill();
+    g.fillStyle = `rgba(255,96,96,${a})`; g.beginPath(); g.arc(x, y, rr * .55, 0, 7); g.fill(); };
+  if (!f && drawIn >= 1) for (const s of spots) red(s.lon, s.lat, Math.min(11, 5 + s.j), .9);
+  if (f && f.jams && drawIn >= 1) for (const q of f.jams) red(q.lon, q.lat, 4.5, 1);
   // the rider: a glowing dot that rides the focused trail once the camera lands
   if (f && dot && dot.t >= 0) { const k = Math.min(1, dot.t); const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
     for (let i = 6; i >= 0; i--) { const q = along(f.path, Math.max(0, e - i * .012)); const [x, y] = px(q[1], q[0]); g.fillStyle = `rgba(255,106,43,${i ? .5 * (1 - i / 7) : 1})`; g.beginPath(); g.arc(x, y, i ? 5 - i * .4 : 6.5, 0, 7); g.fill(); }
@@ -137,6 +143,9 @@ return {
   focus(id) { focus = id; if (cv) { home = target(); setMoved(false); flyTo(home); } }, get focused() { return focus; },
   recentre() { if (!cv) return; home = target(); setMoved(false); flyTo(home); },
   replay() { if (focus && !RM) { dot = { t: 0 }; tick(); } },
+  // jam spots: [{ lat, lon, j }] (j = how many rides jammed there)
+  setSpots(list) { spots = list || []; if (cv) draw(); },
+  look(lat, lon) { if (!cv) return; focus = null; setMoved(true); flyTo({ x: lon, y: lat, z: home.z * 7 }); },
   get tiles() { return tilesOK > 0; },
   inSG: (la, lo) => la < 1.445 || inPoly(GEO.sg[0], lo, la), GEO, K, land: (ctx, w, h, c) => { const s = { g, W, H, cam }; g = ctx; W = w; H = h; cam = c; land(); g = s.g; W = s.W; H = s.H; cam = s.cam; }, fit: (b, pad, w, h) => fit(b, pad, w, h),
   // the same street map, drawn into another canvas (Draw my route). onTile: redraw that canvas when a tile arrives

@@ -371,9 +371,9 @@ function ridesHTML() {
       <div class="mo"><span>${rideAll ? 'All time' : monLabel(mon)}</span><b><span class="cnt" data-to="${Math.round(km)}">${Math.round(km)}</span><small>km</small></b></div>
       ${window.RADAR ? RADAR.ATTR : ''}<div class="mfocus" id="mfocus" hidden></div><button type="button" class="mfs" id="mfs" aria-label="Full-screen map">${ic('full', 2.6)}</button><button type="button" class="mre" id="mre" hidden>${ic('target', 2.4)}<span>Re-centre</span></button></section>
     ${S.rides.length ? `<div class="segs sm mper"><button type="button" data-rper="prev" aria-label="Previous month"${rideAll || atFirst ? ' disabled' : ''}>${ic('chev', 2.6)}</button><button type="button" data-rper="mon" class="${rideAll ? '' : 'on'}">${monLabel(mon)}</button><button type="button" data-rper="next" aria-label="Next month"${rideAll || atNow ? ' disabled' : ''}>${ic('chev', 2.6)}</button><button type="button" data-rper="all" class="${rideAll ? 'on' : ''}">All time</button></div>` : ''}
-    ${mr.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${mr.filter(r => rideKind(r) === k).length}</b></span>`).join('')}</div>` : ''}
+    ${mr.length ? `<div class="mleg">${['gps', 'pick', 'guess'].map(k => `<span style="--kc:${RIDE_KINDS[k][1]}"><i></i>${RIDE_KINDS[k][0]} <b>${mr.filter(r => rideKind(r) === k).length}</b></span>`).join('')}${jamSpots(12).length ? `<span style="--kc:#FF6060"><i class="jl"></i>Usual jams</span>` : ''}</div>` : ''}
     <div class="stats"><div><b class="cnt" data-to="${mr.length}">${mr.length}</b><span>rides</span></div><div><b>${num(longest, longest < 100 ? 1 : 0)}</b><span>longest km</span></div><div><b>${num(abroad)}</b><span>km in JB</span></div></div>
-    ${goalHTML()}</div>
+    ${goalHTML()}${jamHTML()}</div>
     <div class="hcol b"><h2 class="sec">Road check</h2>
     <div class="roadchk"><div id="live1a"></div><div class="cams" id="cams"></div><div id="live1"></div></div>
     <h2 class="sec">Journal <button type="button" class="link" data-act="allrides">All ${rides.length} rides ›</button></h2>
@@ -394,6 +394,19 @@ function liveRides() {
   return `<div class="incs">${my.length ? my.slice(0, incAll ? 99 : 3).map(row).join('') : `<div class="note">${mine.length ? 'Nothing on your roads right now.' : 'Pick your roads to see what matters to you first.'}</div>`}
     ${incAll ? (my.length > 3 ? '' : '') + rest.map(row).join('') : ''}</div>
     ${(my.length > 3 || rest.length) ? `<button type="button" class="nowmore" data-act="incall">${incAll ? 'Show less' : `<b>${rest.length + Math.max(0, my.length - 3)} more</b>${rest.length ? ' elsewhere in Singapore' : ' on your roads'}`}${ic('chev')}</button>` : ''}`;
+}
+// Traffic: where and when your routes jam, learned from your own speed on GPS-tracked rides
+const OT_V = 2; // OwnTracks settings version: 2 = Move mode, a point every 50 m (needed for ~100 m jam stretches)
+function jamHTML() {
+  const n = (S.jam && S.jam.n) || 0, hasOT = !!(S.al && S.al.pt), old = hasOT && S.otV !== OT_V;
+  const t12 = slot => { const h = Math.floor(slot / 2), m = slot % 2 ? '30' : '00'; return `${h % 12 || 12}:${m}${h < 12 ? 'am' : 'pm'}`; };
+  let body;
+  if (!hasOT && !n) body = `<p class="jnote">Redline learns where your routes jam from your speed on GPS-tracked rides. It needs OwnTracks.</p><button type="button" class="btn ghost sm" data-act="autolog">Set up OwnTracks</button>`;
+  else if (n < JAM.learn) body = `<div class="jlearn"><span>Learning your roads · <b>${n} of ${JAM.learn}</b> GPS rides</span><i><b style="width:${Math.round(n / JAM.learn * 100)}%"></b></i></div><p class="jnote">Jams are judged against your own usual speed on each 100 m of road, so it takes a few weeks of riding.</p>`;
+  else { const sp = jamSpots(3), adv = leaveAdvice();
+    body = (sp.length ? `<div class="list">${sp.map(x => `<button type="button" class="li" data-jam="${x.lat},${x.lon}"><span class="jdot"></span><span class="grow"><span class="t">Jams ${x.j} of ${x.n} rides${x.cells > 1 ? ` · about ${num(Math.max(.1, x.len), 1)} km` : ''}</span><span class="s">${x.when} · ${x.slow} km/h vs your usual ${x.usual}</span></span>${ic('chev')}</button>`).join('')}</div>` : `<p class="jnote">No regular jams on your routes so far.</p>`)
+      + adv.map(a => `<div class="jleave">${ic('clock', 2.2)}<span><b>${a.title ? esc(a.title) : 'Your usual trip'}</b>Leave around ${t12(a.best.slot)}: about ${Math.round(a.best.mins)} min. Around ${t12(a.worst.slot)} it’s ${Math.round(a.worst.mins)} min. <small>${a.n} weekday rides</small></span></div>`).join(''); }
+  return `<h2 class="sec">Traffic</h2><section class="card jamcard">${old ? `<a class="jup" href="${otLink()}">${ic('target', 2.2)}<span><b>Update OwnTracks for jam detail</b>One tap: Move mode, a point every 50 m. Uses more battery while you ride.</span></a>` : ''}${body}</section>`;
 }
 function goalHTML() {
   const ws = weekStart(), k = weekKm(ws), g = +S.goal || 0, st = streak();
@@ -614,7 +627,8 @@ function navTo(i) {
   requestAnimationFrame(() => { const b = $(`#nav [data-i="${i}"]`), ind = $('#navInd'); if (!b || !ind) return; ind.style.width = b.offsetWidth + 'px'; ind.style.height = b.offsetHeight + 'px'; ind.style.transform = `translate(${b.offsetLeft}px,${b.offsetTop}px)`; });
 }
 addEventListener('resize', () => navTo(place));
-function syncWorld() { if (window.MAP) MAP.setRides(viewRides().map(r => ({ id: r.id, t: r.start.t, path: r.path, kind: rideKind(r), gps: r.gps }))); }
+function syncWorld() { if (!window.MAP) return; MAP.setRides(viewRides().map(r => ({ id: r.id, t: r.start.t, path: r.path, kind: rideKind(r), gps: r.gps, jams: (r.jams || []).map(([k]) => jamPos(k)) })));
+  MAP.setSpots(jamSpots(12)); }
 // open a ride on the Rides map (from All rides, a ride's mini map…)
 function showOnMap(id, full) { closeSheet(); const go2 = () => { if (window.MAP && MAP.focused !== id) focusRide(id); viewEl.scrollTo({ top: 0, behavior: 'smooth' }); if (full) setTimeout(() => mapFull(true), 450); };
   if (place !== 1) { go(1); setTimeout(go2, 650); } else go2(); }
@@ -666,6 +680,7 @@ viewEl.addEventListener('mapmoved', e => { const b = $('#mre'); if (b) { b.hidde
 viewEl.addEventListener('click', e => {
   if (e.target.closest('#mfs')) { mapFull(!document.body.classList.contains('mapfs')); return; }
   if (e.target.closest('#mre')) { haptic(); MAP.recentre(); return; }
+  const jb = e.target.closest('[data-jam]'); if (jb) { haptic(); const [la, lo] = jb.dataset.jam.split(',').map(Number); $('#mapcard').scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => MAP.look(la, lo), 350); return; }
   const rpb = e.target.closest('[data-rper]'); if (rpb) { const k = rpb.dataset.rper; haptic();
     if (k === 'all') rideAll = true; else if (k === 'mon') rideAll = false; else { rideAll = false; stepMon(k === 'prev' ? -1 : 1); }
     if (window.MAP) MAP.focus(null); refresh(); return; }
@@ -1532,7 +1547,7 @@ function quickScanSheet() {
 }
 // optional: OwnTracks, a free GPS app that tracks in the background and sends points to the relay, so rides show the real road
 function otLink() {
-  const cfg = { _type: 'configuration', mode: 3, url: `${relayBase()}/?ot=1&k=${riderCode()}`, monitoring: 1, tid: 'RL', deviceId: 'redline', auth: false, cmd: false, extendedData: false, locatorDisplacement: 150, locatorInterval: 60, ignoreInaccurateLocations: 200 };
+  const cfg = { _type: 'configuration', mode: 3, url: `${relayBase()}/?ot=1&k=${riderCode()}`, monitoring: 2, tid: 'RL', deviceId: 'redline', auth: false, cmd: false, extendedData: false, locatorDisplacement: 50, locatorInterval: 30, ignoreInaccurateLocations: 200 };
   return 'owntracks:///config?inline=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
 }
 /* ---------- activity log: what arrived from your intercom shortcuts and OwnTracks, and what Redline made of it ---------- */
@@ -1583,7 +1598,7 @@ function otBlock() {
       <li>When OwnTracks asks for location, choose ${ui('Allow While Using')} then ${ui('Change to Always Allow')}. It can’t track with the app closed otherwise.</li>
       <li>Ride as normal. This step ticks itself when the first point arrives.</li></ol>
       ${isIOS ? '' : `<p class="gnote"><b>On Android:</b> also go to your phone’s Settings → Apps → OwnTracks → Battery and choose <b>Unrestricted</b>, or the phone may stop it to save battery.</p>`}
-      <details class="tipbox"><summary>${ic('alert', 2.2)} The button didn’t open OwnTracks?</summary><ul><li>Open OwnTracks → Settings (or Preferences) → Connection. Set Mode to <b>HTTP</b>.</li><li>Paste this as the URL / Host:<div class="cpy"><code id="otu">${esc(relayBase() + '/?ot=1&k=' + riderCode())}</code><button type="button" class="btn ghost sm" data-copy="otu">Copy</button></div></li><li>Set monitoring to <b>Significant</b> (or Move for sharper trails).</li></ul></details>`}
+      <details class="tipbox"><summary>${ic('alert', 2.2)} The button didn’t open OwnTracks?</summary><ul><li>Open OwnTracks → Settings (or Preferences) → Connection. Set Mode to <b>HTTP</b>.</li><li>Paste this as the URL / Host:<div class="cpy"><code id="otu">${esc(relayBase() + '/?ot=1&k=' + riderCode())}</code><button type="button" class="btn ghost sm" data-copy="otu">Copy</button></div></li><li>Set monitoring to <b>Move</b>, and the distance between points to <b>50 m</b> (for jam logging). <b>Significant</b> saves battery but only sends a point every ~500 m.</li></ul></details>`}
     <p class="gnote">${(S.al && S.al.pt) ? '' : 'No intercom? OwnTracks alone works too: Redline spots your trips and asks once “on the bike?”. After you confirm a route twice, it logs it without asking.'}</p>
     <a class="btn ${on ? 'ghost' : ''} openapp" href="${otLink()}">${ic('target', 2.2)} ${on ? 'Set up OwnTracks again' : 'Set up OwnTracks'}</a>
     <p class="gnote">Modes (top of the OwnTracks map): <b>Move</b> gives sharp routes but uses more battery; <b>Significant</b> sends a point every ~500 m and survives Low Power Mode better. Low Power Mode and closing OwnTracks from the app switcher both stop it during rides. Your points go only to the relay and are deleted once Redline collects them.</p></details>`;
@@ -1971,6 +1986,8 @@ export default {
   }
 };`;
 // the shared Redline relay (Haiqal's). Everyone uses it unless they set their own or remove it.
+// tapping any OwnTracks setup link applies the current settings
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('a[href^="owntracks:"]')) { S.otV = OT_V; save(); } });
 const DEFAULT_RELAY = 'https://redline.lvredline.workers.dev';
 // iCloud links to the shared shortcuts (made once on Haiqal's iPhone). Empty = show the build-it-yourself guide.
 const SHORTCUTS = { scan: '', start: 'https://www.icloud.com/shortcuts/afb9c505c54c4b81ba3d5d4c69251b40', end: 'https://www.icloud.com/shortcuts/a0445371b3e74afbb50d15adcd5aaa7e' };
@@ -2193,7 +2210,10 @@ function seedPreview() {
 
 (function boot() {
   if (window.PREVIEW) seedPreview();
-  fixGuesses(true); syncWorld(); applyLite();
+  fixGuesses(true);
+  // jam logging: learn from GPS rides whose raw points are still on the phone (the last 3 days), oldest first
+  S.rides.filter(r => r.est === 'tracked' && !r.jamT && r.end && Date.now() - r.end.t < 3 * DAY).sort((a, b) => a.start.t - b.start.t).forEach(r => learnJams(r, cleanTrail(trailFor(r.start, r.end)).pts));
+  syncWorld(); applyLite();
   const sp = $('#splash');
   const start = () => { if (sp) sp.classList.add('out'); if (!S.setupDone) startSetup(); else { render(true); processURL(); pullLog(true); } };
   // wait for fonts so the big numbers don't jump, but never more than a moment
