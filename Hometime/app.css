@@ -755,3 +755,10 @@ body.booting .app,body.booting .nav{opacity:0}
 @media (prefers-reduced-motion: reduce){.bkLiquid i{animation:none}}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion: reduce){.ping::before,.ping::after,.halo,.soFill{animation:none!important}}
+
+/* a workday with nothing logged: asked about on the start screen */
+.missCard{width:100%;border-radius:22px;background:var(--card);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:14px 14px 12px;margin-top:4px}
+.missCard[hidden]{display:none}
+.missT{margin:0 0 10px;font-size:15px;font-weight:600;color:var(--muted);text-align:center} .missT b{color:var(--ink)} .missT small{display:block;font-size:13px;font-weight:500;margin-top:2px}
+.missB{display:grid;grid-template-columns:1.3fr 1fr 1fr 1.1fr;gap:6px} .missB button{padding:10px 4px;border-radius:14px;background:var(--field,rgba(27,18,64,.06));border:1px solid var(--line);color:var(--ink);font-size:14px;font-weight:700}
+.missB button:first-child{background:var(--violet);border-color:transparent;color:#fff}
