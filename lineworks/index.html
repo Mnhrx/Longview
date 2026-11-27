@@ -270,7 +270,12 @@ const cargoFare = (a,b,good) => (1.8+1.25*dist(a,b)) * (CARGO_VALUE[good]||1) * 
 const price = m => Math.round(MODELS[m].cost * S.infl);
 const vAge = v => (S.day - v.bought)/360;
 const fuel = () => S.fuelUntil>S.day ? 1.3 : 1;
-const runCost = v => MODELS[v.model].run * S.infl * (1 + 0.05*vAge(v)) * fuel();
+const CAR = { seats:40, tonnes:60, cost:8000, run:450, max:6, slow:0.04 };
+const vCars = v => MODELS[v.model].mode==='rail' ? (v.cars||0) : 0;
+const vCap = v => MODELS[v.model].cap + vCars(v)*(MODELS[v.model].kind==='freight'?CAR.tonnes:CAR.seats);
+const vSpeed = v => MODELS[v.model].speed * (1 - CAR.slow*vCars(v));
+const carPrice = () => Math.round(CAR.cost*S.infl);
+const runCost = v => (MODELS[v.model].run + vCars(v)*CAR.run) * S.infl * (1 + 0.05*vAge(v)) * fuel();
 const vehValue = v => Math.round(v.paid * 0.75 * Math.max(0.1, 1 - vAge(v)/MODELS[v.model].life));
 const bestModel = (mode,kind) => Object.keys(MODELS).filter(k=>MODELS[k].mode===mode && MODELS[k].kind===kind && MODELS[k].year<=year()).pop();
 const aboard = v => v.cargo.reduce((s,c)=>s+c.n,0);
@@ -320,19 +325,21 @@ const PRESETS = {
       {name:'Woodlands',lat:1.436,lon:103.786,pop:255000,type:'city'},{name:'Yishun',lat:1.430,lon:103.835,pop:225000,type:'city'},
       {name:'Ang Mo Kio',lat:1.370,lon:103.849,pop:165000,type:'city'},{name:'Sengkang',lat:1.392,lon:103.895,pop:250000,type:'city'},
       {name:'Tampines',lat:1.354,lon:103.943,pop:270000,type:'city'},{name:'Changi',lat:1.357,lon:103.988,pop:40000,type:'port'},
-      {name:'Marine Parade',lat:1.303,lon:103.905,pop:50000,type:'resort'}],
+      {name:'Marine Parade',lat:1.303,lon:103.905,pop:50000,type:'resort'},{name:'Johor Bahru',lat:1.4927,lon:103.741,pop:500000,type:'city'},
+      {name:'Bedok',lat:1.324,lon:103.930,pop:280000,type:'city'},{name:'Punggol',lat:1.405,lon:103.902,pop:190000,type:'city'},{name:'Queenstown',lat:1.294,lon:103.806,pop:95000,type:'city'}],
     villages:[{name:'Lim Chu Kang',lat:1.430,lon:103.712,pop:3000},{name:'Holland Village',lat:1.311,lon:103.796,pop:20000},
-      {name:'Toa Payoh',lat:1.334,lon:103.850,pop:120000},{name:'Pasir Panjang',lat:1.276,lon:103.791,pop:15000}],
+      {name:'Toa Payoh',lat:1.334,lon:103.850,pop:120000},{name:'Pasir Panjang',lat:1.276,lon:103.791,pop:15000},{name:'Pasir Ris',lat:1.373,lon:103.949,pop:150000},
+      {name:'Sembawang',lat:1.449,lon:103.820,pop:100000},{name:'Choa Chu Kang',lat:1.385,lon:103.745,pop:190000},{name:'Bishan',lat:1.351,lon:103.848,pop:90000}],
     industries:[{name:'Tuas Industrial Estate',lat:1.300,lon:103.640,type:'factory'},{name:'Jurong Island',lat:1.266,lon:103.699,type:'factory'},
       {name:'Kranji Farms',lat:1.430,lon:103.745,type:'farm'},{name:'Neo Tiew Farms',lat:1.400,lon:103.710,type:'farm'},{name:'Hindhede Quarry',lat:1.348,lon:103.776,type:'mine'}],
-    attractions:[{name:'Sentosa',lat:1.249,lon:103.830,kind:'beach'},{name:'Mandai Zoo',lat:1.404,lon:103.793,kind:'park'}],
+    attractions:[{name:'Sentosa',lat:1.249,lon:103.830,kind:'beach'},{name:'Mandai Zoo',lat:1.404,lon:103.793,kind:'park'},{name:'Gardens by the Bay',lat:1.282,lon:103.864,kind:'park'},{name:'Pulau Ubin',lat:1.404,lon:103.960,kind:'island'}],
     roads:[[[1.357,103.988],[1.334,103.93],[1.325,103.89],[1.32,103.85],[1.325,103.80],[1.335,103.76],[1.34,103.72],[1.33,103.66]],
       [[1.437,103.786],[1.40,103.775],[1.35,103.775]],[[1.287,103.851],[1.32,103.845],[1.37,103.849],[1.40,103.84],[1.43,103.835]],
       [[1.354,103.943],[1.392,103.895],[1.40,103.86],[1.43,103.835]],[[1.287,103.851],[1.30,103.905],[1.33,103.975],[1.357,103.988]],
-      [[1.287,103.851],[1.276,103.79],[1.30,103.74],[1.31,103.69],[1.30,103.64]],[[1.437,103.786],[1.41,103.75],[1.385,103.745],[1.34,103.705]]],
-    water:[[[1.34,103.55],[1.33,103.62],[1.30,103.64],[1.29,103.70],[1.30,103.74],[1.28,103.78],[1.265,103.82],[1.27,103.86],[1.29,103.88],[1.31,103.94],[1.33,103.99],[1.36,104.03],[1.37,104.12],[1.12,104.12],[1.12,103.55]],
-      [[1.36,103.58],[1.41,103.68],[1.45,103.72],[1.462,103.77],[1.468,103.82],[1.45,103.87],[1.42,103.91],[1.40,103.96],[1.39,104.00],[1.40,104.12],[1.47,104.12],[1.44,104.00],[1.47,103.93],[1.49,103.87],[1.485,103.80],[1.475,103.74],[1.44,103.66],[1.40,103.58]],
-      [[1.40,104.03],[1.40,104.12],[1.36,104.12],[1.36,104.03]]],
+      [[1.287,103.851],[1.276,103.79],[1.30,103.74],[1.31,103.69],[1.30,103.64]],[[1.437,103.786],[1.41,103.75],[1.385,103.745],[1.34,103.705]],[[1.4927,103.741],[1.46,103.766],[1.437,103.786]]],
+    channels:[[[1.33,103.585],[1.37,103.63],[1.42,103.67],[1.447,103.70],[1.458,103.73],[1.465,103.76],[1.461,103.79],[1.468,103.82],[1.462,103.85],[1.445,103.88],[1.425,103.92],[1.415,103.97],[1.40,104.02],[1.39,104.09]]],
+    bbox:[1.06, 103.57, 1.62, 104.13],
+    land:[[[1.3075,103.6973],[1.3079,103.6953],[1.3034,103.6994],[1.2995,103.6994],[1.3005,103.6956],[1.3079,103.6951],[1.3009,103.6938],[1.2991,103.6839],[1.309,103.6825],[1.3089,103.6808],[1.298,103.6819],[1.2966,103.6784],[1.3026,103.673],[1.3068,103.6727],[1.3063,103.6688],[1.3004,103.6695],[1.2954,103.6743],[1.2887,103.6666],[1.2919,103.6647],[1.2968,103.6577],[1.2959,103.6566],[1.301,103.6538],[1.2994,103.6518],[1.3017,103.6498],[1.3101,103.6575],[1.3116,103.6563],[1.3056,103.6505],[1.3062,103.6484],[1.3091,103.6463],[1.3148,103.6519],[1.317,103.6504],[1.3115,103.6436],[1.3162,103.6376],[1.312,103.6345],[1.3006,103.645],[1.2823,103.65],[1.2793,103.647],[1.2791,103.6404],[1.2698,103.6397],[1.2698,103.6434],[1.2609,103.6434],[1.2609,103.6173],[1.254,103.6173],[1.254,103.6444],[1.248,103.6444],[1.245,103.6378],[1.245,103.6173],[1.2382,103.6173],[1.2382,103.6498],[1.2292,103.6498],[1.2292,103.6173],[1.2216,103.6173],[1.2216,103.6569],[1.2172,103.6586],[1.2107,103.6425],[1.22,103.6072],[1.223,103.6057],[1.2437,103.6057],[1.2437,103.6124],[1.2464,103.6124],[1.2464,103.6088],[1.2529,103.6088],[1.2529,103.612],[1.2557,103.612],[1.2557,103.6097],[1.2602,103.6097],[1.2614,103.6057],[1.277,103.6114],[1.2807,103.6177],[1.2843,103.62],[1.2967,103.6178],[1.3454,103.6365],[1.3506,103.6332],[1.3505,103.6382],[1.3581,103.6404],[1.3607,103.6438],[1.3726,103.6493],[1.3747,103.6514],[1.373,103.6527],[1.3835,103.657],[1.3852,103.6602],[1.402,103.6639],[1.4055,103.6625],[1.4138,103.6727],[1.4159,103.6715],[1.4192,103.6723],[1.4193,103.6748],[1.425,103.6742],[1.4261,103.6769],[1.4291,103.678],[1.4312,103.6833],[1.43,103.6858],[1.433,103.6886],[1.435,103.6961],[1.4459,103.7066],[1.4493,103.7126],[1.4511,103.7283],[1.4472,103.7326],[1.4461,103.7312],[1.4468,103.7328],[1.4427,103.7379],[1.4387,103.7368],[1.4411,103.7382],[1.4389,103.7387],[1.4387,103.743],[1.4462,103.7436],[1.4434,103.7579],[1.4442,103.7671],[1.4491,103.7697],[1.4527,103.7694],[1.4485,103.7709],[1.4685,103.8016],[1.4708,103.8173],[1.4686,103.8222],[1.465,103.8186],[1.4672,103.8228],[1.4624,103.8222],[1.4657,103.8243],[1.461,103.8226],[1.4686,103.8275],[1.4647,103.8343],[1.46,103.8329],[1.4648,103.8373],[1.4548,103.8582],[1.4525,103.855],[1.4424,103.8588],[1.4337,103.8654],[1.4265,103.8578],[1.4238,103.8638],[1.4312,103.8736],[1.4318,103.8786],[1.4258,103.8881],[1.4236,103.8865],[1.4254,103.8887],[1.4206,103.8969],[1.4153,103.8965],[1.4147,103.8981],[1.4196,103.9028],[1.4214,103.9105],[1.4211,103.9126],[1.4162,103.9141],[1.4172,103.9163],[1.4039,103.9309],[1.3997,103.9301],[1.4012,103.9344],[1.3974,103.9385],[1.393,103.9364],[1.395,103.941],[1.3926,103.9432],[1.3877,103.9429],[1.383,103.9492],[1.3821,103.9648],[1.3806,103.9662],[1.3924,103.9766],[1.3938,103.9827],[1.3914,103.9951],[1.3889,103.9991],[1.3745,104.0062],[1.3736,104.0089],[1.3695,104.0057],[1.3701,104.0136],[1.3637,104.028],[1.3548,104.0413],[1.3503,104.0436],[1.3486,104.0423],[1.3542,104.0413],[1.3584,104.0319],[1.3559,104.0326],[1.3273,104.0207],[1.3243,104.0214],[1.3246,104.0325],[1.3162,104.0327],[1.3161,104.0291],[1.3204,104.029],[1.3202,104.0227],[1.3159,104.0228],[1.3152,104.0107],[1.3104,104.0022],[1.3142,103.9913],[1.312,103.9839],[1.3134,103.9852],[1.3167,103.9842],[1.3158,103.9701],[1.2936,103.8934],[1.2879,103.8839],[1.2808,103.8759],[1.2806,103.8775],[1.2822,103.8738],[1.2805,103.8714],[1.2768,103.8716],[1.2678,103.86],[1.2647,103.8609],[1.2672,103.8591],[1.2656,103.8559],[1.2681,103.8516],[1.2607,103.8512],[1.2668,103.8457],[1.2655,103.8443],[1.2615,103.8459],[1.2676,103.8395],[1.2674,103.8321],[1.2631,103.8241],[1.2602,103.8244],[1.2636,103.8304],[1.2639,103.8361],[1.2579,103.8425],[1.2548,103.8364],[1.2574,103.8311],[1.2569,103.8278],[1.2602,103.824],[1.2553,103.8252],[1.2521,103.8484],[1.2404,103.8397],[1.2378,103.833],[1.2426,103.8285],[1.2419,103.8272],[1.2476,103.8237],[1.25,103.8177],[1.2561,103.811],[1.2548,103.8105],[1.2594,103.8067],[1.26,103.8179],[1.2576,103.823],[1.2631,103.8233],[1.262,103.8181],[1.2632,103.8196],[1.2644,103.8151],[1.2626,103.8113],[1.2649,103.8116],[1.2645,103.8149],[1.2664,103.8115],[1.265,103.8102],[1.2659,103.8072],[1.2623,103.8051],[1.2682,103.7992],[1.2666,103.7983],[1.2692,103.794],[1.255,103.7855],[1.2592,103.7786],[1.2728,103.7866],[1.2787,103.7769],[1.2682,103.7707],[1.2805,103.7502],[1.2853,103.753],[1.2859,103.7565],[1.2783,103.7691],[1.2836,103.7723],[1.2906,103.7607],[1.2945,103.7631],[1.2993,103.7586],[1.2965,103.7491],[1.2981,103.7442],[1.3009,103.7448],[1.3013,103.7434],[1.2988,103.7409],[1.3016,103.7297],[1.3003,103.7276],[1.3084,103.7158],[1.3084,103.7122],[1.3065,103.7126],[1.3012,103.7209],[1.2998,103.7204],[1.2997,103.7227],[1.2996,103.7119],[1.2918,103.7123],[1.2907,103.7174],[1.292,103.7182],[1.2915,103.7198],[1.29,103.7189],[1.2913,103.721],[1.2896,103.7245],[1.281,103.7292],[1.278,103.7359],[1.2731,103.7401],[1.2692,103.7329],[1.2717,103.7262],[1.2693,103.7236],[1.2709,103.727],[1.2699,103.7313],[1.2675,103.7331],[1.2633,103.7311],[1.259,103.7225],[1.2667,103.7108],[1.2693,103.7102],[1.267,103.7087],[1.2684,103.7061],[1.2656,103.7048],[1.259,103.7141],[1.2503,103.6941],[1.2634,103.6904],[1.2684,103.685],[1.2631,103.6801],[1.2577,103.6859],[1.24,103.6904],[1.2226,103.6731],[1.2283,103.6696],[1.2236,103.6722],[1.2287,103.6762],[1.2345,103.6729],[1.2349,103.6688],[1.245,103.663],[1.268,103.6537],[1.2729,103.6537],[1.2769,103.6588],[1.274,103.6608],[1.2852,103.6768],[1.2908,103.6886],[1.2906,103.6969],[1.2765,103.6842],[1.2728,103.6881],[1.2771,103.6921],[1.2775,103.6966],[1.2814,103.6957],[1.2909,103.704],[1.2927,103.7085],[1.2916,103.7118],[1.3084,103.7108],[1.3076,103.7084],[1.3021,103.7078],[1.3018,103.7024],[1.304,103.7023],[1.3075,103.6973]],[[1.4197,103.928],[1.4237,103.9264],[1.4281,103.9337],[1.4239,103.9458],[1.4177,103.956],[1.4197,103.9704],[1.4176,103.9788],[1.4195,103.9931],[1.4174,103.9978],[1.4077,104.0022],[1.4029,104.0024],[1.4042,103.9782],[1.3994,103.9596],[1.4054,103.9542],[1.4056,103.9505],[1.4099,103.9489],[1.4197,103.928]],[[1.2309,103.8487],[1.2297,103.8495],[1.2315,103.8513],[1.2319,103.8584],[1.2294,103.8574],[1.2275,103.8532],[1.2197,103.8594],[1.2176,103.857],[1.2227,103.8525],[1.2153,103.8511],[1.2134,103.8516],[1.2149,103.8493],[1.2222,103.8432],[1.2235,103.8455],[1.221,103.8512],[1.2242,103.8524],[1.2258,103.8502],[1.2279,103.8521],[1.2291,103.85],[1.2265,103.8468],[1.2295,103.8494],[1.2321,103.8455],[1.2309,103.8487]],[[1.2409,103.8554],[1.2389,103.8541],[1.2405,103.8502],[1.2384,103.8447],[1.2455,103.8521],[1.2409,103.8554]],[[1.2287,103.8406],[1.2275,103.8398],[1.2288,103.8374],[1.2333,103.8354],[1.2342,103.8377],[1.2287,103.8406]],[[1.44,103.8724],[1.4361,103.87],[1.4356,103.8664],[1.4445,103.8597],[1.4511,103.8575],[1.4527,103.8612],[1.44,103.8724]],[[1.4323,104.0541],[1.4271,104.0698],[1.419,104.0805],[1.4101,104.0851],[1.4072,104.0837],[1.4039,104.0882],[1.3962,104.0877],[1.3811,104.0795],[1.3625,104.0746],[1.3552,104.0754],[1.3385,104.0838],[1.338,104.0805],[1.3873,104.023],[1.3934,104.0183],[1.4012,104.0155],[1.4031,104.0285],[1.4114,104.0302],[1.412,104.027],[1.4086,104.0224],[1.4095,104.0134],[1.4194,104.0091],[1.4253,104.0103],[1.4363,104.0226],[1.4406,104.037],[1.4398,104.0435],[1.435,104.0468],[1.4323,104.0541]],[[1.4076,103.947],[1.4025,103.9538],[1.3985,103.9536],[1.4069,103.9448],[1.4082,103.9441],[1.4076,103.947]],[[1.213,103.76],[1.2129,103.7615],[1.2099,103.7608],[1.2099,103.7629],[1.2082,103.763],[1.2078,103.7606],[1.2079,103.7632],[1.2061,103.7632],[1.2081,103.766],[1.2104,103.7804],[1.2008,103.7816],[1.1965,103.7762],[1.1937,103.7757],[1.1901,103.7731],[1.1883,103.7687],[1.1945,103.7609],[1.2015,103.7638],[1.2039,103.7633],[1.2041,103.7616],[1.2029,103.7626],[1.201,103.7596],[1.2031,103.7584],[1.2172,103.7588],[1.213,103.76]],[[1.2133,103.7228],[1.2127,103.7249],[1.2121,103.7233],[1.21,103.7253],[1.2109,103.7294],[1.2079,103.7306],[1.2096,103.7292],[1.2079,103.7274],[1.2059,103.7309],[1.2035,103.7337],[1.2049,103.7298],[1.2033,103.7309],[1.2025,103.7266],[1.2042,103.7075],[1.2112,103.7139],[1.2133,103.7228]],[[1.2361,103.7505],[1.2343,103.7545],[1.2367,103.7574],[1.2312,103.7598],[1.23,103.7673],[1.2274,103.7708],[1.225,103.7689],[1.2252,103.7638],[1.2288,103.7542],[1.2329,103.7402],[1.2347,103.7398],[1.2368,103.7436],[1.2361,103.7505]],[[1.2404,103.7612],[1.2396,103.7652],[1.2294,103.7765],[1.2241,103.779],[1.2249,103.7733],[1.2293,103.7708],[1.2325,103.7607],[1.2388,103.7596],[1.2404,103.7612]],[[1.1922,103.7269],[1.192,103.7292],[1.1905,103.7277],[1.1911,103.7302],[1.1886,103.7317],[1.1859,103.7297],[1.1883,103.7283],[1.1859,103.7289],[1.1869,103.7267],[1.1858,103.7287],[1.1834,103.7284],[1.1832,103.7244],[1.18,103.7194],[1.1865,103.7172],[1.1868,103.7223],[1.1911,103.7238],[1.1922,103.7269]],[[1.1764,103.7328],[1.1756,103.7367],[1.174,103.7366],[1.1758,103.7377],[1.1744,103.7415],[1.1721,103.7405],[1.1722,103.7386],[1.1715,103.7398],[1.1665,103.7384],[1.1672,103.7338],[1.1719,103.7314],[1.173,103.7283],[1.1764,103.7328]],[[1.2106,103.793],[1.201,103.8015],[1.2014,103.7984],[1.2062,103.7926],[1.2105,103.7918],[1.2106,103.793]],[[1.62,103.57],[1.62,104.13],[1.3621,104.13],[1.3685,104.114],[1.3752,104.1062],[1.4045,104.106],[1.4188,104.1006],[1.4486,104.065],[1.4853,104.0594],[1.5029,104.0863],[1.5175,104.1232],[1.5253,104.13],[1.5495,104.13],[1.5451,104.1112],[1.5063,104.0534],[1.5969,104.0122],[1.62,103.9968],[1.62,103.9661],[1.6086,103.9704],[1.5487,104.0083],[1.5069,104.0034],[1.4643,104.0125],[1.4486,104.0098],[1.4198,103.9745],[1.4317,103.9265],[1.4765,103.8397],[1.4745,103.8143],[1.4537,103.7741],[1.4486,103.7531],[1.4521,103.7127],[1.4506,103.6976],[1.4418,103.6814],[1.3774,103.6301],[1.3535,103.6001],[1.3589,103.57]],[[1.06,104.13],[1.06,104.1116],[1.065,104.106],[1.06,104.1047],[1.06,103.9133],[1.0717,103.9067],[1.0905,103.9026],[1.0998,103.9141],[1.0961,103.9238],[1.0796,103.9382],[1.0786,103.949],[1.0849,103.9562],[1.0936,103.9553],[1.1309,103.9432],[1.1352,103.9445],[1.1408,103.9558],[1.1417,103.9671],[1.1333,103.9961],[1.1447,104.0111],[1.1789,104.0192],[1.1879,104.0309],[1.1814,104.0414],[1.1459,104.0708],[1.1333,104.0855],[1.1455,104.0916],[1.1584,104.0916],[1.1817,104.0786],[1.1878,104.0906],[1.1895,104.1032],[1.1872,104.1157],[1.1793,104.13]]],
     mountains:[[1.354,103.776,1.5]], forests:[[1.365,103.805,4],[1.41,103.70,3]] } },
   malaysia: { label:'Peninsular Malaysia', geo:{ region:'Peninsular Malaysia',
     towns:[{name:'Kuala Lumpur',lat:3.139,lon:101.687,pop:1980000,type:'capital'},{name:'George Town',lat:5.414,lon:100.329,pop:708000,type:'port'},
@@ -348,8 +355,8 @@ const PRESETS = {
     attractions:[{name:'Cameron Highlands',lat:4.47,lon:101.38,kind:'highlands'},{name:'Langkawi',lat:6.35,lon:99.80,kind:'island'},{name:'Taman Negara',lat:4.38,lon:102.40,kind:'park'},{name:'Port Dickson',lat:2.52,lon:101.80,kind:'beach'}],
     roads:[[[6.12,100.37],[5.414,100.4],[4.85,100.74],[4.597,101.09],[4.2,101.26],[3.56,101.65],[3.139,101.687],[2.73,101.94],[2.27,102.54],[2.03,103.32],[1.49,103.74]],
       [[3.139,101.687],[3.52,101.91],[3.81,103.33],[5.33,103.14],[6.125,102.238]],[[4.597,101.09],[4.88,101.97],[6.125,102.238]],[[2.43,103.84],[1.49,103.74]],[[3.81,103.33],[2.43,103.84]]],
-    water:[[[7.5,98],[7.5,100.2],[6.4,100.1],[5.5,100.3],[4.2,100.6],[3,101.3],[2.2,102.1],[1.4,103.4],[1.0,104],[0.5,104],[0.5,98]],
-      [[7.5,102],[6.2,102.3],[5.3,103.2],[4,103.4],[2.5,103.9],[1.4,104.3],[0.5,104.6],[0.5,105.5],[7.5,105.5]]],
+    bbox:[1.0, 99.4, 6.9, 104.8],
+    land:[[[6.2575,102.0731],[6.1975,102.1636],[6.2328,102.1996],[6.177,102.3381],[5.8717,102.5208],[5.7972,102.6263],[5.725,102.6692],[5.4855,103.0276],[5.2211,103.2224],[4.8065,103.448],[4.4885,103.4514],[4.3062,103.4964],[4.1828,103.4548],[4.1163,103.3952],[3.95,103.4343],[3.9639,103.4116],[3.935,103.3947],[3.8024,103.3784],[3.7582,103.3387],[3.6247,103.3872],[3.5341,103.4622],[3.505,103.448],[3.5118,103.4822],[3.3672,103.4281],[3.2038,103.4561],[2.9221,103.4412],[2.789,103.5202],[2.6721,103.6384],[2.6489,103.7651],[2.5248,103.8397],[2.4638,103.8377],[2.3399,103.949],[2.1924,103.9764],[1.9761,104.1128],[1.8706,104.1243],[1.7987,104.1953],[1.6378,104.2552],[1.4716,104.2937],[1.3673,104.2774],[1.3482,104.1741],[1.3752,104.1062],[1.4853,104.0594],[1.5454,104.1476],[1.5063,104.0534],[1.6479,103.966],[1.5487,104.0083],[1.4486,104.0098],[1.4198,103.9745],[1.4765,103.8397],[1.4506,103.6976],[1.3535,103.6001],[1.3821,103.5479],[1.2705,103.5164],[1.3394,103.4548],[1.5384,103.3674],[1.7475,102.9346],[1.8456,102.8356],[1.8594,102.6994],[2.0577,102.5447],[2.2357,102.1543],[2.3945,101.9888],[2.4224,101.9268],[2.3945,101.8652],[2.4789,101.8511],[2.5866,101.7744],[2.6613,101.5423],[2.8191,101.3992],[2.8497,101.2864],[2.9112,101.2831],[3.0023,101.3728],[3.2746,101.2976],[3.4739,101.1084],[3.622,101.0405],[3.768,100.8696],[3.7866,100.8123],[3.8513,100.8454],[3.8472,100.7601],[3.9172,100.7007],[3.9836,100.7063],[3.9911,100.8015],[4.0189,100.8714],[4.0404,100.8615],[4.0214,100.7776],[4.0998,100.7659],[4.1652,100.6777],[4.1555,100.6326],[4.2517,100.6152],[4.3192,100.5654],[4.56,100.6455],[4.5719,100.5973],[4.6109,100.5944],[4.6699,100.6662],[4.6658,100.6042],[4.7431,100.5945],[4.7656,100.6326],[4.7993,100.5762],[4.8543,100.5774],[4.8723,100.4944],[4.9069,100.511],[4.9228,100.4416],[5.0843,100.3645],[5.2112,100.4333],[5.5842,100.3508],[5.6693,100.344],[5.6791,100.3864],[5.6941,100.3645],[5.8109,100.3757],[6.0127,100.3491],[6.3805,100.1375],[6.6951,100.1668],[6.6963,100.274],[6.5578,100.3292],[6.5221,100.3874],[6.4448,100.6307],[6.4932,100.73],[6.4564,100.7339],[6.4148,100.8056],[6.2367,100.833],[6.2726,100.9743],[6.2465,101.0817],[6.1888,101.0892],[6.1346,101.0525],[6.0858,101.0943],[5.9382,101.0788],[5.8983,101.0153],[5.7924,100.9653],[5.6299,101.1222],[5.6815,101.2123],[5.787,101.249],[5.9113,101.5579],[5.8556,101.6341],[5.7656,101.6659],[5.7865,101.7268],[5.7399,101.8005],[5.8593,101.9129],[5.9817,101.9347],[6.0948,102.06],[6.2575,102.0731]],[[2.7856,104.2227],[2.7241,104.2227],[2.7077,104.1721],[2.7458,104.1306],[2.8024,104.1506],[2.8898,104.1814],[2.7856,104.2227]],[[5.4508,100.3098],[5.4176,100.3434],[5.2627,100.2887],[5.2733,100.18],[5.3993,100.1931],[5.4582,100.1795],[5.4508,100.3098]],[[6.2418,99.7863],[6.2942,99.837],[6.2229,99.8238],[6.1718,99.8056],[6.2238,99.7672],[6.2418,99.7863]],[[6.3643,99.9006],[6.3315,99.9163],[6.2905,99.8657],[6.3241,99.8253],[6.2615,99.7287],[6.3532,99.719],[6.3767,99.6501],[6.4358,99.6452],[6.4198,99.7709],[6.4709,99.8328],[6.3902,99.9133],[6.3643,99.9006]],[[3.0518,101.3377],[3.009,101.3353],[2.9677,101.2756],[3.064,101.3059],[3.0518,101.3377]],[[6.9,100.9225],[6.8563,101.0267],[6.9,101.4018],[6.8418,101.5574],[6.5007,101.7717],[6.2575,102.0731],[6.0948,102.06],[5.9817,101.9347],[5.8593,101.9129],[5.7399,101.8005],[5.7865,101.7268],[5.7656,101.6659],[5.8556,101.6341],[5.9113,101.5579],[5.787,101.249],[5.6815,101.2123],[5.6299,101.1222],[5.7924,100.9653],[5.8983,101.0153],[5.9382,101.0788],[6.0858,101.0943],[6.1346,101.0525],[6.2335,101.0883],[6.2726,100.9743],[6.2367,100.833],[6.4148,100.8056],[6.4564,100.7339],[6.4932,100.73],[6.4448,100.6307],[6.5221,100.3874],[6.5578,100.3292],[6.7,100.2633],[6.6951,100.1668],[6.5661,100.1672],[6.4423,100.1273],[6.4848,100.0901],[6.5332,100.1035],[6.5066,100.0633],[6.5347,100.03],[6.7626,99.8675],[6.8542,99.7107],[6.9,99.6859]],[[6.5165,99.6724],[6.4923,99.6587],[6.5834,99.6003],[6.6669,99.6364],[6.7238,99.657],[6.6729,99.6805],[6.5583,99.7044],[6.5165,99.6724]],[[1.8254,100.9473],[1.8828,100.9483],[2.2089,100.8],[2.2808,100.8412],[2.2983,100.8859],[2.2915,101.0503],[2.2198,101.0674],[2.0246,101.3171],[1.9164,101.3267],[1.7093,101.427],[1.6559,101.5674],[1.6615,101.7492],[1.3865,102.1182],[1.2478,102.1472],[1.1996,102.1973],[1.0659,102.1942],[1.0,102.2266],[1.0,99.4],[3.3957,99.4],[3.2446,99.5581],[3.1805,99.7507],[3.0115,99.8579],[3.0183,99.89],[2.9485,99.9795],[2.7991,99.9979],[2.7272,99.9671],[2.6962,99.9535],[2.6016,100.0139],[2.6788,100.0122],[2.7031,99.974],[2.7273,100.0549],[2.5301,100.1258],[2.6636,100.1211],[2.7062,100.2106],[2.5629,100.3122],[2.2733,100.4343],[2.1568,100.561],[2.1345,100.6662],[2.0397,100.8128],[1.8254,100.9473]],[[1.0128,103.4431],[1.0045,103.3577],[1.0616,103.3148],[1.1197,103.3421],[1.1303,103.3898],[1.0642,103.3978],[1.0128,103.4431]],[[1.0,102.4926],[1.1064,102.4676],[1.1398,102.5275],[1.0577,102.6157],[1.0112,102.6055],[1.0,102.7849]],[[1.0,102.8197],[1.0355,102.7736],[1.0098,102.6262],[1.041,102.6372],[1.1679,102.7554],[1.0915,102.9671],[1.0,103.0798]],[[1.1605,104.1463],[1.0488,104.1311],[1.065,104.106],[1.0,104.0924],[1.0098,103.9558],[1.0905,103.9026],[1.0786,103.949],[1.1352,103.9445],[1.1333,103.9961],[1.1879,104.0309],[1.1333,104.0855],[1.1878,104.0906],[1.1605,104.1463]],[[1.0964,104.6546],[1.0,104.6483],[1.0,104.4575],[1.0337,104.4852],[1.0582,104.4525],[1.0036,104.271],[1.0933,104.2319],[1.2026,104.3997],[1.1795,104.5081],[1.2254,104.5757],[1.1446,104.5882],[1.0964,104.6546]],[[1.242,102.4734],[1.0762,102.4456],[1.0,102.4636],[1.0,102.3007],[1.0995,102.2329],[1.2039,102.2451],[1.258,102.2126],[1.3983,102.2106],[1.4138,102.2529],[1.242,102.4734]],[[1.3636,102.4959],[1.2773,102.5095],[1.2707,102.4788],[1.4133,102.3303],[1.4752,102.0956],[1.5857,102.0044],[1.6154,102.0078],[1.6273,102.0537],[1.5154,102.4627],[1.4897,102.4905],[1.3636,102.4959]],[[2.0581,101.7212],[1.948,101.7756],[1.7782,101.7151],[1.71,101.5975],[1.7655,101.4601],[1.9306,101.3938],[2.0444,101.4181],[2.0724,101.4783],[2.0581,101.5505],[2.1285,101.6493],[2.0581,101.7212]],[[1.3911,103.9608],[1.3742,104.0034],[1.3345,103.9749],[1.2663,103.8389],[1.3029,103.7302],[1.3223,103.6404],[1.4294,103.7083],[1.4471,103.8316],[1.3911,103.9608]]],
     mountains:[[4.6,101.5,60],[5.5,101.5,50]], forests:[[4.4,102.4,70]] } },
 };
 
@@ -364,7 +371,7 @@ function blankTerrain(seed){
   return { ter, r };
 }
 const small = p => p.kind!=='town';
-function farFrom(list,x,y,sm){ return list.every(o => Math.max(Math.abs(o.x-x),Math.abs(o.y-y)) >= ((sm||small(o)) ? 3 : 5)); }
+function farFrom(list,x,y,sm){ return list.every(o => Math.max(Math.abs(o.x-x),Math.abs(o.y-y)) >= ((sm||small(o)) ? 3 : 4)); }
 function clearFor(ter,p){ const rr=small(p)?0:1; for(let dy=-rr;dy<=rr;dy++) for(let dx=-rr;dx<=rr;dx++) ter[idx(p.x+dx,p.y+dy)]=GRASS; }
 function mkPlace(list,name,x,y,kind,type,size){
   const p={ id:list.length, name, x, y, kind, type, pop:0, draw:0, waiting:{}, cwait:{}, boarded:0, lost:0, arrivals:0, arrLast:0, transfers:0,
@@ -421,17 +428,38 @@ function geoWorld(geo, seed){
   const lat0=srcT.reduce((a,t)=>a+t.lat,0)/srcT.length, k=Math.cos(lat0*Math.PI/180);
   const proj=(lat,lon)=>[lon*k,-lat];
   let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
-  for(const t of all){ const [px,py]=proj(t.lat,t.lon); minx=Math.min(minx,px);maxx=Math.max(maxx,px);miny=Math.min(miny,py);maxy=Math.max(maxy,py); }
+  const fixed=Array.isArray(geo.bbox)&&geo.bbox.length===4&&geo.bbox.every(ok);
+  const ext=fixed?[[geo.bbox[0],geo.bbox[1]],[geo.bbox[2],geo.bbox[3]]]:all.map(t=>[t.lat,t.lon]);
+  for(const [la,lo] of ext){ const [px,py]=proj(la,lo); minx=Math.min(minx,px);maxx=Math.max(maxx,px);miny=Math.min(miny,py);maxy=Math.max(maxy,py); }
   let bw=Math.max(maxx-minx,0.02), bh=Math.max(maxy-miny,0.02);
-  const pad=Math.max(bw,bh)*0.08; minx-=pad; miny-=pad; bw+=pad*2; bh+=pad*2;
+  const pad=fixed?0:Math.max(bw,bh)*0.08; minx-=pad; miny-=pad; bw+=pad*2; bh+=pad*2;
   const scale=(W-6)/Math.max(bw,bh), offX=3+((W-6)-bw*scale)/2, offY=3+((H-6)-bh*scale)/2;
   const toG=(lat,lon)=>{ const [px,py]=proj(lat,lon); return [(px-minx)*scale+offX,(py-miny)*scale+offY]; };
   const perKm=scale/111;
-  const ter=new Array(W*H).fill(GRASS);
+  const hasLand=Array.isArray(geo.land)&&geo.land.length>0;
+  const ter=new Array(W*H).fill(hasLand?WATER:GRASS);
+  const fillPoly=(poly,val,samples)=>{
+    const pts=poly.filter(q=>Array.isArray(q)&&ok(q[0])&&ok(q[1])).slice(0,2000).map(q=>toG(q[0],q[1]));
+    if(pts.length<3) return;
+    let x0=W,x1=0,y0=H,y1=0; for(const [x,y] of pts){ x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y); }
+    const inside=(px,py)=>{ let c=false; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j]; if(((yi>py)!==(yj>py)) && px<(xj-xi)*(py-yi)/(yj-yi)+xi) c=!c; } return c; };
+    for(let y=Math.max(0,Math.floor(y0));y<=Math.min(H-1,Math.ceil(y1));y++) for(let x=Math.max(0,Math.floor(x0));x<=Math.min(W-1,Math.ceil(x1));x++){
+      if(samples){ let n=0; for(const [sx,sy] of [[.25,.25],[.75,.25],[.25,.75],[.75,.75],[.5,.5]]) if(inside(x+sx,y+sy)) n++; if(n>=3) ter[idx(x,y)]=val; }
+      else if(inside(x+0.5,y+0.5)) ter[idx(x,y)]=val;
+    }
+  };
+  if(hasLand) geo.land.slice(0,60).forEach(poly=>{ if(Array.isArray(poly)) fillPoly(poly,GRASS,true); });
+  (Array.isArray(geo.channels)?geo.channels:[]).slice(0,10).forEach(line=>{
+    if(!Array.isArray(line)) return; const pts=line.filter(q=>Array.isArray(q)&&ok(q[0])&&ok(q[1])).map(q=>toG(q[0],q[1]));
+    let lx=null, ly=null;
+    for(let k=0;k<pts.length-1;k++){ const [x0,y0]=pts[k],[x1,y1]=pts[k+1], n=Math.ceil(Math.hypot(x1-x0,y1-y0)*3)+1;
+      for(let s2=0;s2<=n;s2++){ const x=Math.floor(x0+(x1-x0)*s2/n), y=Math.floor(y0+(y1-y0)*s2/n); if(x<0||y<0||x>=W||y>=H) continue;
+        if(lx!==null&&x!==lx&&y!==ly) ter[idx(x,ly)]=WATER; ter[idx(x,y)]=WATER; lx=x; ly=y; } }
+  });
   const circles=(list,type)=>{ (Array.isArray(list)?list:[]).slice(0,14).forEach(c=>{
     if(!Array.isArray(c)||!ok(c[0])||!ok(c[1])||!ok(c[2])) return;
     const [gx,gy]=toG(c[0],c[1]), rad=clamp(c[2]*perKm,1,16);
-    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const d=Math.hypot(x+0.5-gx,y+0.5-gy); if(d<rad*(0.75+0.5*n2(x,y))) ter[idx(x,y)]=type; } }); };
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const d=Math.hypot(x+0.5-gx,y+0.5-gy); if(ter[idx(x,y)]!==WATER && d<rad*(0.75+0.5*n2(x,y))) ter[idx(x,y)]=type; } }); };
   circles(geo.forests,FOREST); circles(geo.mountains,HILL);
   for(let i=0;i<W*H;i++) if(ter[i]===GRASS && n3(i%W,(i/W)|0)>0.76) ter[i]=FOREST;
   (Array.isArray(geo.water)?geo.water:[]).slice(0,24).forEach(poly=>{
@@ -632,7 +660,7 @@ function waitAtFor(p,l){
   return s;
 }
 const lineWaiting = l => l.stops.reduce((s,id)=>s+waitAtFor(P(id),l),0);
-const lineCap = l => lineVehicles(l).reduce((s,v)=>s+MODELS[v.model].cap,0);
+const lineCap = l => lineVehicles(l).reduce((s,v)=>s+vCap(v),0);
 
 // ---------- lines and vehicles ----------
 function sameStops(a,b){ return a.length===b.length && (a.every((x,i)=>x===b[i]) || a.every((x,i)=>x===b[b.length-1-i])); }
@@ -646,7 +674,9 @@ function buyVehicle(spec, model, free){
     line={ id:S.nextLine++, mode:spec.mode, stops:spec.stops.slice(), color:nextColor(), profitYear:0, profitLast:0, fareMult:1, suspendUntil:0 };
     S.lines.push(line); linePaths.set(line.id, lp); buildOverlay();
   }
-  const v={ id:S.nextVeh++, line:line.id, model, pos:0, dir:1, next:0, wait:0, cargo:[], bought:S.day, paid:cost, profitYear:0, profitLast:0, broken:false };
+  const n=S.vehicles.filter(x=>x.line===line.id).length, lp0=linePaths.get(line.id), len0=lp0&&lp0.cum.length?lp0.cum[lp0.cum.length-1]:10;
+  const rt=2*(len0/MODELS[model].speed + line.stops.length*1.2);
+  const v={ id:S.nextVeh++, line:line.id, model, pos:0, dir:1, next:0, wait:n?rt*((n*0.618)%1):0, cargo:[], bought:S.day, paid:cost, profitYear:0, profitLast:0, broken:false, cars:0 };
   S.vehicles.push(v);
   if(!free){ S.money-=cost; S.m.vehicles+=cost; }
   computeAll();
@@ -684,7 +714,7 @@ function arrive(v, k){
   if(k===l.stops.length-1) v.dir=-1; else if(k===0) v.dir=1;
   v.next=k+v.dir;
   const fwd=[]; for(let j=k+v.dir; j>=0&&j<l.stops.length; j+=v.dir) fwd.push(l.stops[j]);
-  let free=m.cap-aboard(v);
+  let free=vCap(v)-aboard(v);
   if(m.kind==='pass' && isPax(at)){
     const rt=routes.get(at.id);
     for(const fk in at.waiting){ if(free<=0) break;
@@ -701,7 +731,7 @@ function arrive(v, k){
       v.cargo.push({from:at.id,to:d,good,n:take});
     }
   }
-  if(v.next>=0 && v.next<l.stops.length){ l.offM=(l.offM||0)+m.cap; l.carM=(l.carM||0)+aboard(v); }
+  if(v.next>=0 && v.next<l.stops.length){ l.offM=(l.offM||0)+vCap(v); l.carM=(l.carM||0)+aboard(v); }
   v.wait = l.mode==='air' ? 1.2 : l.mode==='rail' ? 1.5 : 1;
   v.broken=false;
 }
@@ -814,7 +844,7 @@ function step(dt){
     const l=lineById(v.line); if(l.suspendUntil>S.day) continue;
     if(v.wait>0){ v.wait-=dt; continue; }
     const target=lp.stopPos[v.next];
-    v.pos+=v.dir*MODELS[v.model].speed*dt;
+    v.pos+=v.dir*vSpeed(v)*dt;
     if((v.dir>0&&v.pos>=target)||(v.dir<0&&v.pos<=target)){ v.pos=target; arrive(v, v.next); }
   }
   const before=Math.floor(S.day/30);
@@ -973,7 +1003,7 @@ function draw(){
       c.fillStyle='#fff'; c.beginPath(); c.moveTo(9,0); c.lineTo(-7,-6.5); c.lineTo(-4,0); c.lineTo(-7,6.5); c.closePath(); c.fill();
       c.fillStyle=l.color; c.beginPath(); c.moveTo(7,0); c.lineTo(-5,-4.5); c.lineTo(-3,0); c.lineTo(-5,4.5); c.closePath(); c.fill();
     } else if(m.mode==='rail'){
-      const cars=3, cl=8;
+      const cars=3+Math.min(3,Math.ceil(vCars(v)/2)), cl=8;
       for(let k=0;k<cars;k++){ const x0=-cars*cl/2+k*cl; c.fillStyle='#fff'; roundRect(c,x0-1,-4.5,cl+1,9,2); c.fill();
         c.fillStyle=m.kind==='freight'?'#3b4249':l.color; roundRect(c,x0,-3.5,cl-1,7,1.5); c.fill(); }
       if(m.kind==='freight'){ c.fillStyle=l.color; c.fillRect(-cars*cl/2,-1,cars*cl-1,2); }
@@ -1021,24 +1051,33 @@ function drawPlace(c,p,focus){
 function star(c,x,y,R,r){ c.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r:R; c.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } c.closePath(); }
 function ring(c,t){ c.strokeStyle='#1b2128'; c.lineWidth=2.5; c.setLineDash([6,5]); c.beginPath(); c.arc(t.x*T+T/2,t.y*T+T/2,small(t)?T*1.1:T*1.7,0,7); c.stroke(); c.setLineDash([]); }
 function drawLabels(c){
-  c.textAlign='left'; c.textBaseline='middle';
-  for(const p of S.towns){
-    const important = p.kind==='town' || cam.z>0.85 || ui.stops.includes(p.id) || ui.pickA===p.id || (ui.sel&&ui.sel.kind==='town'&&ui.sel.id===p.id);
-    if(!important) continue;
-    const s=w2s(p.x*T+T/2+(p.kind==='town'?(6+Math.min(7,p.pop/1100))+5:11), p.y*T+T/2);
-    if(s.x<-40||s.x>cw+200||s.y<-30||s.y>ch+30) continue;
-    const name=p.name, fs=p.kind==='town'?15:12.5;
-    c.font=`700 ${fs}px Barlow Condensed, Arial Narrow, sans-serif`;
-    c.lineWidth=4; c.strokeStyle='rgba(255,255,255,.95)'; c.lineJoin='round';
-    c.strokeText(name,s.x,s.y-(p.kind==='town'?4:0)); c.fillStyle='#1b2128'; c.fillText(name,s.x,s.y-(p.kind==='town'?4:0));
-    if(p.kind==='town'){
-      const sub=fmtPop(p.pop)+(p.type&&p.type!=='city'&&p.type!=='market'?' · '+TOWN_TYPES[p.type].name.split(' ')[0]:'');
-      c.font='500 11px Barlow, system-ui, sans-serif'; c.strokeText(sub,s.x,s.y+9); c.fillStyle='#6b7580'; c.fillText(sub,s.x,s.y+9);
-    }
+  c.textAlign='left'; c.textBaseline='middle'; c.lineJoin='round';
+  const placed=[], hit=q=>placed.some(o=>q.x<o.x+o.w&&q.x+q.w>o.x&&q.y<o.y+o.h&&q.y+q.h>o.y);
+  const radius=p=>(p.kind==='town'?6+Math.min(7,p.pop/1100):p.kind==='village'?5:9)*cam.z+2;
+  for(const p of S.towns){ const s=w2s(p.x*T+T/2,p.y*T+T/2), rr=radius(p); placed.push({x:s.x-rr,y:s.y-rr,w:rr*2,h:rr*2}); }
+  const order=S.towns.slice().sort((a,b)=>((b.kind==='town')-(a.kind==='town'))||(sizeOf(b)-sizeOf(a)));
+  for(const p of order){
+    const forced = ui.stops.includes(p.id) || ui.pickA===p.id || (ui.sel&&ui.sel.kind==='town'&&ui.sel.id===p.id);
+    if(!(p.kind==='town' || cam.z>0.85 || forced)) continue;
+    const s=w2s(p.x*T+T/2,p.y*T+T/2), rr=radius(p);
+    if(s.x<-150||s.x>cw+150||s.y<-40||s.y>ch+40) continue;
+    const big=p.kind==='town', fs=big?15:12.5, name=p.name;
+    const sub=big?fmtPop(p.pop)+(p.type&&p.type!=='city'&&p.type!=='market'?' · '+TOWN_TYPES[p.type].name.split(' ')[0]:''):'';
+    c.font=`700 ${fs}px Barlow Condensed, Arial Narrow, sans-serif`; const nw=c.measureText(name).width;
+    c.font='500 11px Barlow, system-ui, sans-serif'; const sw=sub?c.measureText(sub).width:0;
+    const w=Math.max(nw,sw), h=big?27:15;
+    const cands=[{x:s.x+rr+4,y:s.y-h/2},{x:s.x-rr-4-w,y:s.y-h/2},{x:s.x-w/2,y:s.y+rr+2},{x:s.x-w/2,y:s.y-rr-2-h}];
+    let at=cands.find(q=>!hit({x:q.x,y:q.y,w,h}));
+    if(!at){ if(!big&&!forced) continue; at=cands[0]; }
+    placed.push({x:at.x,y:at.y,w,h});
+    const ny=at.y+(big?8:h/2);
+    c.font=`700 ${fs}px Barlow Condensed, Arial Narrow, sans-serif`; c.lineWidth=4; c.strokeStyle='rgba(255,255,255,.95)';
+    c.strokeText(name,at.x,ny); c.fillStyle='#1b2128'; c.fillText(name,at.x,ny);
+    if(sub){ c.font='500 11px Barlow, system-ui, sans-serif'; c.strokeText(sub,at.x,at.y+21); c.fillStyle='#6b7580'; c.fillText(sub,at.x,at.y+21); }
     let wait=0; if(isPax(p)) for(const f in p.waiting) wait+=p.waiting[f]; else for(const d in p.cwait) wait+=p.cwait[d];
     if(wait>=1){
       const wt=Math.floor(wait)+(isPax(p)?'':'t'); c.font='700 10.5px Barlow, system-ui, sans-serif'; const ww=c.measureText(wt).width+10;
-      const bx=s.x-ww-(p.kind==='town'?22:16)-(p.kind==='town'?Math.min(7,p.pop/1100)*cam.z:0), by=s.y-(p.kind==='town'?14:15);
+      const bx=s.x-rr-ww+4, by=s.y-rr-4;
       c.fillStyle=isPax(p)&&p.rating<0.45?'#d2402f':'#1b2128'; roundRect(c,bx,by-8,ww,16,8); c.fill(); c.fillStyle='#fff'; c.fillText(wt,bx+5,by+0.5);
     }
   }
@@ -1093,7 +1132,7 @@ const route=l=>l.stops.map(s=>esc(P(s).name)).join(' – ');
 function lineStats(l){
   const lp=linePaths.get(l.id), vs=lineVehicles(l), len=lp&&lp.cum.length?lp.cum[lp.cum.length-1]:1, wait=l.mode==='air'?1.2:l.mode==='rail'?1.5:1;
   const st={pass:{seats:0,demand:0,n:0}, freight:{seats:0,demand:0,n:0}, run:0, old:vs.filter(v=>vAge(v)>MODELS[v.model].life), len};
-  for(const v of vs){ const m=MODELS[v.model], rt=2*(len/m.speed+l.stops.length*wait); st[m.kind].seats+=m.cap*2/rt; st[m.kind].n++; st.run+=runCost(v); }
+  for(const v of vs){ const m=MODELS[v.model], rt=2*(len/vSpeed(v)+l.stops.length*wait); st[m.kind].seats+=vCap(v)*2/rt; st[m.kind].n++; st.run+=runCost(v); }
   for(const a of l.stops){ const p=P(a);
     if(isPax(p)){ const rt=routes.get(a); for(const {f,rate} of (rates.get(a)||[])){ const r=rt.get(f); if(r&&l.stops.includes(r.hop)) st.pass.demand+=rate; } }
     else { const d=fRoutes.get(a); if(d&&d.size){ const on=[...d].filter(x=>l.stops.includes(x)).length; st.freight.demand+=prodRate(p)*on/d.size; } } }
@@ -1116,6 +1155,10 @@ function diagnose(l){
         kind==='pass'?'Nobody on this line wants these trips. Passenger vehicles need at least two towns or attractions.':'No stop on this line produces cargo that another stop buys. Check what each industry sells.',{act:'editRoute',id:l.id,label:'Edit stops'}); continue; }
     if(k.seats>k.demand*1.6) add('over-'+kind,'too many vehicles',`${k.demand<1?'Fewer than 1':'About '+Math.round(k.demand)} ${k.demand<1&&kind==='pass'?'person':word} a day ${k.demand<1?'wants':'want'} this route, but its vehicles offer ${Math.round(k.seats)} spaces a day. They run mostly empty.`,{act:'removeOne',id:l.id,label:'Sell one vehicle'});
   }
+  for(const kind of ['pass','freight']){ const k=st[kind]; if(k.n && k.demand>k.seats*1.2){
+    const canCar=l.mode==='rail'&&lineVehicles(l).some(v=>vCars(v)<CAR.max);
+    add('under-'+kind,'not enough seats',`About ${Math.round(k.demand)} ${kind==='pass'?'people':'tonnes'} a day want this line but it carries ${Math.round(k.seats)}. The rest wait and give up, which lowers town ratings.`,
+      canCar?{act:'addCarLine',id:l.id,label:'Add a carriage'}:{act:'addBest',id:l.id,label:'Add a vehicle'}); } }
   if(st.load!=null && st.load<0.35 && !out.some(o=>o.key.startsWith('over'))) add('empty','mostly empty',`Vehicles left stops only ${Math.round(st.load*100)}% full last month.`,l.fareMult>1?{act:'fare',id:l.id,d:-1,label:'Lower fares'}:{act:'removeOne',id:l.id,label:'Sell one vehicle'});
   if(l.fareMult>=1.3 && st.pass.n) add('fare','fares high',`Fares are at ${Math.round(l.fareMult*100)}%, which puts many riders off.`,{act:'fare',id:l.id,d:-1,label:'Lower fares'});
   if(l.mode!=='air' && st.endDist<9 && st.pass.n) add('short','short route',`The ends are only ${st.endDist} tiles apart. Fares grow with distance, so short trips earn little per rider.`,{act:'editRoute',id:l.id,label:'Extend the line'});
@@ -1197,6 +1240,7 @@ function placeSheet(p){
   <div class="row"><span>Visitors last month</span><b>${Math.round(p.arrLast||0)}</b></div></div>
   <h3>Where people want to go</h3>
   ${wl.map(w=>`<div class="wish"><span>${esc(w.b.name)} <small class="m" style="display:inline">${w.rival?`<span class="chip bad">${RIVAL}</span>`:w.r?(w.r.transfer?'<span class="chip info">with a change</span>':'<span class="chip ok">direct</span>'):'<span class="chip warn">not served</span>'}</small></span><b>${Math.round(w.share*100)}%</b><div class="bar2"><i style="width:${Math.round(w.share*100/Math.max(...wl.map(x=>x.share))*100)/100}%"></i></div></div>`).join('')}
+  ${waitBreakdown(p)}
   <h3>Lines stopping here</h3>
   ${lines.length?lines.map(l=>{ const w=Math.floor(waitAtFor(p,l)), best=bestModel(l.mode,'pass');
     return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span>
@@ -1207,6 +1251,20 @@ function placeSheet(p){
   <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New line from here</button>
   ${p.kind==='town'&&!p.airport?`<button class="btn" data-act="airportAt" data-id="${p.id}">Airport…</button>`:''}</div>
   ${propSection(p)}`);
+}
+function waitBreakdown(p){
+  const rt=routes.get(p.id), rows=[];
+  for(const f in p.waiting){ const n=Math.floor(p.waiting[f]); if(n<1) continue; const r=rt.get(+f), dest=P(+f);
+    let how='<span class="chip bad">no service now</span>';
+    if(r){ const ls=S.lines.filter(l=>l.stops.includes(p.id)&&l.stops.includes(r.hop)&&lineVehicles(l).some(v=>MODELS[v.model].kind==='pass'));
+      how=ls.map(l=>badge(l)).join('')+(r.transfer?`<small class="m" style="display:inline">change at ${esc(P(r.hop).name)}</small>`:''); }
+    rows.push({n,dest,how,f:+f}); }
+  if(!rows.length) return '';
+  rows.sort((a,b)=>b.n-a.n);
+  const total=rows.reduce((s,x)=>s+x.n,0);
+  return `<h3>Waiting here · ${total.toLocaleString('en-US')}</h3>
+  <div class="rows">${rows.slice(0,8).map(x=>`<div class="row"><span style="color:var(--ink)">${esc(x.dest.name)} <span style="white-space:nowrap">${x.how}</span></span><b class="${x.n>100?'warnc':''}">${x.n}</b></div>`).join('')}</div>
+  <p class="note">Each queue only shrinks when the line serving that trip has more seats. People who wait too long give up and lower the rating.</p>`;
 }
 function industrySheet(p){
   const d=IND[p.type], lines=S.lines.filter(l=>l.stops.includes(p.id)), dests=[...(fRoutes.get(p.id)||[])];
@@ -1258,12 +1316,15 @@ function vehSheet(v){
   showSheet(`<h2>${badge(l)} ${m.name}${closeBtn}</h2><div class="sub">${route(l)}</div>
   <div class="rows">
     <div class="row"><span>Status</span><b>${status}</b></div>
-    <div class="row"><span>${m.kind==='freight'?'Cargo':'Passengers'}</span><b>${aboard(v)} / ${m.cap}${m.kind==='freight'?' t':''}</b></div>
+    <div class="row"><span>${m.kind==='freight'?'Cargo':'Passengers'}</span><b>${aboard(v)} / ${vCap(v)}${m.kind==='freight'?' t':''}</b></div>
     <div class="row"><span>Profit this year</span>${pl(v.profitYear)}</div>
     <div class="row"><span>Profit last year</span>${pl(v.profitLast)}</div>
     <div class="row"><span>Running cost</span><b>${money(runCost(v))}/mo</b></div>
     <div class="row"><span>Age</span><b class="${age>m.life?'neg':old?'warnc':''}">${age.toFixed(1)} of ${m.life} years</b></div>
   </div>
+  ${m.mode==='rail'?`<h3>Carriages · ${vCars(v)}/${CAR.max}</h3>
+  <p class="note">Each carriage adds ${m.kind==='freight'?CAR.tonnes+' t':CAR.seats+' seats'} for ${money(carPrice())} and ${money(CAR.run*S.infl)}/mo, much cheaper than a new train. Trains slow down ${Math.round(CAR.slow*100)}% per carriage.</p>
+  <div class="btns"><button class="btn pri" data-act="addCar" data-id="${v.id}" ${vCars(v)>=CAR.max||S.money<carPrice()?'disabled':''}>Add carriage (${money(carPrice())})</button><button class="btn" data-act="removeCar" data-id="${v.id}" ${vCars(v)<=0?'disabled':''}>Remove one</button></div>`:''}
   <div class="btns">
     ${(old||upgrade)?`<button class="btn pri" data-act="replace" data-id="${v.id}" ${S.money<repCost?'disabled':''}>Replace with ${MODELS[best].name} (${money(repCost)})</button>`:''}
     <button class="btn" data-act="moveVeh" data-id="${v.id}">Move to another line</button>
@@ -1293,8 +1354,9 @@ function lineSheet(l){
   <h3>Stops · waiting for this line</h3>
   <div class="rows">${l.stops.map(id=>{ const t=P(id), w=Math.floor(waitAtFor(t,l)); return `<button class="row" data-act="selTown" data-id="${id}"><span>${esc(t.name)}</span><b class="${w>40?'warnc':''}">${w}${t.kind==='industry'?' t':''} waiting</b></button>`; }).join('')}</div>
   <h3>${vehWord(l.mode,2).replace(/^./,c=>c.toUpperCase())} (${vs.length})</h3>
-  <div class="rows">${vs.map(v=>{ const m=MODELS[v.model], age=vAge(v); return `<div class="row"><button class="main" style="background:none;border:0;padding:0;text-align:left;font:inherit;color:var(--ink);min-width:0" data-act="selVeh" data-id="${v.id}">${m.name}<small class="m">${aboard(v)}/${m.cap} aboard · <span class="${age>m.life?'neg':''}">${age.toFixed(1)} yrs</span> · ${signed(v.profitYear)} this year</small></button>
+  <div class="rows">${vs.map(v=>{ const m=MODELS[v.model], age=vAge(v); return `<div class="row"><button class="main" style="background:none;border:0;padding:0;text-align:left;font:inherit;color:var(--ink);min-width:0" data-act="selVeh" data-id="${v.id}">${m.name}${vCars(v)?` +${vCars(v)} car${vCars(v)>1?'s':''}`:''}<small class="m">${aboard(v)}/${vCap(v)} aboard · <span class="${age>m.life?'neg':''}">${age.toFixed(1)} yrs</span> · ${signed(v.profitYear)} this year</small></button>
     <span class="mini"><button class="txt" data-act="moveVeh" data-id="${v.id}">Move</button><button class="txt" data-act="sell" data-id="${v.id}">Sell</button></span></div>`; }).join('')}</div>
+  ${l.mode==='rail'&&vs.some(v=>vCars(v)<CAR.max)?`<div class="btns"><button class="btn pri" data-act="addCarLine" data-id="${l.id}" ${S.money<carPrice()?'disabled':''}>Add a carriage (${money(carPrice())}) · cheapest way to add seats</button></div>`:''}
   ${modelRows(l, lineKinds(l.stops))}
   <h3>Change this line</h3>
   <div class="btns"><button class="btn" data-act="editRoute" data-id="${l.id}">Edit stops</button>
@@ -1578,6 +1640,11 @@ $('card').addEventListener('click', e=>{
       l.stops=ui.stops.slice(); linePaths.set(l.id,lp); for(const v of lineVehicles(l)){ v.pos=0; v.dir=1; v.next=0; v.wait=0; v.cargo=[]; }
       buildOverlay(); computeAll(); save(); toast(`Line ${l.id} now runs ${l.stops.length} stops.`,'good'); goLine(l.id); },
     moveVeh(){ ui.sel={kind:'move',id}; refreshSheet(); },
+    addCar(){ const v=S.vehicles.find(x=>x.id===id); if(!v||vCars(v)>=CAR.max) return; const c=carPrice(); if(S.money<c){ toast('Not enough cash.','bad'); return; }
+      v.cars=(v.cars||0)+1; v.paid+=c; S.money-=c; S.m.vehicles+=c; save(); toast(`Carriage added: ${vCap(v)} ${MODELS[v.model].kind==='freight'?'t':'seats'} now.`,'good'); refreshSheet(); },
+    removeCar(){ const v=S.vehicles.find(x=>x.id===id); if(!v||vCars(v)<=0) return; const back=Math.round(carPrice()*0.5); v.cars--; v.paid=Math.max(0,v.paid-carPrice()); S.money+=back; S.m.sales+=back; save(); toast(`Carriage removed. Refund ${money(back)}.`); refreshSheet(); },
+    addCarLine(){ const l=lineById(id); if(!l) return; const v=lineVehicles(l).filter(x=>vCars(x)<CAR.max).sort((a,b)=>vCars(a)-vCars(b))[0]; if(!v){ toast('All trains on this line are full length.'); return; } b.dataset.id=v.id; const c=carPrice(); if(S.money<c){ toast('Not enough cash.','bad'); return; }
+      v.cars=(v.cars||0)+1; v.paid+=c; S.money-=c; S.m.vehicles+=c; save(); toast(`Carriage added to a ${MODELS[v.model].name}.`,'good'); refreshSheet(); },
     moveTo(){ const v=S.vehicles.find(x=>x.id===id), to=+b.dataset.line; if(!v||!lineById(to)) return; const from=v.line;
       moveVehicle(v,to); save(); toast(`Moved to line ${to}.${lineById(from)?'':' Line '+from+' closed.'}`,'good'); goLine(to); },
     replace(){ const v=S.vehicles.find(x=>x.id===id); if(!v) return; if(replaceVehicle(v)){ toast(`Replaced with a new ${MODELS[v.model].name}.`,'good'); save(); refreshSheet(); } else toast('Not enough cash to replace it.','bad'); },
