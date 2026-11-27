@@ -1,0 +1,1800 @@
+<title>Lineworks Transit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: full-screen transit-diagram map, white signage panels: HUD on top, tab bar at bottom, sheet above it. Single committed light look. */
+:root{
+  --ink:#1b2128;
+  --paper:#ffffff;
+  --soft:#eef0f2;
+  --rule:#e1e4e8;
+  --muted:#6b7580;
+  --land:#f1f0ea;
+  --go:#1f8a5b;
+  --stop:#d2402f;
+  --warn:#b7791f;
+  --display:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --body:'Barlow',system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--land);}
+body{font-family:var(--body);color:var(--ink);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;font-size:15px}
+#map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.panel{background:var(--paper);box-shadow:0 1px 2px rgba(20,25,30,.12),0 4px 14px rgba(20,25,30,.08)}
+
+.hud{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;
+  padding-top:calc(env(safe-area-inset-top,0px) + 10px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.hud>*{pointer-events:auto}
+.cash{border-radius:10px;padding:6px 12px 7px;min-width:0}
+.cash .amt{font-family:var(--display);font-weight:700;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.cash .amt.neg{color:var(--stop)}
+.cash .date{font-family:var(--display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.hudr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.speed{display:flex;border-radius:10px;padding:3px;gap:2px}
+.speed button{background:none;border:0;border-radius:7px;padding:8px 10px;font-family:var(--display);font-weight:600;font-size:16px;min-width:38px;color:var(--muted)}
+.speed button.on{background:var(--ink);color:#fff}
+.layer{border:0;border-radius:999px;padding:6px 12px;font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.layer.on{background:var(--ink);color:#fff}
+
+.hint{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 70px);z-index:4;
+  background:var(--ink);color:#fff;font-weight:600;border-radius:999px;padding:8px 10px 8px 16px;display:flex;gap:8px;align-items:center;
+  max-width:calc(100vw - 32px);box-shadow:0 4px 14px rgba(0,0,0,.2);white-space:nowrap}
+.hint span{overflow:hidden;text-overflow:ellipsis}
+.hint button{background:rgba(255,255,255,.18);border:0;border-radius:999px;padding:4px 10px;font-weight:600;font-size:13px;color:#fff}
+.toasts{position:fixed;top:calc(env(safe-area-inset-top,0px) + 118px);left:0;right:0;z-index:4;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding-left:16px;padding-right:16px}
+.toast{background:var(--paper);border-left:4px solid var(--ink);border-radius:8px;padding:8px 12px;font-size:14px;max-width:420px;box-shadow:0 4px 14px rgba(20,25,30,.14);animation:tin .25s ease-out}
+.toast.bad{border-left-color:var(--stop)}.toast.good{border-left-color:var(--go)}
+@keyframes tin{from{transform:translateY(-6px);opacity:0}}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(5,1fr);
+  padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));border-top:1px solid var(--rule)}
+.bar button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 8px;color:var(--muted);font-family:var(--display);font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;min-width:0;position:relative}
+.bar button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bar button.on{color:var(--ink)}
+.bar button.on::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;border-radius:0 0 3px 3px;background:var(--ink)}
+.bar .dot{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;border-radius:8px;background:var(--stop);color:#fff;font-size:10px;font-family:var(--body);font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:0;padding:0 4px;box-sizing:border-box}
+
+.sheet{position:fixed;left:0;right:0;z-index:5;bottom:calc(62px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.card{pointer-events:auto;background:var(--paper);border-radius:14px 14px 10px 10px;width:100%;max-width:480px;max-height:56vh;overflow:auto;padding:14px 16px 16px;box-shadow:0 -4px 24px rgba(20,25,30,.16);margin-bottom:8px;animation:sin .2s ease-out;box-sizing:border-box}
+@keyframes sin{from{transform:translateY(12px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.card,.toast{animation:none}}
+.card h2{font-family:var(--display);font-weight:700;font-size:25px;margin:0;line-height:1.1;text-wrap:balance;display:flex;align-items:center;gap:8px}
+.card .sub{color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--display);margin-top:2px}
+.card h3{font-family:var(--display);font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:18px 0 2px;font-weight:600}
+.card p{margin:10px 0;line-height:1.45}
+.note{font-size:13px;color:var(--muted)}
+.x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:24px;line-height:1;padding:2px 6px}
+.rows{display:grid;margin-top:6px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--rule);font-variant-numeric:tabular-nums}
+.row>span:first-child{color:var(--muted);min-width:0}
+.row b{font-weight:600;text-align:right;white-space:nowrap}
+button.row{background:none;border-left:0;border-right:0;border-bottom:0;width:100%;text-align:left;font:inherit}
+button.row>span:first-child{color:var(--ink)}
+small.m{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:1px}
+.pos{color:var(--go)}.neg{color:var(--stop)}.warnc{color:var(--warn)}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;padding:0 5px;border-radius:11px;color:#fff;font-family:var(--display);font-weight:700;font-size:14px;margin-right:6px;vertical-align:middle;box-sizing:border-box}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{flex:1 1 auto;background:var(--soft);border:0;border-radius:9px;padding:11px 14px;font-weight:600;min-height:44px}
+.btn.pri{background:var(--ink);color:#fff}
+.btn.warn{background:#fbe9e6;color:#a8301f}
+.btn.sm{min-height:36px;padding:7px 12px;font-size:14px;flex:none}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.veh{display:grid;grid-template-columns:1fr auto;gap:3px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--rule)}
+.veh .nm{font-family:var(--display);font-size:19px;font-weight:600;min-width:0}
+.veh .sp{color:var(--muted);font-size:13px;grid-column:1;line-height:1.35}
+.veh .btn{grid-row:1/3;grid-column:2;flex:none;min-width:92px}
+.lc{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--rule)}
+.lc .main{background:none;border:0;text-align:left;padding:0;min-width:0;font:inherit;color:var(--ink)}
+.lc .rt{font-weight:600;line-height:1.3}
+.lc .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.mini{display:flex;gap:6px;align-items:center}
+.mini button{min-width:40px;height:36px;border:0;border-radius:8px;background:var(--soft);font-size:20px;font-weight:600;line-height:1;padding:0 10px}
+.mini button.txt{font-size:14px}
+.mini button.add{background:var(--ink);color:#fff}
+.mini button:disabled{opacity:.3}
+.chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;padding:1px 6px;border-radius:4px;margin-left:4px;vertical-align:1px}
+.chip.bad{background:#fbe9e6;color:#a8301f}.chip.warn{background:#fdf1dc;color:#8a5a12}.chip.ok{background:#e3f3ea;color:#17673f}.chip.info{background:var(--soft);color:var(--ink)}
+.goal{height:8px;background:var(--soft);border-radius:4px;overflow:hidden;margin-top:6px}
+.goal i{display:block;height:100%;background:var(--go)}
+.wish{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 0;border-top:1px solid var(--rule);font-variant-numeric:tabular-nums}
+.wish .bar2{grid-column:1/3;height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
+.wish .bar2 i{display:block;height:100%;background:var(--ink)}
+.tool{display:grid;grid-template-columns:44px 1fr;gap:4px 12px;align-items:center;padding:12px 0;border-top:1px solid var(--rule);background:none;border-left:0;border-right:0;border-bottom:0;width:100%;text-align:left;font:inherit}
+.tool svg{grid-row:1/3;width:40px;height:40px;stroke:var(--ink);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;background:var(--soft);border-radius:10px;padding:6px;box-sizing:border-box}
+.tool b{font-family:var(--display);font-size:19px;font-weight:600}
+.tool span{color:var(--muted);font-size:13px;line-height:1.35}
+ol{margin:8px 0 0;padding-left:20px;line-height:1.5}
+label.sub{display:block;margin-top:6px}
+.field{display:block;width:100%;box-sizing:border-box;margin-top:6px;background:var(--soft);border:1px solid var(--rule);border-radius:9px;color:var(--ink);font:inherit;font-size:17px;padding:11px 12px;-webkit-user-select:text;user-select:text}
+.field:focus{outline:2px solid var(--ink);outline-offset:1px}
+svg.chart{width:100%;height:auto;display:block;margin-top:8px}
+</style>
+
+<canvas id="map"></canvas>
+
+<div class="hud">
+  <div class="cash panel"><div class="amt" id="cash">$0</div><div class="date" id="date">Jan 1960</div></div>
+  <div class="hudr"><div class="speed panel" id="speed">
+    <button data-s="0" aria-label="Pause">II</button>
+    <button data-s="1">1×</button>
+    <button data-s="2">2×</button>
+    <button data-s="4">4×</button>
+  </div><button class="layer panel" id="layer">Map: lines</button></div>
+</div>
+<div class="hint" id="hint" hidden><span id="hintText"></span><button id="hintUndo" hidden>Undo</button><button id="hintCancel">Cancel</button></div>
+<div class="toasts" id="toasts"></div>
+<div class="sheet" id="sheet" hidden><div class="card" id="card"></div></div>
+
+<nav class="bar panel" id="bar">
+  <button data-tool="lines"><svg viewBox="0 0 24 24"><path d="M4 18c3 0 4-12 8-12s5 12 8 12"/><circle cx="4" cy="18" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="20" cy="18" r="2"/></svg>Lines</button>
+  <button data-tool="build"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M5 6h14M5 10.5h14M5 15h14M5 19.5h14"/></svg>Build</button>
+  <button data-tool="business"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg>Business</button>
+  <button data-tool="tenders"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"/></svg>Tenders<span class="dot" id="tdot" hidden>0</span></button>
+  <button data-tool="company"><svg viewBox="0 0 24 24"><path d="M4 20V10l5-3v13M9 20V5l7-2v17M16 20V9l4 2v9M3 20h18"/></svg>Company</button>
+</nav>
+
+<script>
+(() => {
+'use strict';
+const W = 56, H = 56, T = 24;
+const SAVE_KEY = 'lineworks-save-v3';
+const START_YEAR = 1960;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NAMES = ['Ashford','Bramwick','Coldharbour','Dunmere','Eastreach','Fenwick','Galloway Cross','Holtby','Ivelton','Kestrel Bay','Larkhill','Millbrook','Northam','Oakhurst','Pellow','Redcliff','Stanmoor','Thornbury','Upton Vale','Wexley'];
+const VILLAGES = ['Ashby Green','Birch End','Cobb Hollow','Dovecote','Elm Wick','Foxley','Gorse Hill','Hatherley','Inchmoor','Juniper Ford','Kilby','Low Marsh','Mossbank','Nettlecombe','Orchard End','Pike Bridge'];
+const IND_NAMES = { farm:['Greenacre Farm','Hollow Fields','Ridgeway Farm','Brookside Farm'], mine:['Blackrock Mine','Copperdale Mine','Ironhill Quarry'], factory:['Northgate Works','Riverside Mill','Eastfield Plant'] };
+const LINE_COLORS = ['#e4572e','#1f77b4','#2a9d5c','#8e44ad','#e09f1f','#c2185b','#17a2b8','#6d4c41','#ff7f11','#3949ab','#7cb342','#5d6d7e'];
+const GRASS = 0, FOREST = 1, WATER = 2, HILL = 3;
+const TOWN_TYPES = {
+  capital:   { name:'Capital',         attr:1.6 },
+  city:      { name:'City',            attr:1.2 },
+  port:      { name:'Port city',       attr:1.2 },
+  resort:    { name:'Resort town',     attr:1.3 },
+  university:{ name:'University town', attr:1.15 },
+  industrial:{ name:'Industrial town', attr:1.0 },
+  market:    { name:'Market town',     attr:0.9 },
+  farming:   { name:'Farming village', attr:0.6 },
+};
+const IND = {
+  farm:    { name:'Farm',    cargo:'food',  rate:7, color:'#6a9a2e', glyph:'F' },
+  mine:    { name:'Mine',    cargo:'ore',   rate:10, color:'#8a6a4a', glyph:'M' },
+  factory: { name:'Factory', cargo:'goods', rate:3, color:'#4f5d8a', glyph:'G' },
+};
+const CARGO = { food:'Food', ore:'Ore', goods:'Goods' };
+const accepts = (good,p) => good==='food' ? (p.kind==='town'||p.kind==='village') : good==='ore' ? (p.kind==='industry'&&p.type==='factory') : p.kind==='town';
+const MODELS = {
+  hbus:    { mode:'road', kind:'pass',    name:'Horizon Bus',          year:1960, cap:30,  speed:2.0, cost:7000,   run:650,   life:12 },
+  mcoach:  { mode:'road', kind:'pass',    name:'Metro Coach',          year:1968, cap:50,  speed:2.8, cost:15000,  run:1100,  life:14 },
+  icoach:  { mode:'road', kind:'pass',    name:'Interstate Coach',     year:1978, cap:70,  speed:3.8, cost:30000,  run:1800,  life:15 },
+  ebus:    { mode:'road', kind:'pass',    name:'Electric Bus',         year:1995, cap:90,  speed:4.3, cost:52000,  run:1900,  life:16 },
+  truck:   { mode:'road', kind:'freight', name:'Flatbed Truck',        year:1960, cap:25,  speed:2.0, cost:6000,   run:420,   life:12 },
+  lorry:   { mode:'road', kind:'freight', name:'Box Lorry',            year:1972, cap:35,  speed:3.0, cost:16000,  run:900,   life:14 },
+  semi:    { mode:'road', kind:'freight', name:'Semi Trailer',         year:1988, cap:55,  speed:4.0, cost:34000,  run:1500,  life:15 },
+  steam:   { mode:'rail', kind:'pass',    name:'Steam Locomotive',     year:1960, cap:140, speed:3.0, cost:45000,  run:3500,  life:20 },
+  diesel:  { mode:'rail', kind:'pass',    name:'Diesel Express',       year:1971, cap:220, speed:5.0, cost:90000,  run:5600,  life:22 },
+  electric:{ mode:'rail', kind:'pass',    name:'Electric Intercity',   year:1985, cap:320, speed:7.5, cost:160000, run:8000,  life:25 },
+  bullet:  { mode:'rail', kind:'pass',    name:'Bullet Train',         year:2000, cap:420, speed:11,  cost:300000, run:12000, life:25 },
+  fsteam:  { mode:'rail', kind:'freight', name:'Steam Freight',        year:1960, cap:150, speed:2.5, cost:50000,  run:3200,  life:20 },
+  fdiesel: { mode:'rail', kind:'freight', name:'Diesel Freight',       year:1972, cap:300, speed:4.0, cost:100000, run:5200,  life:22 },
+  felec:   { mode:'rail', kind:'freight', name:'Heavy Electric Freight',year:1988,cap:500, speed:5.5, cost:170000, run:7500,  life:25 },
+  prop:    { mode:'air',  kind:'pass',    name:'Propliner',            year:1960, cap:50,  speed:9,   cost:160000, run:5200,  life:20 },
+  jet:     { mode:'air',  kind:'pass',    name:'Jetliner',             year:1970, cap:140, speed:15,  cost:380000, run:11000, life:22 },
+  wide:    { mode:'air',  kind:'pass',    name:'Widebody Jet',         year:1990, cap:300, speed:18,  cost:750000, run:20000, life:25 },
+};
+const BUILD = {
+  road: { [GRASS]:500,  [FOREST]:800,  [HILL]:1300, [WATER]:3200 },
+  rail: { [GRASS]:1600, [FOREST]:2300, [HILL]:3600, [WATER]:8500 },
+};
+const AIRPORT_COST = 180000, AIRPORT_UPKEEP = 1500, AIRPORT_MINPOP = 2500;
+const PT = {
+  flats:    { name:'Apartment Block',     base:18000,  rate:0.014, where:'townvillage' },
+  shops:    { name:'Shopping Street',     base:50000,  rate:0.015, where:'town', minPop:1500 },
+  hotel:    { name:'Hotel',               base:110000, rate:0.012, where:'town', minPop:2500, visitors:true },
+  mall:     { name:'Shopping Mall',       base:220000, rate:0.013, where:'town', minPop:4000, year:1965, boost:0.15 },
+  themepark:{ name:'Theme Park',          base:260000, rate:0.011, where:'town', minPop:2000, year:1970, boost:0.4, visitors:true },
+  tower:    { name:'Office Tower',        base:320000, rate:0.018, where:'town', minPop:8000, year:1975 },
+  resort:   { name:'Beach Resort',        base:90000,  rate:0.016, where:'resort', visitors:true, seasonal:true },
+  warehouse:{ name:'Logistics Warehouse', base:40000,  rate:0.012, where:'industry', prodBoost:0.5 },
+};
+const UPKEEP = 0.004;
+const GOAL = 2500000, MAX_LOAN = 300000, LOAN_RATE = 0.08, MAX_STOPS = 6, RIVAL = 'Meridian Transit';
+const SEASON = [0.8,0.8,0.9,1,1,1.3,1.7,1.7,1.1,0.9,1,1.6];
+
+// ---------- helpers ----------
+function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function noise(r, scale){
+  const gw=Math.ceil(W/scale)+2, g=[]; for(let i=0;i<gw*gw;i++) g.push(r());
+  const sm=t=>t*t*(3-2*t);
+  return (x,y)=>{ const fx=x/scale, fy=y/scale, ix=fx|0, iy=fy|0, u=sm(fx-ix), v=sm(fy-iy);
+    const a=g[iy*gw+ix], b=g[iy*gw+ix+1], c=g[(iy+1)*gw+ix], d=g[(iy+1)*gw+ix+1];
+    return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; };
+}
+const money = n => (n<0?'-$':'$') + Math.abs(Math.round(n)).toLocaleString('en-US');
+const signed = n => (n>=0?'+':'') + money(n);
+const idx = (x,y) => y*W+x;
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+
+// ---------- state ----------
+let S = null;
+let roads, rails, planned, terrain, placeTile;
+let linePaths = new Map(), overlay = [], laneOff = new Map();
+let routes = new Map(), fRoutes = new Map(), rates = new Map(), lineCount = new Map();
+let railSegsW = [], roadSegsW = [];
+const ui = { tool:'inspect', pickA:null, stops:[], plan:null, sel:null, speed:1, lastPlace:'', mapCtl:null, layer:'lines', editLine:null, prefMode:null, confirm:null };
+const PANELS = ['lines','build','business','tenders','company'];
+let floats = [];
+let sampleFn = null;
+try{ window.claude?.use?.('sample')?.then(f=>{ sampleFn=f; if(ui.sel&&ui.sel.kind==='map') refreshSheet(); }).catch(()=>{}); }catch(e){}
+
+const P = id => S.towns[id];
+const lineById = id => S.lines.find(l=>l.id===id);
+const dist = (a,b) => Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+const eDist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const isPax = p => p.kind!=='industry';
+const popO = p => p.kind==='attraction' ? p.draw*0.5 : p.kind==='industry' ? 0 : p.pop;
+const popD = p => p.kind==='attraction' ? p.draw : p.kind==='industry' ? 0 : p.pop;
+const sizeOf = p => p.kind==='attraction' ? p.draw : p.kind==='industry' ? 1000 : p.pop;
+const roadPass = i => roads[i]===1 || placeTile[i]>=0;
+const railPass = i => rails[i]===1 || placeTile[i]>=0;
+const pass = mode => mode==='rail' ? railPass : roadPass;
+const year = () => START_YEAR + Math.floor(S.day/360);
+const monthIdx = () => Math.floor(S.day/30)%12;
+const season = () => SEASON[monthIdx()];
+const dateStr = d => MONTHS[Math.floor(d/30)%12] + ' ' + (START_YEAR + Math.floor(d/360));
+const fare = (mode,a,b) => (mode==='air' ? 1.2+0.9*eDist(a,b) : mode==='rail' ? 0.8+0.65*dist(a,b) : 0.8+0.6*dist(a,b)) * S.fareInfl;
+const CARGO_VALUE = { food:1.1, ore:1.0, goods:1.5 };
+const cargoFare = (a,b,good) => (1.8+1.25*dist(a,b)) * (CARGO_VALUE[good]||1) * S.fareInfl;
+const price = m => Math.round(MODELS[m].cost * S.infl);
+const vAge = v => (S.day - v.bought)/360;
+const fuel = () => S.fuelUntil>S.day ? 1.3 : 1;
+const runCost = v => MODELS[v.model].run * S.infl * (1 + 0.05*vAge(v)) * fuel();
+const vehValue = v => Math.round(v.paid * 0.75 * Math.max(0.1, 1 - vAge(v)/MODELS[v.model].life));
+const bestModel = (mode,kind) => Object.keys(MODELS).filter(k=>MODELS[k].mode===mode && MODELS[k].kind===kind && MODELS[k].year<=year()).pop();
+const aboard = v => v.cargo.reduce((s,c)=>s+c.n,0);
+const lineVehicles = l => S.vehicles.filter(v=>v.line===l.id);
+const kindLabel = p => p.kind==='industry' ? IND[p.type].name : p.kind==='attraction' ? 'Tourist attraction' : (TOWN_TYPES[p.type]?.name || 'Town');
+const modeName = m => m==='rail' ? 'Railway' : m==='air' ? 'Air' : 'Road';
+const vehWord = (mode,n) => mode==='air' ? (n===1?'plane':'planes') : mode==='rail' ? (n===1?'train':'trains') : (n===1?'vehicle':'vehicles');
+
+function attrOf(p){
+  let a = p.kind==='attraction' ? 1.3 : (TOWN_TYPES[p.type]?.attr ?? 0.8);
+  if(p.kind==='attraction'||p.type==='resort'){ a*=season(); if(S.tourismUntil>S.day) a*=1.5; }
+  for(const b of S.props) if(b.town===p.id && PT[b.type].boost) a*=1+PT[b.type].boost;
+  if(S.events.some(e=>e.type==='festival'&&e.town===p.id&&e.until>S.day)) a*=2.5;
+  return a;
+}
+
+// ---------- business ----------
+function canHost(type,p){
+  const w=PT[type].where;
+  if(w==='industry') return p.kind==='industry';
+  if(w==='resort') return p.kind==='attraction' || p.type==='resort';
+  if(w==='townvillage') return p.kind==='town'||p.kind==='village';
+  return p.kind==='town';
+}
+const propPrice = (type,p) => Math.round(PT[type].base * Math.pow(Math.max(sizeOf(p),200)/1000, 0.8) * S.infl);
+const propValue = b => Math.round(propPrice(b.type, P(b.town)) * 0.9);
+function visitF(p){ return clamp(0.5 + (p.arrLast||0)/(Math.max(popD(p),200)*0.04), 0.5, 2.5); }
+function propRent(b){
+  const p=P(b.town), pt=PT[b.type];
+  let r = propPrice(b.type,p) * pt.rate;
+  r *= p.kind==='industry' ? (0.5 + (p.shipShare||0)) : (0.4 + p.rating);
+  if(pt.visitors) r *= visitF(p);
+  if(pt.seasonal) r *= season();
+  return r;
+}
+const propUpkeep = b => b.paid * UPKEEP;
+const propPL = b => propValue(b) + b.rentTotal - b.upkeepTotal - b.paid;
+const maxProps = p => p.kind==='town' ? 3 : p.kind==='attraction' ? 2 : 1;
+const airportValue = () => S.towns.filter(t=>t.airport).length * AIRPORT_COST * 0.5 * S.infl;
+const companyValue = () => S.money - S.loan + S.vehicles.reduce((s,v)=>s+vehValue(v),0) + S.props.reduce((s,b)=>s+propValue(b),0) + airportValue();
+
+const IN_CLAUDE = !!window.claude;
+const PRESETS = {
+  singapore: { label:'Singapore', geo:{ region:'Singapore',
+    towns:[{name:'Downtown Core',lat:1.287,lon:103.851,pop:250000,type:'capital'},{name:'Jurong West',lat:1.340,lon:103.705,pop:260000,type:'industrial'},
+      {name:'Clementi',lat:1.315,lon:103.765,pop:90000,type:'university'},{name:'Bukit Panjang',lat:1.378,lon:103.762,pop:140000,type:'city'},
+      {name:'Woodlands',lat:1.436,lon:103.786,pop:255000,type:'city'},{name:'Yishun',lat:1.430,lon:103.835,pop:225000,type:'city'},
+      {name:'Ang Mo Kio',lat:1.370,lon:103.849,pop:165000,type:'city'},{name:'Sengkang',lat:1.392,lon:103.895,pop:250000,type:'city'},
+      {name:'Tampines',lat:1.354,lon:103.943,pop:270000,type:'city'},{name:'Changi',lat:1.357,lon:103.988,pop:40000,type:'port'},
+      {name:'Marine Parade',lat:1.303,lon:103.905,pop:50000,type:'resort'}],
+    villages:[{name:'Lim Chu Kang',lat:1.430,lon:103.712,pop:3000},{name:'Holland Village',lat:1.311,lon:103.796,pop:20000},
+      {name:'Toa Payoh',lat:1.334,lon:103.850,pop:120000},{name:'Pasir Panjang',lat:1.276,lon:103.791,pop:15000}],
+    industries:[{name:'Tuas Industrial Estate',lat:1.300,lon:103.640,type:'factory'},{name:'Jurong Island',lat:1.266,lon:103.699,type:'factory'},
+      {name:'Kranji Farms',lat:1.430,lon:103.745,type:'farm'},{name:'Neo Tiew Farms',lat:1.400,lon:103.710,type:'farm'},{name:'Hindhede Quarry',lat:1.348,lon:103.776,type:'mine'}],
+    attractions:[{name:'Sentosa',lat:1.249,lon:103.830,kind:'beach'},{name:'Mandai Zoo',lat:1.404,lon:103.793,kind:'park'}],
+    roads:[[[1.357,103.988],[1.334,103.93],[1.325,103.89],[1.32,103.85],[1.325,103.80],[1.335,103.76],[1.34,103.72],[1.33,103.66]],
+      [[1.437,103.786],[1.40,103.775],[1.35,103.775]],[[1.287,103.851],[1.32,103.845],[1.37,103.849],[1.40,103.84],[1.43,103.835]],
+      [[1.354,103.943],[1.392,103.895],[1.40,103.86],[1.43,103.835]],[[1.287,103.851],[1.30,103.905],[1.33,103.975],[1.357,103.988]],
+      [[1.287,103.851],[1.276,103.79],[1.30,103.74],[1.31,103.69],[1.30,103.64]],[[1.437,103.786],[1.41,103.75],[1.385,103.745],[1.34,103.705]]],
+    water:[[[1.34,103.55],[1.33,103.62],[1.30,103.64],[1.29,103.70],[1.30,103.74],[1.28,103.78],[1.265,103.82],[1.27,103.86],[1.29,103.88],[1.31,103.94],[1.33,103.99],[1.36,104.03],[1.37,104.12],[1.12,104.12],[1.12,103.55]],
+      [[1.36,103.58],[1.41,103.68],[1.45,103.72],[1.462,103.77],[1.468,103.82],[1.45,103.87],[1.42,103.91],[1.40,103.96],[1.39,104.00],[1.40,104.12],[1.47,104.12],[1.44,104.00],[1.47,103.93],[1.49,103.87],[1.485,103.80],[1.475,103.74],[1.44,103.66],[1.40,103.58]],
+      [[1.40,104.03],[1.40,104.12],[1.36,104.12],[1.36,104.03]]],
+    mountains:[[1.354,103.776,1.5]], forests:[[1.365,103.805,4],[1.41,103.70,3]] } },
+  malaysia: { label:'Peninsular Malaysia', geo:{ region:'Peninsular Malaysia',
+    towns:[{name:'Kuala Lumpur',lat:3.139,lon:101.687,pop:1980000,type:'capital'},{name:'George Town',lat:5.414,lon:100.329,pop:708000,type:'port'},
+      {name:'Ipoh',lat:4.597,lon:101.09,pop:760000,type:'city'},{name:'Johor Bahru',lat:1.4927,lon:103.741,pop:860000,type:'industrial'},
+      {name:'Malacca',lat:2.189,lon:102.25,pop:500000,type:'resort'},{name:'Kuantan',lat:3.8077,lon:103.326,pop:550000,type:'port'},
+      {name:'Kota Bharu',lat:6.125,lon:102.238,pop:500000,type:'market'},{name:'Kuala Terengganu',lat:5.33,lon:103.14,pop:400000,type:'city'},
+      {name:'Alor Setar',lat:6.12,lon:100.37,pop:400000,type:'market'},{name:'Seremban',lat:2.7297,lon:101.938,pop:560000,type:'city'},
+      {name:'Taiping',lat:4.85,lon:100.74,pop:250000,type:'market'},{name:'Mersing',lat:2.43,lon:103.84,pop:70000,type:'resort'}],
+    villages:[{name:'Tapah',lat:4.2,lon:101.26,pop:30000},{name:'Kuala Kubu Bharu',lat:3.56,lon:101.65,pop:20000},{name:'Tangkak',lat:2.27,lon:102.54,pop:40000},
+      {name:'Kluang',lat:2.03,lon:103.32,pop:180000},{name:'Bentong',lat:3.52,lon:101.91,pop:40000},{name:'Gua Musang',lat:4.88,lon:101.97,pop:20000},{name:'Jerantut',lat:3.94,lon:102.36,pop:30000}],
+    industries:[{name:'Kerteh Refinery',lat:4.51,lon:103.44,type:'factory'},{name:'Pasir Gudang',lat:1.47,lon:103.90,type:'factory'},{name:'Kinta Tin Mines',lat:4.45,lon:101.15,type:'mine'},
+      {name:'Bukit Ibam Mine',lat:3.17,lon:102.98,type:'mine'},{name:'Felda Jengka',lat:3.75,lon:102.55,type:'farm'},{name:'Kedah Rice Fields',lat:5.95,lon:100.50,type:'farm'},{name:'Shah Alam Industrial',lat:3.07,lon:101.52,type:'factory'}],
+    attractions:[{name:'Cameron Highlands',lat:4.47,lon:101.38,kind:'highlands'},{name:'Langkawi',lat:6.35,lon:99.80,kind:'island'},{name:'Taman Negara',lat:4.38,lon:102.40,kind:'park'},{name:'Port Dickson',lat:2.52,lon:101.80,kind:'beach'}],
+    roads:[[[6.12,100.37],[5.414,100.4],[4.85,100.74],[4.597,101.09],[4.2,101.26],[3.56,101.65],[3.139,101.687],[2.73,101.94],[2.27,102.54],[2.03,103.32],[1.49,103.74]],
+      [[3.139,101.687],[3.52,101.91],[3.81,103.33],[5.33,103.14],[6.125,102.238]],[[4.597,101.09],[4.88,101.97],[6.125,102.238]],[[2.43,103.84],[1.49,103.74]],[[3.81,103.33],[2.43,103.84]]],
+    water:[[[7.5,98],[7.5,100.2],[6.4,100.1],[5.5,100.3],[4.2,100.6],[3,101.3],[2.2,102.1],[1.4,103.4],[1.0,104],[0.5,104],[0.5,98]],
+      [[7.5,102],[6.2,102.3],[5.3,103.2],[4,103.4],[2.5,103.9],[1.4,104.3],[0.5,104.6],[0.5,105.5],[7.5,105.5]]],
+    mountains:[[4.6,101.5,60],[5.5,101.5,50]], forests:[[4.4,102.4,70]] } },
+};
+
+// ---------- world generation ----------
+function blankTerrain(seed){
+  const r=rng(seed), n1=noise(r,12), n2=noise(r,4), n3=noise(r,6);
+  const ter=new Array(W*H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const e=n1(x,y)*0.75+n2(x,y)*0.25;
+    ter[idx(x,y)] = e<0.3 ? WATER : e>0.74 ? HILL : n3(x,y)>0.63 ? FOREST : GRASS;
+  }
+  return { ter, r };
+}
+const small = p => p.kind!=='town';
+function farFrom(list,x,y,sm){ return list.every(o => Math.max(Math.abs(o.x-x),Math.abs(o.y-y)) >= ((sm||small(o)) ? 3 : 5)); }
+function clearFor(ter,p){ const rr=small(p)?0:1; for(let dy=-rr;dy<=rr;dy++) for(let dx=-rr;dx<=rr;dx++) ter[idx(p.x+dx,p.y+dy)]=GRASS; }
+function mkPlace(list,name,x,y,kind,type,size){
+  const p={ id:list.length, name, x, y, kind, type, pop:0, draw:0, waiting:{}, cwait:{}, boarded:0, lost:0, arrivals:0, arrLast:0, transfers:0,
+    rating:0.3, growth:0, airport:false, prod:1, produced:0, shipped:0, shipShare:0, oreMonth:0, oreLast:0, supplied:0 };
+  if(kind==='attraction') p.draw=Math.round(size); else if(kind!=='industry') p.pop=Math.round(size);
+  list.push(p); return p;
+}
+function nearWater(ter,x,y,r){ for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){ const nx=x+dx, ny=y+dy; if(nx>=0&&ny>=0&&nx<W&&ny<H&&ter[idx(nx,ny)]===WATER) return true; } return false; }
+function assignTypes(list, ter, r){
+  const towns=list.filter(p=>p.kind==='town').sort((a,b)=>b.pop-a.pop);
+  towns.forEach(t=>t.type=t.pop>2000?'city':'market');
+  if(towns[0]) towns[0].type='capital';
+  const free=()=>towns.filter(t=>t.type==='city'||t.type==='market');
+  const coastal=free().filter(t=>nearWater(ter,t.x,t.y,3));
+  if(coastal[0]) coastal[0].type='port';
+  const c2=free().filter(t=>nearWater(ter,t.x,t.y,3)); (c2[0]||free()[free().length-1]||{}).type='resort';
+  const f=free(); if(f.length) f[Math.floor(r()*f.length)].type='university';
+  const inds=list.filter(p=>p.kind==='industry');
+  const f2=free(); if(f2.length&&inds.length){ let best=null; for(const t of f2) for(const i of inds){ const d=dist(t,i); if(!best||d<best.d) best={t,d}; } best.t.type='industrial'; }
+  list.filter(p=>p.kind==='village').forEach(v=>v.type='farming');
+}
+function randomWorld(seed){
+  const { ter, r } = blankTerrain(seed);
+  const list=[], names=NAMES.slice().sort(()=>r()-0.5), vnames=VILLAGES.slice().sort(()=>r()-0.5);
+  const landOK=(x,y,rr)=>{ for(let dy=-rr;dy<=rr;dy++) for(let dx=-rr;dx<=rr;dx++) if(ter[idx(x+dx,y+dy)]===WATER) return false; return true; };
+  let n=0;
+  for(let tries=0; tries<6000 && n<11; tries++){
+    const x=3+Math.floor(r()*(W-6)), y=3+Math.floor(r()*(H-6));
+    if(!landOK(x,y,1) || list.some(t=>Math.abs(t.x-x)+Math.abs(t.y-y)<12)) continue;
+    clearFor(ter, mkPlace(list,names[n++],x,y,'town','city',700+Math.pow(r(),2)*3800));
+  }
+  const addSmall=(count, make, pick)=>{ let k=0; for(let tries=0; tries<6000 && k<count; tries++){
+    const x=2+Math.floor(r()*(W-4)), y=2+Math.floor(r()*(H-4));
+    if(!landOK(x,y,0) || !farFrom(list,x,y,true) || (pick&&!pick(x,y))) continue;
+    const p=make(x,y,k++); clearFor(ter,p); } };
+  addSmall(9,(x,y,k)=>mkPlace(list,vnames[k],x,y,'village','farming',150+r()*350));
+  addSmall(3,(x,y,k)=>mkPlace(list,IND_NAMES.farm[k],x,y,'industry','farm'));
+  addSmall(2,(x,y,k)=>mkPlace(list,IND_NAMES.mine[k],x,y,'industry','mine'),(x,y)=>ter[idx(x,y)]===HILL||r()<0.05);
+  addSmall(2,(x,y,k)=>mkPlace(list,IND_NAMES.factory[k],x,y,'industry','factory'));
+  addSmall(1,(x,y)=>mkPlace(list,'Silver Sands',x,y,'attraction','beach',1400+r()*900),(x,y)=>nearWater(ter,x,y,1));
+  addSmall(1,(x,y)=>mkPlace(list,'Mistral Peaks',x,y,'attraction','highlands',1000+r()*800),(x,y)=>ter[idx(x,y)]===HILL||r()<0.03);
+  assignTypes(list, ter, r);
+  return { ter, places:list, plannedLines:[], region:null };
+}
+
+function geoWorld(geo, seed){
+  const r=rng(seed), n3=noise(r,6), n2=noise(r,3);
+  const ok=v=>typeof v==='number'&&isFinite(v);
+  const okPlace=t=>t&&typeof t.name==='string'&&t.name.trim()&&ok(t.lat)&&ok(t.lon)&&Math.abs(t.lat)<=90&&Math.abs(t.lon)<=180;
+  const arr=k=>(Array.isArray(geo[k])?geo[k]:[]).filter(okPlace).slice(0,18);
+  const srcT=arr('towns'), srcV=arr('villages'), srcI=arr('industries'), srcA=arr('attractions');
+  if(srcT.length<3) throw {code:'too_few'};
+  const all=srcT.concat(srcV,srcI,srcA);
+  const lat0=srcT.reduce((a,t)=>a+t.lat,0)/srcT.length, k=Math.cos(lat0*Math.PI/180);
+  const proj=(lat,lon)=>[lon*k,-lat];
+  let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+  for(const t of all){ const [px,py]=proj(t.lat,t.lon); minx=Math.min(minx,px);maxx=Math.max(maxx,px);miny=Math.min(miny,py);maxy=Math.max(maxy,py); }
+  let bw=Math.max(maxx-minx,0.02), bh=Math.max(maxy-miny,0.02);
+  const pad=Math.max(bw,bh)*0.08; minx-=pad; miny-=pad; bw+=pad*2; bh+=pad*2;
+  const scale=(W-6)/Math.max(bw,bh), offX=3+((W-6)-bw*scale)/2, offY=3+((H-6)-bh*scale)/2;
+  const toG=(lat,lon)=>{ const [px,py]=proj(lat,lon); return [(px-minx)*scale+offX,(py-miny)*scale+offY]; };
+  const perKm=scale/111;
+  const ter=new Array(W*H).fill(GRASS);
+  const circles=(list,type)=>{ (Array.isArray(list)?list:[]).slice(0,14).forEach(c=>{
+    if(!Array.isArray(c)||!ok(c[0])||!ok(c[1])||!ok(c[2])) return;
+    const [gx,gy]=toG(c[0],c[1]), rad=clamp(c[2]*perKm,1,16);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const d=Math.hypot(x+0.5-gx,y+0.5-gy); if(d<rad*(0.75+0.5*n2(x,y))) ter[idx(x,y)]=type; } }); };
+  circles(geo.forests,FOREST); circles(geo.mountains,HILL);
+  for(let i=0;i<W*H;i++) if(ter[i]===GRASS && n3(i%W,(i/W)|0)>0.76) ter[i]=FOREST;
+  (Array.isArray(geo.water)?geo.water:[]).slice(0,24).forEach(poly=>{
+    if(!Array.isArray(poly)) return;
+    const pts=poly.filter(q=>Array.isArray(q)&&ok(q[0])&&ok(q[1])).slice(0,240).map(q=>toG(q[0],q[1]));
+    if(pts.length<3) return;
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const px=x+0.5, py=y+0.5; let inside=false;
+      for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const [xi,yi]=pts[i],[xj,yj]=pts[j];
+        if(((yi>py)!==(yj>py)) && px<(xj-xi)*(py-yi)/(yj-yi)+xi) inside=!inside; }
+      if(inside) ter[idx(x,y)]=WATER;
+    } });
+  const list=[];
+  const place=(t,kind,type,size)=>{
+    let [gx,gy]=toG(t.lat,t.lon); gx=clamp(Math.round(gx-0.5),2,W-3); gy=clamp(Math.round(gy-0.5),2,H-3);
+    if(ter[idx(gx,gy)]===WATER){ let best=null;
+      for(let dy=-4;dy<=4;dy++) for(let dx=-4;dx<=4;dx++){ const x=gx+dx,y=gy+dy; if(x<2||y<2||x>W-3||y>H-3||ter[idx(x,y)]===WATER) continue;
+        const d=Math.abs(dx)+Math.abs(dy); if(!best||d<best.d) best={x,y,d}; }
+      if(!best) return null; gx=best.x; gy=best.y; }
+    if(!farFrom(list,gx,gy,kind!=='town')) return null;
+    return mkPlace(list,t.name.trim().slice(0,22),gx,gy,kind,type,size);
+  };
+  srcT.slice().sort((a,b)=>(b.pop||0)-(a.pop||0)).forEach(t=>{ if(list.length<14) place(t,'town',TOWN_TYPES[t.type]&&t.type!=='farming'?t.type:'city',ok(t.pop)&&t.pop>0?t.pop:50000); });
+  if(list.length<3) throw {code:'too_few'};
+  srcV.slice(0,12).forEach(t=>place(t,'village','farming',ok(t.pop)&&t.pop>0?t.pop:3000));
+  srcI.slice(0,8).forEach(t=>{ const ty=IND[t.type]?t.type:'farm'; place(t,'industry',ty,0); });
+  srcA.slice(0,6).forEach(t=>place(t,'attraction',typeof t.kind==='string'?t.kind.slice(0,20):'park',0));
+  const big=list.filter(p=>p.kind==='town'), lp=big.map(t=>Math.log10(Math.max(100,t.pop))), lo=Math.min(...lp), hi=Math.max(...lp);
+  big.forEach((t,i)=>{ t.pop=Math.round(800+((lp[i]-lo)/((hi-lo)||1))*5200); });
+  if(!big.some(t=>t.type==='capital')) big.slice().sort((a,b)=>b.pop-a.pop)[0].type='capital';
+  list.filter(p=>p.kind==='village').forEach(t=>{ t.pop=Math.round(clamp(Math.log10(Math.max(100,t.pop))*90 - 100 + r()*120, 150, 650)); });
+  list.filter(p=>p.kind==='attraction').forEach(t=>{ t.draw=Math.round(1000+r()*1500); });
+  if(!list.some(p=>p.kind==='industry')){ /* keep the cargo game alive on maps without industry data */
+    const towns=list.filter(p=>p.kind==='town');
+    ['farm','mine','factory'].forEach((ty,i)=>{ const t=towns[(i*3+1)%towns.length]; for(let tries=0;tries<60;tries++){ const x=clamp(t.x+Math.round((r()-0.5)*10),2,W-3), y=clamp(t.y+Math.round((r()-0.5)*10),2,H-3);
+      if(ter[idx(x,y)]!==WATER && farFrom(list,x,y,true)){ mkPlace(list,IND_NAMES[ty][0],x,y,'industry',ty); break; } } });
+  }
+  list.forEach(p=>clearFor(ter,p));
+  const plannedLines=(Array.isArray(geo.roads)?geo.roads:[]).slice(0,20).map(l=>Array.isArray(l)?l.filter(q=>Array.isArray(q)&&ok(q[0])&&ok(q[1])).slice(0,60).map(q=>toG(q[0],q[1])):[]).filter(l=>l.length>=2);
+  return { ter, places:list, plannedLines, region: typeof geo.region==='string' ? geo.region.slice(0,40) : null };
+}
+function rasterPlanned(pts){
+  const tiles=[]; let lx=null, ly=null;
+  const push=(x,y)=>{ if(x<0||y<0||x>=W||y>=H) return; if(x===lx&&y===ly) return;
+    if(lx!==null && x!==lx && y!==ly) tiles.push(idx(x,ly));
+    tiles.push(idx(x,y)); lx=x; ly=y; };
+  for(let k=0;k<pts.length-1;k++){
+    const [x0,y0]=pts[k],[x1,y1]=pts[k+1], n=Math.ceil(Math.hypot(x1-x0,y1-y0)*3)+1;
+    for(let s=0;s<=n;s++) push(Math.floor(x0+(x1-x0)*s/n), Math.floor(y0+(y1-y0)*s/n));
+  }
+  let run=[];
+  const mark=i=>{ if(placeTile[i]<0) planned[i]=1; };
+  for(const i of tiles){ if(terrain[i]===WATER){ run.push(i); continue; } if(run.length<=3) run.forEach(mark); run=[]; mark(i); }
+}
+
+function newGame(seed, world){
+  const { ter, places, plannedLines, region } = world || randomWorld(seed);
+  S = { v:3, seed, day:0, money:80000, loan:0, terrain:ter, roads:new Array(W*H).fill(0), rails:new Array(W*H).fill(0), planned:new Array(W*H).fill(0),
+        towns:places, lines:[], vehicles:[], props:[], nextLine:1, nextVeh:1, nextTender:1, hist:[], m:freshMonth(), yearFares:0,
+        infl:1, fareInfl:1, fuelUntil:0, tourismUntil:0, events:[], news:[], tenders:[], rival:{ value:400000, routes:[] },
+        debtMonths:0, over:false, won:false, seenIntro:false, region };
+  hydrate();
+  for(const l of plannedLines) rasterPlanned(l);
+  S.planned=Array.from(planned);
+  newTender(rng(seed+5), true);
+  renderStatic(); computeAll();
+}
+function freshMonth(){ return { fares:0, cargo:0, rent:0, run:0, upkeep:0, interest:0, build:0, vehicles:0, sales:0, tenders:0 }; }
+
+function hydrate(){
+  terrain=S.terrain; roads=Uint8Array.from(S.roads); rails=Uint8Array.from(S.rails); planned=Uint8Array.from(S.planned);
+  placeTile=new Int16Array(W*H).fill(-1);
+  for(const p of S.towns){ const rr=small(p)?0:1; for(let dy=-rr;dy<=rr;dy++) for(let dx=-rr;dx<=rr;dx++) placeTile[idx(p.x+dx,p.y+dy)]=p.id; }
+  linePaths=new Map();
+  for(const l of S.lines){ const lp=buildLinePath(l.mode,l.stops); linePaths.set(l.id, lp.pts?lp:{pts:[],cum:[],stopPos:[]}); }
+  buildOverlay(); computeAll();
+}
+function serialize(){ S.roads=Array.from(roads); S.rails=Array.from(rails); S.planned=Array.from(planned); return JSON.stringify(S); }
+function save(){ if(S) S.savedAt=Date.now(); try{ localStorage.setItem(SAVE_KEY, serialize()); }catch(e){} }
+function loadGame(raw){
+  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; hydrate(); renderStatic(); return true; }
+  catch(e){ return false; }
+}
+
+// ---------- pathfinding ----------
+function astar(s, t, costFn, hMul){
+  const N=W*H, g=new Float32Array(N).fill(Infinity), came=new Int32Array(N).fill(-1), closed=new Uint8Array(N);
+  const tx=t%W, ty=(t/W)|0, h=i=>(Math.abs(i%W-tx)+Math.abs(((i/W)|0)-ty))*hMul;
+  const open=[[h(s),s]]; g[s]=0;
+  while(open.length){
+    let bi=0; for(let k=1;k<open.length;k++) if(open[k][0]<open[bi][0]) bi=k;
+    const c=open[bi][1]; open[bi]=open[open.length-1]; open.pop();
+    if(closed[c]) continue; closed[c]=1;
+    if(c===t) break;
+    const cx=c%W, cy=(c/W)|0;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=cx+dx, ny=cy+dy; if(nx<0||ny<0||nx>=W||ny>=H) continue;
+      const ni=idx(nx,ny); if(closed[ni]) continue;
+      const k=costFn(ni); if(k===Infinity) continue;
+      const ng=g[c]+k; if(ng<g[ni]){ g[ni]=ng; came[ni]=c; open.push([ng+h(ni),ni]); }
+    }
+  }
+  if(g[t]===Infinity) return null;
+  const path=[]; for(let c=t;c!==-1;c=came[c]) path.push(c);
+  return path.reverse();
+}
+function modePath(mode,a,b){ const p=pass(mode); return astar(idx(a.x,a.y), idx(b.x,b.y), i=>p(i)?1:Infinity, 1); }
+function planBuild(mode,a,b){
+  const own = mode==='rail' ? rails : roads;
+  const path=astar(idx(a.x,a.y), idx(b.x,b.y), i=>{
+    if(placeTile[i]>=0) return (placeTile[i]===a.id||placeTile[i]===b.id) ? 0.05 : 3;
+    if(own[i]) return 0.25;
+    const base=({[GRASS]:1,[FOREST]:1.8,[HILL]:2.7,[WATER]:5})[terrain[i]];
+    return planned[i] ? base*0.55 : base;
+  }, 0.05);
+  if(!path) return null;
+  let cost=0, tiles=0, bridges=0, plannedTiles=0;
+  for(const i of path){ if(placeTile[i]>=0||own[i]) continue; const c=BUILD[mode][terrain[i]]*S.infl*(planned[i]?0.5:1); cost+=c; tiles++; if(terrain[i]===WATER) bridges++; if(planned[i]) plannedTiles++; }
+  let removable=[];
+  if(tiles===0){
+    const used=new Set(); for(const l of S.lines){ if(l.mode!==mode) continue; const lp=linePaths.get(l.id); if(lp&&lp.path) lp.path.forEach(i=>used.add(i)); }
+    removable=path.filter(i=>own[i]&&placeTile[i]<0&&!used.has(i));
+  }
+  return { mode, a:a.id, b:b.id, path, cost:Math.round(cost), tiles, bridges, plannedTiles, removable };
+}
+function buildLinePath(mode, stops){
+  if(mode==='air'){
+    const bad=stops.findIndex(s=>!P(s).airport); if(bad>=0) return { fail:Math.max(0,bad-1), air:true };
+    const pts=stops.map(s=>[P(s).x,P(s).y]), cum=[0];
+    for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+    return { path:null, pts, cum, stopPos:cum.slice() };
+  }
+  const path=[], stopPos=[];
+  for(let k=0;k<stops.length-1;k++){
+    const seg=modePath(mode, P(stops[k]), P(stops[k+1]));
+    if(!seg) return { fail:k };
+    if(k===0){ path.push(...seg); stopPos.push(0); } else path.push(...seg.slice(1));
+    stopPos.push(path.length-1);
+  }
+  return { path, pts:path.map(i=>[i%W,(i/W)|0]), cum:path.map((_,i)=>i), stopPos };
+}
+
+// ---------- network: routes and demand ----------
+function computeRoutes(){
+  const direct=new Map(); for(const p of S.towns) direct.set(p.id,new Map());
+  fRoutes=new Map(); lineCount=new Map();
+  for(const l of S.lines){
+    const vs=lineVehicles(l); if(!vs.length) continue;
+    for(const s of l.stops) lineCount.set(s,(lineCount.get(s)||0)+1);
+    const pv=vs.filter(v=>MODELS[v.model].kind==='pass'), fv=vs.filter(v=>MODELS[v.model].kind==='freight');
+    if(pv.length){ const sp=Math.max(...pv.map(v=>MODELS[v.model].speed));
+      for(const a of l.stops) for(const b of l.stops){ if(a===b||!isPax(P(a))||!isPax(P(b))) continue;
+        const m=direct.get(a), e=m.get(b); if(!e||e.speed<sp||(e.speed===sp&&l.fareMult<e.fm)) m.set(b,{speed:Math.max(sp,e?e.speed:0),fm:Math.min(l.fareMult,e?e.fm:9)}); } }
+    if(fv.length){ for(const a of l.stops){ const p=P(a); if(p.kind!=='industry') continue; const good=IND[p.type].cargo;
+      for(const b of l.stops){ if(b!==a && accepts(good,P(b))){ if(!fRoutes.has(a)) fRoutes.set(a,new Set()); fRoutes.get(a).add(b); } } } }
+  }
+  routes=new Map();
+  for(const p of S.towns){
+    const m=new Map(), da=direct.get(p.id);
+    for(const [b,e] of da) m.set(b,{hop:b,speed:e.speed,fm:e.fm,transfer:false});
+    for(const [b,e] of da) for(const [c,e2] of direct.get(b)){
+      if(c===p.id||da.has(c)) continue;
+      const cost=dist(p,P(b))+dist(P(b),P(c)), cur=m.get(c);
+      if(!cur||cost<cur.cost) m.set(c,{hop:b,speed:Math.min(e.speed,e2.speed),fm:(e.fm+e2.fm)/2,transfer:true,cost});
+    }
+    routes.set(p.id,m);
+  }
+}
+const rivalOn = (a,b) => S.rival.routes.some(r=>(r.a===a&&r.b===b)||(r.a===b&&r.b===a));
+function pairRate(a,b,r){
+  const d=Math.max(1,dist(a,b)), t=d/(r?r.speed:2.5);
+  const modeF = r ? clamp(1.4 - t/12, 0.35, 1.35) : 1;
+  const fareF = r ? Math.pow(r.fm,-1.4) : 1;
+  const tf = r&&r.transfer ? 0.6 : 1, rv = rivalOn(a.id,b.id) ? 0.6 : 1;
+  return popO(a)*popD(b)*attrOf(b)*modeF*fareF*tf*rv/((d+6)*40000);
+}
+function computeDemand(){
+  rates=new Map();
+  for(const a of S.towns){ if(!isPax(a)) continue; const out=[];
+    for(const [f,r] of routes.get(a.id)) out.push({f, rate:pairRate(a,P(f),r)});
+    rates.set(a.id,out); }
+}
+function computeAll(){ computeRoutes(); computeDemand(); }
+function wishList(a){
+  const all=S.towns.filter(b=>b.id!==a.id&&isPax(b)).map(b=>({b, w:pairRate(a,b,null)}));
+  const tot=all.reduce((s,x)=>s+x.w,0)||1;
+  return all.sort((x,y)=>y.w-x.w).slice(0,5).map(x=>({ b:x.b, share:x.w/tot, r:routes.get(a.id).get(x.b.id), rival:rivalOn(a.id,x.b.id) }));
+}
+function prodRate(p){
+  const wh=S.props.filter(b=>b.town===p.id&&b.type==='warehouse').length;
+  const base = p.type==='factory' ? 3 + (p.oreLast/30)*1.2 : IND[p.type].rate;
+  return base * p.prod * (1+0.5*wh);
+}
+function waitAtFor(p,l){
+  if(p.kind==='industry'){ let s=0; for(const d of l.stops) s+=p.cwait[d]||0; return s; }
+  let s=0; const rt=routes.get(p.id);
+  for(const f in p.waiting){ const r=rt.get(+f); if(r && l.stops.includes(r.hop) && r.hop!==p.id) s+=p.waiting[f]; }
+  return s;
+}
+const lineWaiting = l => l.stops.reduce((s,id)=>s+waitAtFor(P(id),l),0);
+const lineCap = l => lineVehicles(l).reduce((s,v)=>s+MODELS[v.model].cap,0);
+
+// ---------- lines and vehicles ----------
+function sameStops(a,b){ return a.length===b.length && (a.every((x,i)=>x===b[i]) || a.every((x,i)=>x===b[b.length-1-i])); }
+function nextColor(){ const used=new Set(S.lines.map(l=>l.color)); return LINE_COLORS.find(c=>!used.has(c)) || LINE_COLORS[S.nextLine%LINE_COLORS.length]; }
+function buyVehicle(spec, model, free){
+  const cost=price(model);
+  if(!free && S.money<cost) return null;
+  let line=S.lines.find(l=>l.mode===spec.mode && sameStops(l.stops,spec.stops));
+  if(!line){
+    const lp=buildLinePath(spec.mode, spec.stops); if(!lp.pts) return null;
+    line={ id:S.nextLine++, mode:spec.mode, stops:spec.stops.slice(), color:nextColor(), profitYear:0, profitLast:0, fareMult:1, suspendUntil:0 };
+    S.lines.push(line); linePaths.set(line.id, lp); buildOverlay();
+  }
+  const v={ id:S.nextVeh++, line:line.id, model, pos:0, dir:1, next:0, wait:0, cargo:[], bought:S.day, paid:cost, profitYear:0, profitLast:0, broken:false };
+  S.vehicles.push(v);
+  if(!free){ S.money-=cost; S.m.vehicles+=cost; }
+  computeAll();
+  return v;
+}
+function cleanupLine(id){ const l=lineById(id); if(l && !S.vehicles.some(v=>v.line===id)){ S.lines=S.lines.filter(x=>x!==l); linePaths.delete(id); buildOverlay(); } computeAll(); }
+function sellVehicle(v){ const val=vehValue(v); S.money+=val; S.m.sales+=val; S.vehicles=S.vehicles.filter(x=>x!==v); cleanupLine(v.line); return val; }
+function moveVehicle(v, lineId){ const old=v.line; v.line=lineId; v.pos=0; v.dir=1; v.next=0; v.wait=0; v.cargo=[]; cleanupLine(old); }
+function replaceVehicle(v){
+  const l=lineById(v.line), m=MODELS[v.model], nm=bestModel(l.mode,m.kind), cost=price(nm)-vehValue(v);
+  if(S.money<cost) return null;
+  S.money-=cost; S.m.vehicles+=cost;
+  v.model=nm; v.bought=S.day; v.paid=price(nm); v.broken=false; computeAll();
+  return v;
+}
+function arrive(v, k){
+  const l=lineById(v.line), at=P(l.stops[k]), m=MODELS[v.model];
+  let rev=0;
+  v.cargo=v.cargo.filter(c=>{
+    if(c.to!==at.id) return true;
+    const from=P(c.from);
+    if(m.kind==='pass'){
+      rev+=c.n*fare(l.mode,from,at)*l.fareMult; at.arrivals+=c.n;
+      if(c.final!==at.id){ at.waiting[c.final]=(at.waiting[c.final]||0)+c.n; at.transfers+=c.n; }
+    } else {
+      rev+=c.n*cargoFare(from,at,c.good)*l.fareMult;
+      if(at.kind==='industry'&&at.type==='factory'&&c.good==='ore') at.oreMonth+=c.n;
+      if(at.kind!=='industry') at.supplied+=c.n;
+    }
+    return false; });
+  if(rev>0){
+    S.money+=rev; if(m.kind==='pass') S.m.fares+=rev; else S.m.cargo+=rev; S.yearFares+=rev; v.profitYear+=rev; l.profitYear+=rev; l.revM=(l.revM||0)+rev;
+    floats.push({ x:at.x*T+T/2, y:at.y*T-T*0.5, txt:'+'+money(rev), life:2 });
+  }
+  if(k===l.stops.length-1) v.dir=-1; else if(k===0) v.dir=1;
+  v.next=k+v.dir;
+  const fwd=[]; for(let j=k+v.dir; j>=0&&j<l.stops.length; j+=v.dir) fwd.push(l.stops[j]);
+  let free=m.cap-aboard(v);
+  if(m.kind==='pass' && isPax(at)){
+    const rt=routes.get(at.id);
+    for(const fk in at.waiting){ if(free<=0) break;
+      const f=+fk, w=Math.floor(at.waiting[fk]); if(w<=0) continue;
+      const r=rt.get(f); if(!r||!fwd.includes(r.hop)) continue;
+      const take=Math.min(free,w); at.waiting[fk]-=take; at.boarded+=take; free-=take;
+      const ex=v.cargo.find(c=>c.to===r.hop&&c.final===f&&c.from===at.id); if(ex) ex.n+=take; else v.cargo.push({from:at.id,to:r.hop,final:f,n:take});
+    }
+  } else if(m.kind==='freight' && at.kind==='industry'){
+    const good=IND[at.type].cargo;
+    for(const dk in at.cwait){ if(free<=0) break;
+      const d=+dk, w=Math.floor(at.cwait[dk]); if(w<=0||!fwd.includes(d)) continue;
+      const take=Math.min(free,w); at.cwait[dk]-=take; at.shipped+=take; free-=take;
+      v.cargo.push({from:at.id,to:d,good,n:take});
+    }
+  }
+  if(v.next>=0 && v.next<l.stops.length){ l.offM=(l.offM||0)+m.cap; l.carM=(l.carM||0)+aboard(v); }
+  v.wait = l.mode==='air' ? 1.2 : l.mode==='rail' ? 1.5 : 1;
+  v.broken=false;
+}
+const segKey = (i,j) => i<j ? i+'-'+j : j+'-'+i;
+function airCtrl(a,b){ const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2, dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1; return [mx-dy/L*L*0.18, my+dx/L*L*0.18]; }
+function vehWorld(v){
+  const lp=linePaths.get(v.line); if(!lp||!lp.pts||lp.pts.length<2) return null;
+  const n=lp.pts.length, pos=clamp(v.pos,0,lp.cum[n-1]);
+  let i;
+  if(lp.path){ i=Math.min(Math.floor(pos),n-2); } else { i=0; while(i<n-2 && lp.cum[i+1]<=pos) i++; }
+  const seg=lp.cum[i+1]-lp.cum[i]||1, f=(pos-lp.cum[i])/seg, a=lp.pts[i], b=lp.pts[i+1];
+  if(!lp.path){
+    const c=airCtrl(a,b), u=1-f;
+    const x=u*u*a[0]+2*u*f*c[0]+f*f*b[0], y=u*u*a[1]+2*u*f*c[1]+f*f*b[1];
+    let tx=2*u*(c[0]-a[0])+2*f*(b[0]-c[0]), ty=2*u*(c[1]-a[1])+2*f*(b[1]-c[1]); if(v.dir<0){tx=-tx;ty=-ty;}
+    return { x:x*T+T/2, y:y*T+T/2, ang:Math.atan2(ty,tx), air:true };
+  }
+  const lane=laneOff.get(v.line+':'+segKey(lp.path[i],lp.path[i+1])) || [0,0];
+  let dx=b[0]-a[0], dy=b[1]-a[1]; if(v.dir<0){ dx=-dx; dy=-dy; }
+  return { x:(a[0]+(b[0]-a[0])*f)*T+T/2+lane[0], y:(a[1]+(b[1]-a[1])*f)*T+T/2+lane[1], ang:Math.atan2(dy,dx) };
+}
+function buildOverlay(){
+  const seg=new Map();
+  for(const l of S.lines){ const lp=linePaths.get(l.id); if(!lp||!lp.path) continue;
+    const seen=new Set();
+    for(let k=0;k<lp.path.length-1;k++){ const key=segKey(lp.path[k],lp.path[k+1]); if(seen.has(key)) continue; seen.add(key);
+      if(!seg.has(key)) seg.set(key,[]); seg.get(key).push(l.id); } }
+  laneOff=new Map(); overlay=[];
+  for(const [key,ids] of seg){
+    const [a,b]=key.split('-').map(Number), dx=(b%W)-(a%W), dy=((b/W)|0)-((a/W)|0);
+    ids.forEach((id,slot)=>{ const o=(slot-(ids.length-1)/2)*6; laneOff.set(id+':'+key,[-dy*o,dx*o]); });
+  }
+  for(const l of S.lines){ const lp=linePaths.get(l.id); if(!lp||!lp.pts) continue;
+    if(!lp.path){ overlay.push({ id:l.id, color:l.color, mode:'air', arcs:lp.pts.slice(0,-1).map((a,i)=>[a,lp.pts[i+1]]) }); continue; }
+    const segs=[];
+    for(let k=0;k<lp.path.length-1;k++){ const i=lp.path[k], j=lp.path[k+1], off=laneOff.get(l.id+':'+segKey(i,j))||[0,0];
+      segs.push([(i%W)*T+T/2+off[0], ((i/W)|0)*T+T/2+off[1], (j%W)*T+T/2+off[0], ((j/W)|0)*T+T/2+off[1]]); }
+    overlay.push({ id:l.id, color:l.color, mode:l.mode, segs });
+  }
+}
+
+// ---------- tenders, rival and events ----------
+function newTender(r, first){
+  const towns=S.towns.filter(p=>p.kind==='town').sort((a,b)=>b.pop-a.pop);
+  const cand=[];
+  for(const a of towns.slice(0,8)) for(const w of wishList(a)){
+    const b=w.b, d=dist(a,b);
+    if(d<8||rivalOn(a.id,b.id)) continue;
+    if(S.lines.some(l=>l.stops.includes(a.id)&&l.stops.includes(b.id))) continue;
+    if(S.tenders.some(t=>(t.state==='open'||t.state==='won')&&((t.a===a.id&&t.b===b.id)||(t.a===b.id&&t.b===a.id)))) continue;
+    cand.push({a,b,d});
+  }
+  if(!cand.length) return;
+  const c=cand[Math.floor(r()*Math.min(cand.length,6))];
+  const mode = c.d>=20 && r()<0.6 ? 'rail' : 'any';
+  const reward=Math.round((12000 + c.d*2200)*(mode==='rail'?1.7:1)*S.infl/500)*500;
+  S.tenders.push({ id:S.nextTender++, a:c.a.id, b:c.b.id, mode, reward, bidUntil:S.day+(first?75:60), deadline:S.day+(first?75:60)+720,
+    state:'open', myBid:null, rivalBid:0.7+r()*0.3 });
+  if(!first) toast(`New tender: link ${c.a.name} and ${c.b.name}${mode==='rail'?' by rail':''}.`, '');
+}
+function tenderDone(t){ return S.lines.some(l=>l.stops.includes(t.a)&&l.stops.includes(t.b)&&(t.mode==='any'||l.mode===t.mode)&&lineVehicles(l).some(v=>MODELS[v.model].kind==='pass')); }
+function monthlyTenders(r){
+  for(const t of S.tenders){
+    const a=P(t.a), b=P(t.b);
+    if(t.state==='open' && S.day>=t.bidUntil){
+      if(t.myBid!=null && t.myBid<t.rivalBid){ t.state='won'; toast(`You won the ${a.name}–${b.name} tender at ${money(t.reward*t.myBid)}. Finish by ${dateStr(t.deadline)}.`,'good'); news(`Won tender ${a.name}–${b.name}.`); }
+      else if(t.myBid==null && r()<0.5){ t.state='lapsed'; news(`Tender ${a.name}–${b.name} lapsed with no winner.`); }
+      else { t.state='lost'; S.rival.routes.push({a:t.a,b:t.b,mode:t.mode==='rail'?'rail':'road'}); S.rival.value+=t.reward*t.rivalBid;
+        toast(`${RIVAL} won the ${a.name}–${b.name} tender${t.myBid!=null?` with ${Math.round(t.rivalBid*100)}%`:''}. Your demand on that route falls 40%.`,'bad'); news(`${RIVAL} now serves ${a.name}–${b.name}.`); }
+    } else if(t.state==='won'){
+      if(tenderDone(t)){ const pay=t.reward*t.myBid; t.state='done'; S.money+=pay; S.m.tenders+=pay; toast(`Tender complete: ${a.name}–${b.name}. Paid ${money(pay)}.`,'good'); news(`Tender ${a.name}–${b.name} paid ${money(pay)}.`); }
+      else if(S.day>t.deadline){ const pen=t.reward*t.myBid*0.25; t.state='failed'; S.money-=pen; S.m.tenders-=pen; toast(`Missed the ${a.name}–${b.name} deadline. Penalty ${money(pen)}.`,'bad'); news(`Missed tender ${a.name}–${b.name}.`); }
+    }
+  }
+  S.tenders=S.tenders.filter(t=>t.state==='open'||t.state==='won'||S.day-t.bidUntil<720);
+  if(S.tenders.filter(t=>t.state==='open').length<2 && r()<0.16) newTender(r,false);
+  S.rival.value*=1.004+r()*0.004;
+}
+function news(txt){ S.news.unshift(dateStr(S.day)+': '+txt); S.news=S.news.slice(0,8); }
+function monthlyEvents(r){
+  S.events=S.events.filter(e=>e.until>S.day);
+  if(r()>0.22) return;
+  const towns=S.towns.filter(p=>p.kind==='town'), pick=a=>a[Math.floor(r()*a.length)];
+  const roll=r();
+  if(roll<0.3){ const t=pick(towns); S.events.push({type:'festival',town:t.id,until:S.day+30}); toast(`Festival in ${t.name}! Travel there is up 150% this month.`,'good'); news(`Festival in ${t.name}.`); }
+  else if(roll<0.45){ const rl=S.lines.filter(l=>l.mode==='rail'); if(rl.length){ const l=pick(rl); l.suspendUntil=S.day+10; toast(`Floods closed rail line ${l.id} for 10 days.`,'bad'); news(`Floods closed line ${l.id}.`); } }
+  else if(roll<0.6){ S.fuelUntil=S.day+180; toast('Fuel prices jumped. Running costs up 30% for six months.','bad'); news('Fuel price spike.'); }
+  else if(roll<0.8){ S.tourismUntil=S.day+90; toast('Tourism boom: resorts and attractions draw 50% more visitors for three months.','good'); news('Tourism boom.'); }
+  else { const t=pick(towns); t.pop=Math.round(t.pop*1.06); toast(`${t.name} is booming. Population up 6%.`,'good'); news(`${t.name} boomed.`); }
+}
+
+// ---------- simulation ----------
+function step(dt){
+  for(const a of S.towns){
+    if(isPax(a)){
+      const cap=Math.max(popD(a),popO(a))*0.1;
+      for(const {f,rate} of (rates.get(a.id)||[])){
+        let w=(a.waiting[f]||0)+rate*dt;
+        const gone=w*0.02*dt; w-=gone; a.lost+=gone;
+        if(w>cap){ a.lost+=w-cap; w=cap; }
+        a.waiting[f]=w;
+      }
+    } else {
+      const dests=fRoutes.get(a.id); const r=prodRate(a)*dt; a.produced+=r;
+      if(dests&&dests.size){ const share=r/dests.size; for(const d of dests) a.cwait[d]=Math.min(600,(a.cwait[d]||0)+share); }
+    }
+  }
+  for(const v of S.vehicles){
+    const lp=linePaths.get(v.line); if(!lp||!lp.pts||lp.pts.length<2) continue;
+    const l=lineById(v.line); if(l.suspendUntil>S.day) continue;
+    if(v.wait>0){ v.wait-=dt; continue; }
+    const target=lp.stopPos[v.next];
+    v.pos+=v.dir*MODELS[v.model].speed*dt;
+    if((v.dir>0&&v.pos>=target)||(v.dir<0&&v.pos<=target)){ v.pos=target; arrive(v, v.next); }
+  }
+  const before=Math.floor(S.day/30);
+  S.day+=dt;
+  if(Math.floor(S.day/30)!==before) endMonth();
+}
+function endMonth(){
+  const r=rng(Math.floor(S.day)*7+S.seed);
+  for(const l of S.lines){ l.costLast=0; }
+  for(const v of S.vehicles){ const c=runCost(v), l=lineById(v.line); S.m.run+=c; v.profitYear-=c; l.profitYear-=c; l.costLast+=c; }
+  for(const l of S.lines){ l.revLast=l.revM||0; l.offLast=l.offM||0; l.carLast=l.carM||0; l.revM=0; l.offM=0; l.carM=0; l.months=(l.months||0)+1; }
+  const ap=S.towns.filter(t=>t.airport).length*AIRPORT_UPKEEP*S.infl; S.m.upkeep+=ap;
+  let rentTotal=0;
+  for(const b of S.props){ const rent=propRent(b), up=propUpkeep(b); b.rentTotal+=rent; b.upkeepTotal+=up; b.lastNet=rent-up; rentTotal+=rent; S.m.rent+=rent; S.m.upkeep+=up; }
+  const byTown={}; for(const b of S.props) byTown[b.town]=(byTown[b.town]||0)+b.lastNet;
+  for(const id in byTown){ const t=P(+id); floats.push({ x:t.x*T+T/2, y:t.y*T+T*1.6, txt:'rent '+signed(byTown[id]), life:2.6, rent:true }); }
+  S.m.interest=S.loan*LOAN_RATE/12;
+  S.money += rentTotal - S.m.run - S.m.upkeep - S.m.interest;
+  S.hist.push({...S.m, cash:S.money, value:companyValue()}); if(S.hist.length>36) S.hist.shift(); S.m=freshMonth();
+  for(const p of S.towns){
+    if(p.kind==='industry'){
+      p.shipShare = p.produced>1 ? clamp(p.shipped/p.produced,0,1) : 0;
+      p.prod = clamp(p.prod*(p.shipShare>0.5?1.015:0.99), 0.7, 2.5);
+      p.oreLast=p.oreMonth; p.oreMonth=0; p.produced=0; p.shipped=0; continue;
+    }
+    const served=(routes.get(p.id)?.size||0)>0, tot=p.boarded+p.lost;
+    if(served && tot>1) p.rating = p.rating*0.5 + (p.boarded/tot)*0.5;
+    else if(!served) p.rating += (0.3-p.rating)*0.3;
+    p.arrLast=p.arrivals; p.arrivals=0;
+    if(p.kind==='attraction'){ p.boarded=0; p.lost=0; p.transfers=0; continue; }
+    let g = !served ? 0.001 : p.rating>=0.45 ? Math.min(0.025,(p.rating-0.45)*0.05) : p.rating<0.3 ? -0.004 : 0;
+    if(p.supplied > p.pop*0.02) g+=0.004;
+    p.growth=g; p.pop=clamp(Math.round(p.pop*(1+g)),100,30000); p.boarded=0; p.lost=0; p.transfers=0; p.supplied=0;
+  }
+  for(const v of S.vehicles){
+    const age=vAge(v), life=MODELS[v.model].life, l=lineById(v.line);
+    const pb = age>life ? 0.25 : 0.008 + 0.024*Math.pow(age/life,1.3);
+    if(r()<pb){ v.wait+=age>life?6:3; v.broken=true; toast(`Line ${l.id}: ${MODELS[v.model].name} broke down${age>life?'. It is worn out, replace it.':'.'}`, 'bad'); }
+  }
+  if(monthIdx()===0){
+    for(const v of S.vehicles){ v.profitLast=v.profitYear; v.profitYear=0; }
+    for(const l of S.lines){ l.profitLast=l.profitYear; l.profitYear=0; }
+    S.infl*=1.03; S.fareInfl*=1.02;
+    toast(`${year()-1} closed. Fares and freight ${money(S.yearFares)}. Prices rose 3%.`, 'good'); S.yearFares=0;
+    for(const k in MODELS) if(MODELS[k].year===year()) toast(`New model: ${MODELS[k].name}.`, 'good');
+    for(const k in PT) if(PT[k].year===year()) toast(`New business: ${PT[k].name}.`, 'good');
+  }
+  monthlyEvents(r); monthlyTenders(r);
+  if(S.money<0){ S.debtMonths++;
+    if(ui.quiet) S.debtMonths=Math.min(S.debtMonths,3);
+    else if(S.debtMonths>=4){ S.over=true; setSpeed(0); ui.sel={kind:'over'}; overSheet(); save(); return; }
+    if(!S.over) toast(`Cash is negative. ${4-S.debtMonths} month${4-S.debtMonths>1?'s':''} until the bank closes the company.`, 'bad'); }
+  else S.debtMonths=0;
+  if(!S.won && companyValue()>=GOAL){ S.won=true; toast(`Company value passed ${money(GOAL)}. You built a transport empire!`, 'good'); }
+  computeDemand(); save(); updateDots();
+  if(ui.sel && ui.sel.kind!=='veh') refreshSheet();
+}
+
+// ---------- rendering ----------
+const cv=$('map'), cx=cv.getContext('2d');
+const st=document.createElement('canvas'); st.width=W*T; st.height=H*T; const sx=st.getContext('2d');
+const tt=document.createElement('canvas'); tt.width=W*T; tt.height=H*T; const tx=tt.getContext('2d');
+const cam={ x:W*T/2, y:H*T/2, z:1 };
+let cw=0, ch=0, dpr=1;
+function resize(){ dpr=Math.min(window.devicePixelRatio||1,2.5); cw=innerWidth; ch=innerHeight; cv.width=cw*dpr; cv.height=ch*dpr; clampCam(); }
+function clampCam(){
+  const minZ=Math.max(cw,ch)/(W*T)*0.9; cam.z=clamp(cam.z,minZ,3);
+  cam.x=clamp(cam.x, cw/2/cam.z-T*2, W*T-cw/2/cam.z+T*2);
+  cam.y=clamp(cam.y, ch/2/cam.z-T*3, H*T-ch/2/cam.z+T*3);
+}
+function hash(i){ let h=i*374761393+S.seed*668265263; h=(h^(h>>>13))*1274126177; return ((h^(h>>>16))>>>0)/4294967296; }
+function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+function renderStatic(){
+  const c=sx;
+  c.fillStyle='#f1f0ea'; c.fillRect(0,0,W*T,H*T);
+  c.fillStyle='#c9dde9';
+  for(let i=0;i<W*H;i++) if(terrain[i]===WATER) c.fillRect((i%W)*T,((i/W)|0)*T,T,T);
+  c.fillStyle='#b3cddd';
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=idx(x,y); if(terrain[i]!==WATER) continue;
+    if(y>0&&terrain[i-W]!==WATER) c.fillRect(x*T,y*T,T,1.5); if(y<H-1&&terrain[i+W]!==WATER) c.fillRect(x*T,y*T+T-1.5,T,1.5);
+    if(x>0&&terrain[i-1]!==WATER) c.fillRect(x*T,y*T,1.5,T); if(x<W-1&&terrain[i+1]!==WATER) c.fillRect(x*T+T-1.5,y*T,1.5,T); }
+  const ctr=i=>[(i%W)*T+T/2, ((i/W)|0)*T+T/2];
+  const segsFor=(p,own)=>{ const out=[]; for(let i=0;i<W*H;i++){ if(!p(i)) continue; const x=i%W, y=(i/W)|0;
+    for(const j of [x<W-1?i+1:-1, y<H-1?i+W:-1]) if(j>=0 && p(j) && (own[i]||own[j]) && !(placeTile[i]>=0&&placeTile[j]>=0)) out.push([i,j]); } return out; };
+  const stroke=(segs,col,w,dash,cap)=>{ c.strokeStyle=col; c.lineWidth=w; c.lineCap=cap||'round'; c.setLineDash(dash||[]); c.beginPath(); for(const [i,j] of segs){ c.moveTo(...ctr(i)); c.lineTo(...ctr(j)); } c.stroke(); c.setLineDash([]); };
+  const plannedSegs=segsFor(i=>planned[i]===1&&!roads[i], planned);
+  stroke(plannedSegs,'#b9c0c7',2,[2,5]);
+  const rs=segsFor(roadPass,roads), ts=segsFor(railPass,rails);
+  roadSegsW=rs.map(([i,j])=>[...ctr(i),...ctr(j)]); railSegsW=ts.map(([i,j])=>[...ctr(i),...ctr(j)]);
+  stroke(rs.filter(([i,j])=>terrain[i]===WATER||terrain[j]===WATER),'#aab3bb',9);
+  stroke(rs,'#d5d9dd',6);
+  stroke(ts.filter(([i,j])=>terrain[i]===WATER||terrain[j]===WATER),'#aab3bb',9);
+  stroke(ts,'#8a9198',6,[1.2,3.5],'butt'); stroke(ts,'#5f666d',2);
+  // terrain detail layer (shown while building)
+  const t=tx; t.clearRect(0,0,W*T,H*T);
+  for(let i=0;i<W*H;i++){ const k=terrain[i], px=(i%W)*T, py=((i/W)|0)*T;
+    if(k===HILL){ t.fillStyle='rgba(176,140,86,.35)'; t.fillRect(px,py,T,T); t.strokeStyle='rgba(120,90,50,.45)'; t.lineWidth=1.2; t.beginPath(); t.arc(px+T/2,py+T*0.85,T*0.36,Math.PI*1.15,Math.PI*1.85); t.stroke(); }
+    if(k===FOREST){ t.fillStyle='rgba(96,150,84,.3)'; t.fillRect(px,py,T,T); t.fillStyle='rgba(60,110,55,.45)'; for(let n=0;n<2;n++){ t.beginPath(); t.arc(px+5+hash(i*3+n)*(T-10),py+5+hash(i*7+n)*(T-10),3.5,0,7); t.fill(); } }
+  }
+}
+
+function layerNow(){ return ui.tool==='rail' ? 'rail' : ui.tool==='road' ? 'road' : ui.layer; }
+function draw(){
+  const c=cx;
+  c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle='#c9dde9'; c.fillRect(0,0,cw,ch);
+  c.save();
+  c.translate(cw/2,ch/2); c.scale(cam.z,cam.z); c.translate(-cam.x,-cam.y);
+  c.drawImage(st,0,0);
+  const layer=layerNow();
+  if(layer==='terrain'||ui.tool==='road'||ui.tool==='rail') c.drawImage(tt,0,0);
+  if(layer==='rail'||layer==='road'){
+    const segs=layer==='rail'?railSegsW:roadSegsW;
+    c.lineCap='round'; c.strokeStyle=layer==='rail'?'#2b3138':'#59626b'; c.lineWidth=layer==='rail'?5:6; c.beginPath(); for(const s of segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
+    if(layer==='rail'){ c.strokeStyle='#fff'; c.lineWidth=1.6; c.setLineDash([4,4]); c.beginPath(); for(const s of segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke(); c.setLineDash([]); }
+  }
+  // rival services
+  c.strokeStyle='rgba(110,118,126,.55)'; c.lineWidth=3; c.setLineDash([2,6]); c.lineCap='round';
+  for(const r of S.rival.routes){ const a=P(r.a), b=P(r.b); c.beginPath(); c.moveTo(a.x*T+T/2,a.y*T+T/2); c.lineTo(b.x*T+T/2,b.y*T+T/2); c.stroke(); }
+  c.setLineDash([]);
+  const focus=focusLine(), showLines = layer!=='terrain';
+  c.lineCap='round'; c.lineJoin='round';
+  if(showLines) for(const o of overlay){
+    if((layer==='rail'||layer==='road') && o.mode!==layer) continue;
+    c.globalAlpha = focus==null || focus===o.id ? 1 : 0.15;
+    if(o.mode==='air'){
+      c.strokeStyle=o.color; c.lineWidth=3; c.setLineDash([7,6]);
+      for(const [a,b] of o.arcs){ const k=airCtrl(a,b); c.beginPath(); c.moveTo(a[0]*T+T/2,a[1]*T+T/2); c.quadraticCurveTo(k[0]*T+T/2,k[1]*T+T/2,b[0]*T+T/2,b[1]*T+T/2); c.stroke(); }
+      c.setLineDash([]); continue;
+    }
+    c.strokeStyle='#fff'; c.lineWidth=9; c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
+    c.strokeStyle=o.color; c.lineWidth=o.mode==='rail'?6:5; c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
+  }
+  c.globalAlpha=1;
+  if(ui.plan && ui.plan.kind==='build'){ c.strokeStyle='#1b2128'; c.globalAlpha=.25; c.lineWidth=12;
+    c.beginPath(); ui.plan.path.forEach((i,k)=>{ const x=(i%W)*T+T/2, y=((i/W)|0)*T+T/2; k?c.lineTo(x,y):c.moveTo(x,y); }); c.stroke(); c.globalAlpha=1;
+    c.setLineDash([6,5]); c.strokeStyle='#1b2128'; c.lineWidth=2.5; c.stroke(); c.setLineDash([]); }
+  // places
+  for(const p of S.towns) drawPlace(c,p,focus);
+  if(ui.pickA!=null) ring(c,P(ui.pickA));
+  if(ui.sel && ui.sel.kind==='town') ring(c,P(ui.sel.id));
+  if(ui.stops.length){
+    c.strokeStyle='#1b2128'; c.lineWidth=2.5; c.setLineDash([7,6]); c.beginPath();
+    ui.stops.forEach((id,k)=>{ const t=P(id); k?c.lineTo(t.x*T+T/2,t.y*T+T/2):c.moveTo(t.x*T+T/2,t.y*T+T/2); }); c.stroke(); c.setLineDash([]);
+    ui.stops.forEach((id,k)=>{ const t=P(id), x=t.x*T+T/2, y=t.y*T+T/2; c.fillStyle='#1b2128'; c.beginPath(); c.arc(x,y,10,0,7); c.fill();
+      c.fillStyle='#fff'; c.font='700 13px Barlow Condensed, Arial Narrow, sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(String(k+1),x,y+1); });
+  }
+  for(const v of S.vehicles){
+    const p=vehWorld(v); if(!p) continue; const l=lineById(v.line), m=MODELS[v.model];
+    if((layer==='rail'||layer==='road') && l.mode!==layer) continue;
+    if(layer==='terrain') continue;
+    c.globalAlpha = focus==null||focus===l.id ? 1 : 0.25;
+    c.save(); c.translate(p.x,p.y); c.rotate(p.ang);
+    if(m.mode==='air'){
+      c.fillStyle='#fff'; c.beginPath(); c.moveTo(9,0); c.lineTo(-7,-6.5); c.lineTo(-4,0); c.lineTo(-7,6.5); c.closePath(); c.fill();
+      c.fillStyle=l.color; c.beginPath(); c.moveTo(7,0); c.lineTo(-5,-4.5); c.lineTo(-3,0); c.lineTo(-5,4.5); c.closePath(); c.fill();
+    } else if(m.mode==='rail'){
+      const cars=3, cl=8;
+      for(let k=0;k<cars;k++){ const x0=-cars*cl/2+k*cl; c.fillStyle='#fff'; roundRect(c,x0-1,-4.5,cl+1,9,2); c.fill();
+        c.fillStyle=m.kind==='freight'?'#3b4249':l.color; roundRect(c,x0,-3.5,cl-1,7,1.5); c.fill(); }
+      if(m.kind==='freight'){ c.fillStyle=l.color; c.fillRect(-cars*cl/2,-1,cars*cl-1,2); }
+    } else {
+      const len=m.kind==='freight'?12:m.cap>=70?14:11;
+      c.fillStyle='#fff'; roundRect(c,-len/2-1,-4.5,len+2,9,2.5); c.fill();
+      c.fillStyle=m.kind==='freight'?'#3b4249':l.color; roundRect(c,-len/2,-3.5,len,7,2); c.fill();
+      if(m.kind==='freight'){ c.fillStyle=l.color; c.fillRect(-len/2+1,-1,len-2,2); }
+    }
+    c.restore();
+    if(v.broken){ c.fillStyle='#d2402f'; c.beginPath(); c.arc(p.x,p.y-10,4,0,7); c.fill(); }
+    if(ui.sel&&ui.sel.kind==='veh'&&ui.sel.id===v.id){ c.strokeStyle='#1b2128'; c.lineWidth=2; c.beginPath(); c.arc(p.x,p.y,13,0,7); c.stroke(); }
+  }
+  c.globalAlpha=1;
+  c.textAlign='center'; c.textBaseline='alphabetic'; c.font='700 13px Barlow Condensed, Arial Narrow, sans-serif';
+  for(const f of floats){ c.globalAlpha=Math.min(1,f.life); c.lineWidth=3.5; c.strokeStyle='#fff';
+    const y=f.y-(2.6-f.life)*12; c.strokeText(f.txt,f.x,y); c.fillStyle=f.rent?'#17673f':'#1b2128'; c.fillText(f.txt,f.x,y); }
+  c.globalAlpha=1;
+  c.restore();
+  drawLabels(c);
+}
+function drawPlace(c,p,focus){
+  const x=p.x*T+T/2, y=p.y*T+T/2, n=lineCount.get(p.id)||0;
+  const dim = focus!=null && !lineById(focus)?.stops.includes(p.id);
+  c.globalAlpha = dim ? 0.5 : 1;
+  if(p.kind==='industry'){
+    const d=IND[p.type]; c.fillStyle='#fff'; roundRect(c,x-9,y-9,18,18,4); c.fill(); c.fillStyle=d.color; roundRect(c,x-7.5,y-7.5,15,15,3); c.fill();
+    c.fillStyle='#fff'; c.font='700 11px Barlow, system-ui, sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(d.glyph,x,y+0.5);
+  } else if(p.kind==='attraction'){
+    c.fillStyle='#fff'; star(c,x,y,11,5); c.fill(); c.fillStyle='#e09f1f'; star(c,x,y,8.5,3.8); c.fill();
+  } else if(p.kind==='village'){
+    c.fillStyle='#fff'; c.strokeStyle='#1b2128'; c.lineWidth=2; c.beginPath(); c.arc(x,y,n>1?6:4.5,0,7); c.fill(); c.stroke();
+  } else {
+    const r=6+Math.min(7,p.pop/1100);
+    c.fillStyle='#fff'; c.strokeStyle='#1b2128'; c.lineWidth=n>1?3.5:2.5;
+    if(n>1){ roundRect(c,x-r-3,y-r,r*2+6,r*2,r); } else { c.beginPath(); c.arc(x,y,r,0,7); }
+    c.fill(); c.stroke();
+    if(p.airport){ c.fillStyle='#1b2128'; c.save(); c.translate(x+r+5,y-r-3); c.rotate(-Math.PI/4); c.beginPath(); c.moveTo(6,0); c.lineTo(-5,-4.5); c.lineTo(-3,0); c.lineTo(-5,4.5); c.closePath(); c.fill(); c.restore(); }
+  }
+  const owned=S.props.filter(b=>b.town===p.id).length;
+  if(owned){ const bx=x-(p.kind==='town'?14:10), by=y-(p.kind==='town'?12:9); c.fillStyle='#1b2128'; c.save(); c.translate(bx,by); c.rotate(Math.PI/4); c.fillRect(-4,-4,8,8); c.restore();
+    if(owned>1){ c.fillStyle='#fff'; c.font='700 8px Barlow, sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(owned,bx,by+0.5); } }
+  c.globalAlpha=1;
+}
+function star(c,x,y,R,r){ c.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r:R; c.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } c.closePath(); }
+function ring(c,t){ c.strokeStyle='#1b2128'; c.lineWidth=2.5; c.setLineDash([6,5]); c.beginPath(); c.arc(t.x*T+T/2,t.y*T+T/2,small(t)?T*1.1:T*1.7,0,7); c.stroke(); c.setLineDash([]); }
+function drawLabels(c){
+  c.textAlign='left'; c.textBaseline='middle';
+  for(const p of S.towns){
+    const important = p.kind==='town' || cam.z>0.85 || ui.stops.includes(p.id) || ui.pickA===p.id || (ui.sel&&ui.sel.kind==='town'&&ui.sel.id===p.id);
+    if(!important) continue;
+    const s=w2s(p.x*T+T/2+(p.kind==='town'?(6+Math.min(7,p.pop/1100))+5:11), p.y*T+T/2);
+    if(s.x<-40||s.x>cw+200||s.y<-30||s.y>ch+30) continue;
+    const name=p.name, fs=p.kind==='town'?15:12.5;
+    c.font=`700 ${fs}px Barlow Condensed, Arial Narrow, sans-serif`;
+    c.lineWidth=4; c.strokeStyle='rgba(255,255,255,.95)'; c.lineJoin='round';
+    c.strokeText(name,s.x,s.y-(p.kind==='town'?4:0)); c.fillStyle='#1b2128'; c.fillText(name,s.x,s.y-(p.kind==='town'?4:0));
+    if(p.kind==='town'){
+      const sub=fmtPop(p.pop)+(p.type&&p.type!=='city'&&p.type!=='market'?' · '+TOWN_TYPES[p.type].name.split(' ')[0]:'');
+      c.font='500 11px Barlow, system-ui, sans-serif'; c.strokeText(sub,s.x,s.y+9); c.fillStyle='#6b7580'; c.fillText(sub,s.x,s.y+9);
+    }
+    let wait=0; if(isPax(p)) for(const f in p.waiting) wait+=p.waiting[f]; else for(const d in p.cwait) wait+=p.cwait[d];
+    if(wait>=1){
+      const wt=Math.floor(wait)+(isPax(p)?'':'t'); c.font='700 10.5px Barlow, system-ui, sans-serif'; const ww=c.measureText(wt).width+10;
+      const bx=s.x-ww-(p.kind==='town'?22:16)-(p.kind==='town'?Math.min(7,p.pop/1100)*cam.z:0), by=s.y-(p.kind==='town'?14:15);
+      c.fillStyle=isPax(p)&&p.rating<0.45?'#d2402f':'#1b2128'; roundRect(c,bx,by-8,ww,16,8); c.fill(); c.fillStyle='#fff'; c.fillText(wt,bx+5,by+0.5);
+    }
+  }
+}
+function focusLine(){
+  if(!ui.sel) return null;
+  if(ui.sel.kind==='line') return ui.sel.id;
+  if(ui.sel.kind==='veh'){ const v=S.vehicles.find(x=>x.id===ui.sel.id); return v?v.line:null; }
+  return null;
+}
+const fmtPop = p => p>=10000 ? (p/1000).toFixed(1)+'k' : p.toLocaleString('en-US');
+function w2s(x,y){ return { x:(x-cam.x)*cam.z+cw/2, y:(y-cam.y)*cam.z+ch/2 }; }
+function s2w(x,y){ return { x:(x-cw/2)/cam.z+cam.x, y:(y-ch/2)/cam.z+cam.y }; }
+
+// ---------- HUD ----------
+let lastCash=null, lastDate=null;
+function hud(){
+  const m=Math.round(S.money);
+  if(m!==lastCash){ lastCash=m; $('cash').textContent=money(m); $('cash').classList.toggle('neg',m<0); }
+  const d=dateStr(S.day); if(d!==lastDate){ lastDate=d; $('date').textContent=d; }
+}
+function updateDots(){ const n=S.tenders.filter(t=>t.state==='open'&&t.myBid==null).length; $('tdot').textContent=n; $('tdot').hidden=!n; }
+function setSpeed(s){ ui.speed=s; document.querySelectorAll('#speed button').forEach(b=>b.classList.toggle('on',+b.dataset.s===s)); }
+function toast(msg,kind){
+  if(ui.quiet) return;
+  const el=document.createElement('div'); el.className='toast '+(kind||''); el.textContent=msg;
+  const box=$('toasts'); box.appendChild(el); while(box.children.length>2) box.firstChild.remove();
+  setTimeout(()=>el.remove(),4500);
+}
+function setHint(text){ if(text){ $('hintText').textContent=text; $('hint').hidden=false; } else $('hint').hidden=true; $('hintUndo').hidden=!(ui.tool==='line'&&ui.stops.length>0); }
+function lineHint(){ setHint(ui.stops.length===0 ? 'Tap the first stop' : ui.stops.length<MAX_STOPS ? `Tap stop ${ui.stops.length+1}` : 'Line is full'); }
+function markTool(t){ document.querySelectorAll('#bar button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t)); }
+function setTool(t){
+  ui.pickA=null; ui.plan=null; ui.sel=null; ui.stops=[]; ui.editLine=null; ui.prefMode=null; ui.confirm=null;
+  if(PANELS.includes(t)){ ui.tool='inspect'; markTool(t); setHint(null); ui.sel={kind:t}; refreshSheet(); return; }
+  ui.tool=t; markTool(t==='inspect'?null:(t==='line'?'lines':'build')); hideSheet();
+  if(t==='road') setHint('Tap the first place for the road');
+  else if(t==='rail') setHint('Tap the first station');
+  else if(t==='airport') setHint('Tap a town to build an airport');
+  else if(t==='line') lineHint();
+  else setHint(null);
+}
+
+// ---------- sheets ----------
+function sheetKey(){ return ui.sel ? ui.sel.kind+':'+(ui.sel.id??'') : ui.plan ? 'plan' : 'stops'; }
+function showSheet(html){ const card=$('card'), keep=card.scrollTop, same=card.dataset.k===sheetKey(); card.innerHTML=html; $('sheet').hidden=false; card.dataset.k=sheetKey(); if(same) card.scrollTop=keep; }
+function hideSheet(){ $('sheet').hidden=true; $('card').dataset.k=''; }
+const closeBtn='<button class="x" data-act="close" aria-label="Close">×</button>';
+const badge=l=>`<span class="badge" style="background:${l.color}">${l.id}</span>`;
+const pl=n=>`<b class="${n>=0?'pos':'neg'}">${signed(n)}</b>`;
+const route=l=>l.stops.map(s=>esc(P(s).name)).join(' – ');
+function lineStats(l){
+  const lp=linePaths.get(l.id), vs=lineVehicles(l), len=lp&&lp.cum.length?lp.cum[lp.cum.length-1]:1, wait=l.mode==='air'?1.2:l.mode==='rail'?1.5:1;
+  const st={pass:{seats:0,demand:0,n:0}, freight:{seats:0,demand:0,n:0}, run:0, old:vs.filter(v=>vAge(v)>MODELS[v.model].life), len};
+  for(const v of vs){ const m=MODELS[v.model], rt=2*(len/m.speed+l.stops.length*wait); st[m.kind].seats+=m.cap*2/rt; st[m.kind].n++; st.run+=runCost(v); }
+  for(const a of l.stops){ const p=P(a);
+    if(isPax(p)){ const rt=routes.get(a); for(const {f,rate} of (rates.get(a)||[])){ const r=rt.get(f); if(r&&l.stops.includes(r.hop)) st.pass.demand+=rate; } }
+    else { const d=fRoutes.get(a); if(d&&d.size){ const on=[...d].filter(x=>l.stops.includes(x)).length; st.freight.demand+=prodRate(p)*on/d.size; } } }
+  const ends=[P(l.stops[0]),P(l.stops[l.stops.length-1])];
+  st.endDist=l.mode==='air'?eDist(ends[0],ends[1]):dist(ends[0],ends[1]);
+  st.load=l.offLast?l.carLast/l.offLast:null;
+  st.trip=st.endDist/Math.max(...vs.map(v=>MODELS[v.model].speed),1);
+  return st;
+}
+function diagnose(l){
+  const st=lineStats(l), out=[], add=(key,short,text,fix)=>out.push({key,short,text,fix});
+  const rev=l.revLast||0, cost=l.costLast||st.run, losing=(l.months||0)>=1 ? rev<cost : l.profitYear<0;
+  if(l.suspendUntil>S.day) add('flood','closed','Floods have closed this line, so it earns nothing until they clear. Running costs still count.',null);
+  if((l.months||0)<2) add('new','new line','New lines need a month or two before passengers build up at the stops.',null);
+  if(st.old.length) add('old','worn out',`${st.old.length} vehicle${st.old.length>1?'s are':' is'} past service life: they cost more to run and break down often.`,{act:'replace',id:st.old[0].id,label:'Replace oldest'});
+  for(const kind of ['pass','freight']){
+    const k=st[kind]; if(!k.n) continue;
+    const word=kind==='pass'?'people':'tonnes of cargo';
+    if(k.demand<=0.05){ add('nodemand-'+kind, kind==='pass'?'no riders':'no cargo',
+        kind==='pass'?'Nobody on this line wants these trips. Passenger vehicles need at least two towns or attractions.':'No stop on this line produces cargo that another stop buys. Check what each industry sells.',{act:'editRoute',id:l.id,label:'Edit stops'}); continue; }
+    if(k.seats>k.demand*1.6) add('over-'+kind,'too many vehicles',`${k.demand<1?'Fewer than 1':'About '+Math.round(k.demand)} ${k.demand<1&&kind==='pass'?'person':word} a day ${k.demand<1?'wants':'want'} this route, but its vehicles offer ${Math.round(k.seats)} spaces a day. They run mostly empty.`,{act:'removeOne',id:l.id,label:'Sell one vehicle'});
+  }
+  if(st.load!=null && st.load<0.35 && !out.some(o=>o.key.startsWith('over'))) add('empty','mostly empty',`Vehicles left stops only ${Math.round(st.load*100)}% full last month.`,l.fareMult>1?{act:'fare',id:l.id,d:-1,label:'Lower fares'}:{act:'removeOne',id:l.id,label:'Sell one vehicle'});
+  if(l.fareMult>=1.3 && st.pass.n) add('fare','fares high',`Fares are at ${Math.round(l.fareMult*100)}%, which puts many riders off.`,{act:'fare',id:l.id,d:-1,label:'Lower fares'});
+  if(l.mode!=='air' && st.endDist<9 && st.pass.n) add('short','short route',`The ends are only ${st.endDist} tiles apart. Fares grow with distance, so short trips earn little per rider.`,{act:'editRoute',id:l.id,label:'Extend the line'});
+  if(l.mode==='road' && st.pass.n && st.trip>9) add('slow','slow for distance',`A bus takes about ${Math.round(st.trip)} days end to end. On long trips people prefer trains or planes, so demand drops.`,{act:'tool',t:'rail',label:'Build a railway'});
+  const heavy=lineVehicles(l).filter(v=>['rail','air'].includes(MODELS[v.model].mode)&&MODELS[v.model].kind==='pass');
+  if(heavy.length && st.pass.demand*1.6<st.pass.seats && st.pass.demand<MODELS[heavy[0].model].cap/4) add('big','too big for demand',`${MODELS[heavy[0].model].name}s carry ${MODELS[heavy[0].model].cap} and cost ${money(runCost(heavy[0]))}/mo each. These places are too small to fill them.`,{act:'editRoute',id:l.id,label:'Add bigger towns'});
+  if(st.freight.n && l.stops.filter(s=>P(s).kind==='industry'&&fRoutes.has(s)&&[...fRoutes.get(s)].some(x=>l.stops.includes(x))).length===1 && l.stops.length===2) add('return','empty returns','Freight only travels one way here, so vehicles drive back empty. A stop that ships something back (a factory) doubles the earnings.',{act:'editRoute',id:l.id,label:'Edit stops'});
+  for(let i=0;i<l.stops.length;i++) for(let j=i+1;j<l.stops.length;j++) if(rivalOn(l.stops[i],l.stops[j])){ add('rival','rival',`${RIVAL} competes between ${P(l.stops[i]).name} and ${P(l.stops[j]).name}, taking 40% of those riders.`,null); i=99; break; }
+  if(l.mode==='air' && S.towns.filter(t=>t.airport).length) add('air','airport costs',`Each airport costs ${money(AIRPORT_UPKEEP*S.infl)}/mo, counted in company upkeep. Air pays best between big, far-apart towns.`,null);
+  if(S.fuelUntil>S.day) add('fuel','fuel spike','A fuel price spike has raised running costs 30% for now.',null);
+  const res = out.some(o=>o.key==='return') ? out.filter(o=>o.key!=='empty') : out;
+  return { losing, rev, cost, st, reasons:res };
+}
+function healthSection(l){
+  const d=diagnose(l), st=d.st, load=st.load==null?'–':Math.round(st.load*100)+'%';
+  const fixBtn=f=>f?`<button class="btn sm" data-act="${f.act}" ${f.id!=null?`data-id="${f.id}"`:''} ${f.d!=null?`data-d="${f.d}"`:''} ${f.t?`data-t="${f.t}"`:''}>${f.label}</button>`:'';
+  const head=d.losing?`<p class="neg" style="font-weight:600">Lost ${money(d.cost-d.rev)} last month. Here is why:</p>`:`<p class="pos" style="font-weight:600">Earned ${signed(d.rev-d.cost)} last month.</p>`;
+  const reasons=d.reasons.filter(x=>d.losing||!['new','air'].includes(x.key));
+  return `<h3>Line health</h3>
+  <div class="rows">
+    <div class="row"><span>Earned last month</span><b class="pos">${money(d.rev)}</b></div>
+    <div class="row"><span>Running costs last month</span><b class="neg">${money(-d.cost)}</b></div>
+    <div class="row"><span>Average load leaving stops</span><b>${load}</b></div>
+    ${st.pass.n?`<div class="row"><span>Riders wanting this line</span><b>${Math.round(st.pass.demand*30).toLocaleString('en-US')}/mo vs ${Math.round(st.pass.seats*30).toLocaleString('en-US')} seats</b></div>`:''}
+    ${st.freight.n?`<div class="row"><span>Cargo for this line</span><b>${Math.round(st.freight.demand*30).toLocaleString('en-US')} t/mo vs ${Math.round(st.freight.seats*30).toLocaleString('en-US')} t space</b></div>`:''}
+  </div>
+  ${head}
+  ${reasons.length?reasons.map(x=>`<div class="lc"><div class="main"><span class="rt">${x.short.replace(/^./,c=>c.toUpperCase())}</span><small class="m">${esc(x.text)}</small></div><div class="side">${fixBtn(x.fix)}</div></div>`).join('')
+    :`<p class="note">${d.losing?'No single cause found: try lowering fares a little or adding a busier stop.':'No problems found.'}${(!d.losing&&st.pass.n&&st.pass.demand>st.pass.seats*1.2)?' More people want this line than it can carry: add a vehicle or raise fares.':''}</p>`}`;
+}
+function lineChips(l){
+  const vs=lineVehicles(l), w=lineWaiting(l), old=vs.filter(v=>vAge(v)>MODELS[v.model].life).length; let out='';
+  if(l.suspendUntil>S.day) out+='<span class="chip bad">closed by floods</span>';
+  const dg=(l.months||0)>=1?diagnose(l):null;
+  if(dg&&dg.losing){ const top=dg.reasons.find(x=>!['new','air','fuel'].includes(x.key)); out+=`<span class="chip bad">losing${top?': '+top.short:''}</span>`; }
+  else if(!dg && l.profitYear<0 && S.day%360>60) out+='<span class="chip bad">losing money</span>';
+  if(w>lineCap(l)*1.2) out+='<span class="chip warn">needs vehicles</span>';
+  if(old) out+=`<span class="chip bad">${old} worn out</span>`;
+  if(l.fareMult!==1) out+=`<span class="chip info">fares ${Math.round(l.fareMult*100)}%</span>`;
+  return out;
+}
+
+function refreshSheet(){
+  if(ui.tool==='line' && (ui.stops.length>=2||ui.editLine!=null) && !ui.plan) return linePlanSheet();
+  if(ui.plan && ui.plan.kind==='build') return buildPlanSheet();
+  const s=ui.sel; if(!s){ hideSheet(); return; }
+  const back=()=>{ ui.sel={kind:'lines'}; linesSheet(); };
+  if(s.kind==='town') placeSheet(P(s.id));
+  else if(s.kind==='veh'){ const v=S.vehicles.find(x=>x.id===s.id); if(v) vehSheet(v); else back(); }
+  else if(s.kind==='line'){ const l=lineById(s.id); if(l) lineSheet(l); else back(); }
+  else if(s.kind==='move'){ const v=S.vehicles.find(x=>x.id===s.id); if(v) moveSheet(v); else back(); }
+  else if(s.kind==='tender'){ const t=S.tenders.find(x=>x.id===s.id); if(t) tenderSheet(t); else { ui.sel={kind:'tenders'}; tendersSheet(); } }
+  else if(s.kind==='airport') airportSheet(P(s.id));
+  else if(s.kind==='away') awaySheet();
+  else if(s.kind==='backup') backupSheet();
+  else ({lines:linesSheet, build:buildSheet, business:businessSheet, tenders:tendersSheet, company:companySheet, intro:introSheet, map:mapSheet, over:overSheet}[s.kind]||hideSheet)();
+}
+function introSheet(){
+  const top=S.towns.filter(p=>p.kind==='town').sort((a,b)=>b.pop-a.pop)[0], w=top?wishList(top)[0]:null;
+  showSheet(`<h2>Welcome to Lineworks${closeBtn}</h2><div class="sub">${S.region?esc(S.region)+' · ':''}Start with $80,000 and an empty map</div>
+  <ol><li><b>Build</b> roads, railways and airports between places. Dotted grey lines are planned routes: building on them costs half.</li>
+  <li><b>Lines</b>: make a line through 2 to 6 stops and buy buses, trucks, trains or planes.</li>
+  <li>Tap a town to see <b>where its people want to go</b>, how many are waiting per line, and businesses you can open.</li>
+  <li>Farms, mines and factories (squares) need freight. Stars are tourist attractions.</li>
+  <li>Your company keeps earning while the game is closed, and every line has a health check that explains losses.</li>
+  <li>Win <b>tenders</b> against ${RIVAL}, ride out events, and reach a company value of <b>${money(GOAL)}</b>.</li></ol>
+  ${w?`<p class="note">Tip: most people in ${esc(top.name)} want to go to ${esc(w.b.name)}. Try a road and a bus between them first.</p>`:''}
+  <div class="btns"><button class="btn pri" data-act="close">Start</button><button class="btn" data-act="newgame">Play a real place</button></div>`);
+}
+function placeSheet(p){
+  if(p.kind==='industry') return industrySheet(p);
+  const lines=S.lines.filter(l=>l.stops.includes(p.id));
+  const g=p.kind==='attraction'?`${p.draw.toLocaleString('en-US')} visitor draw`:`${p.pop.toLocaleString('en-US')} people · ${p.growth>=0?'+':''}${(p.growth*100).toFixed(1)}%/mo`;
+  const rc=p.rating>=0.65?'pos':p.rating>=0.45?'warnc':'neg';
+  const rn=railNeighbours(p).filter(id=>!S.lines.some(l=>l.mode==='rail'&&l.stops.includes(p.id)&&l.stops.includes(id)));
+  const wl=wishList(p);
+  showSheet(`<h2>${esc(p.name)}${closeBtn}</h2><div class="sub">${kindLabel(p)} · ${g}${p.airport?' · Airport':''}</div>
+  <div class="rows"><div class="row"><span>Service rating</span><b class="${rc}">${Math.round(p.rating*100)}%</b></div>
+  <div class="row"><span>Visitors last month</span><b>${Math.round(p.arrLast||0)}</b></div></div>
+  <h3>Where people want to go</h3>
+  ${wl.map(w=>`<div class="wish"><span>${esc(w.b.name)} <small class="m" style="display:inline">${w.rival?`<span class="chip bad">${RIVAL}</span>`:w.r?(w.r.transfer?'<span class="chip info">with a change</span>':'<span class="chip ok">direct</span>'):'<span class="chip warn">not served</span>'}</small></span><b>${Math.round(w.share*100)}%</b><div class="bar2"><i style="width:${Math.round(w.share*100/Math.max(...wl.map(x=>x.share))*100)/100}%"></i></div></div>`).join('')}
+  <h3>Lines stopping here</h3>
+  ${lines.length?lines.map(l=>{ const w=Math.floor(waitAtFor(p,l)), best=bestModel(l.mode,'pass');
+    return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span>
+      <small class="m">${modeName(l.mode)} · ${lineVehicles(l).length} ${vehWord(l.mode,lineVehicles(l).length)} · <b class="${w>40?'warnc':''}">${w} waiting here</b>${lineChips(l)}</small></button>
+      <div class="side"><div class="mini"><button class="add" data-act="addBest" data-id="${l.id}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''}>+</button></div></div></div>`; }).join('')
+    :'<p class="note">No lines stop here yet. Places without service barely grow.</p>'}
+  ${rn.length?`<h3>Your railway reaches</h3>${rn.map(id=>`<div class="lc"><div class="main"><span class="rt">${esc(P(id).name)}</span><small class="m">Track built, no train line yet</small></div><div class="side"><button class="btn pri sm" data-act="trainTo" data-id="${p.id}" data-b="${id}">Add train</button></div></div>`).join('')}`:''}
+  <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New line from here</button>
+  ${p.kind==='town'&&!p.airport?`<button class="btn" data-act="airportAt" data-id="${p.id}">Airport…</button>`:''}</div>
+  ${propSection(p)}`);
+}
+function industrySheet(p){
+  const d=IND[p.type], lines=S.lines.filter(l=>l.stops.includes(p.id)), dests=[...(fRoutes.get(p.id)||[])];
+  const good=d.cargo, acc=S.towns.filter(q=>q.id!==p.id&&accepts(good,q)).sort((a,b)=>dist(p,a)-dist(p,b)).slice(0,4);
+  showSheet(`<h2>${esc(p.name)}${closeBtn}</h2><div class="sub">${d.name} · produces ${CARGO[good].toLowerCase()} · ${Math.round(prodRate(p)*30)} t/month</div>
+  <div class="rows">
+    <div class="row"><span>Shipped last month</span><b class="${p.shipShare>0.5?'pos':p.shipShare>0?'warnc':'neg'}">${Math.round(p.shipShare*100)}%</b></div>
+    <div class="row"><span>Output trend</span><b>${Math.round(p.prod*100)}% of normal</b></div>
+    ${p.type==='factory'?`<div class="row"><span>Ore delivered last month</span><b>${Math.round(p.oreLast)} t</b></div>`:''}
+    ${dests.map(id=>`<div class="row"><span>Waiting for ${esc(P(id).name)}</span><b>${Math.floor(p.cwait[id]||0)} t</b></div>`).join('')}
+  </div>
+  <p class="note">${p.type==='factory'?'Factories make some goods on their own, and far more from delivered ore (each tonne of ore becomes 1.2 t of goods). Goods pay 50% more per tonne than raw cargo.':`${CARGO[good]} sells to ${good==='ore'?'factories':'towns and villages'}.`} Output grows when you ship more than half of it. Nearest buyers: ${acc.map(q=>esc(q.name)).join(', ')||'none'}.</p>
+  <h3>Lines stopping here</h3>
+  ${lines.length?lines.map(l=>{ const best=bestModel(l.mode,'freight'); return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span><small class="m">${modeName(l.mode)} · ${Math.floor(waitAtFor(p,l))} t waiting${lineChips(l)}</small></button>
+    <div class="side">${best?`<div class="mini"><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''}>+</button></div>`:''}</div></div>`; }).join('')
+    :'<p class="note">No freight line yet. Make a line from here to a buyer and add a truck or freight train.</p>'}
+  <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New freight line from here</button></div>
+  ${propSection(p)}`);
+}
+function railNeighbours(t){
+  const seen=new Uint8Array(W*H), out=new Set(), q=[];
+  for(let i=0;i<W*H;i++) if(placeTile[i]===t.id){ seen[i]=1; q.push(i); }
+  while(q.length){ const c=q.pop(), x=c%W, y=(c/W)|0;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx, ny=y+dy; if(nx<0||ny<0||nx>=W||ny>=H) continue; const n=idx(nx,ny); if(seen[n]) continue; seen[n]=1;
+      if(placeTile[n]>=0 && placeTile[n]!==t.id){ if(rails[c]) out.add(placeTile[n]); continue; }
+      if(rails[n]) q.push(n); } }
+  return [...out];
+}
+function propSection(p){
+  const mine=S.props.filter(b=>b.town===p.id);
+  const owned=mine.map(b=>{ const i=S.props.indexOf(b), net=propRent(b)-propUpkeep(b), tot=propPL(b);
+    return `<div class="veh"><div class="nm">${PT[b.type].name}</div>
+      <div class="sp">Earns <span class="${net>=0?'pos':'neg'}">${signed(net)}</span>/mo · paid ${money(b.paid)} · worth ${money(propValue(b))}<br>Overall <span class="${tot>=0?'pos':'neg'}">${signed(tot)}</span>${PT[b.type].boost?` · draws ${Math.round(PT[b.type].boost*100)}% more travellers`:''}</div>
+      <button class="btn warn" data-act="sellProp" data-id="${i}">Sell ${money(propValue(b))}</button></div>`; }).join('');
+  const full=mine.length>=maxProps(p);
+  const buy=full?'':Object.entries(PT).filter(([k])=>canHost(k,p)).map(([k,pt])=>{
+    const locked=(pt.minPop&&sizeOf(p)<pt.minPop)||(pt.year&&year()<pt.year), pr=propPrice(k,p);
+    const est=pr*pt.rate*(p.kind==='industry'?0.5+(p.shipShare||0):0.4+p.rating)*(pt.visitors?visitF(p):1)*(pt.seasonal?season():1)-pr*UPKEEP;
+    const extra=pt.boost?` Draws ${Math.round(pt.boost*100)}% more travellers here.`:pt.prodBoost?' Raises output 50%.':pt.visitors?' Earns more with more visitors.':'';
+    return `<div class="veh"><div class="nm">${pt.name}</div>
+      <div class="sp">${locked?(pt.year&&year()<pt.year?`Available from ${pt.year}`:`Needs ${pt.minPop.toLocaleString('en-US')}+ people`):`About ${signed(est)}/mo now.${extra}`}</div>
+      <button class="btn pri" data-act="buyProp" data-type="${k}" data-id="${p.id}" ${locked||S.money<pr?'disabled':''}>${money(pr)}</button></div>`; }).join('');
+  return `<h3>Businesses · ${mine.length}/${maxProps(p)}</h3>${owned}${buy}`;
+}
+function vehSheet(v){
+  const l=lineById(v.line), m=MODELS[v.model], age=vAge(v), to=P(l.stops[v.next]??l.stops[0]);
+  const status=v.broken?'<span class="neg">Broken down</span>':l.suspendUntil>S.day?'<span class="neg">Line closed by floods</span>':v.wait>0?'At a stop':'Heading to '+esc(to.name);
+  const best=bestModel(l.mode,m.kind), old=age>m.life*0.7, upgrade=best!==v.model, repCost=price(best)-vehValue(v);
+  showSheet(`<h2>${badge(l)} ${m.name}${closeBtn}</h2><div class="sub">${route(l)}</div>
+  <div class="rows">
+    <div class="row"><span>Status</span><b>${status}</b></div>
+    <div class="row"><span>${m.kind==='freight'?'Cargo':'Passengers'}</span><b>${aboard(v)} / ${m.cap}${m.kind==='freight'?' t':''}</b></div>
+    <div class="row"><span>Profit this year</span>${pl(v.profitYear)}</div>
+    <div class="row"><span>Profit last year</span>${pl(v.profitLast)}</div>
+    <div class="row"><span>Running cost</span><b>${money(runCost(v))}/mo</b></div>
+    <div class="row"><span>Age</span><b class="${age>m.life?'neg':old?'warnc':''}">${age.toFixed(1)} of ${m.life} years</b></div>
+  </div>
+  <div class="btns">
+    ${(old||upgrade)?`<button class="btn pri" data-act="replace" data-id="${v.id}" ${S.money<repCost?'disabled':''}>Replace with ${MODELS[best].name} (${money(repCost)})</button>`:''}
+    <button class="btn" data-act="moveVeh" data-id="${v.id}">Move to another line</button>
+  </div>
+  <div class="btns"><button class="btn" data-act="selLine" data-id="${l.id}">Back to line</button><button class="btn warn" data-act="sell" data-id="${v.id}">Sell ${money(vehValue(v))}</button></div>`);
+}
+function modelRows(l, kinds){
+  return kinds.map(kind=>{
+    const list=Object.entries(MODELS).filter(([,m])=>m.mode===l.mode&&m.kind===kind&&m.year<=year());
+    if(!list.length) return '';
+    return `<h3>Add ${kind==='freight'?'freight':'passenger'} ${l.mode==='air'?'plane':l.mode==='rail'?'train':'vehicle'}</h3>`+list.map(([k,m])=>`<div class="veh"><div class="nm">${m.name}</div><div class="sp">${m.cap}${kind==='freight'?' t':' seats'} · speed ${m.speed} · ${money(m.run*S.infl)}/mo to run</div>
+      <button class="btn pri" data-act="addModel" data-id="${l.id}" data-model="${k}" ${S.money<price(k)?'disabled':''}>${money(price(k))}</button></div>`).join('');
+  }).join('');
+}
+function lineKinds(stops){ const k=[]; if(stops.filter(s=>isPax(P(s))).length>=2) k.push('pass'); if(stops.some(s=>P(s).kind==='industry')) k.push('freight'); return k; }
+function lineSheet(l){
+  const vs=lineVehicles(l), confirming=ui.confirm==='close'+l.id, total=vs.reduce((s,v)=>s+vehValue(v),0);
+  showSheet(`<h2>${badge(l)} ${modeName(l.mode)} line ${l.id}${closeBtn}</h2><div class="sub">${route(l)}</div>
+  <div class="rows">
+    <div class="row"><span>Profit this year</span>${pl(l.profitYear)}</div>
+    <div class="row"><span>Profit last year</span>${pl(l.profitLast)}</div>
+    <div class="row"><span>Capacity</span><b>${lineCap(l)}</b></div>
+    <div class="row"><span>Ticket price</span><span class="mini"><button data-act="fare" data-id="${l.id}" data-d="-1" ${l.fareMult<=0.6?'disabled':''} aria-label="Lower fares">−</button><b style="min-width:52px;text-align:center;color:var(--ink)">${Math.round(l.fareMult*100)}%</b><button data-act="fare" data-id="${l.id}" data-d="1" ${l.fareMult>=1.6?'disabled':''} aria-label="Raise fares">+</button></span></div>
+  </div>
+  <p class="note">Higher fares earn more per rider but fewer people travel. Raise them on full lines, lower them on empty ones.</p>
+  ${healthSection(l)}
+  <h3>Stops · waiting for this line</h3>
+  <div class="rows">${l.stops.map(id=>{ const t=P(id), w=Math.floor(waitAtFor(t,l)); return `<button class="row" data-act="selTown" data-id="${id}"><span>${esc(t.name)}</span><b class="${w>40?'warnc':''}">${w}${t.kind==='industry'?' t':''} waiting</b></button>`; }).join('')}</div>
+  <h3>${vehWord(l.mode,2).replace(/^./,c=>c.toUpperCase())} (${vs.length})</h3>
+  <div class="rows">${vs.map(v=>{ const m=MODELS[v.model], age=vAge(v); return `<div class="row"><button class="main" style="background:none;border:0;padding:0;text-align:left;font:inherit;color:var(--ink);min-width:0" data-act="selVeh" data-id="${v.id}">${m.name}<small class="m">${aboard(v)}/${m.cap} aboard · <span class="${age>m.life?'neg':''}">${age.toFixed(1)} yrs</span> · ${signed(v.profitYear)} this year</small></button>
+    <span class="mini"><button class="txt" data-act="moveVeh" data-id="${v.id}">Move</button><button class="txt" data-act="sell" data-id="${v.id}">Sell</button></span></div>`; }).join('')}</div>
+  ${modelRows(l, lineKinds(l.stops))}
+  <h3>Change this line</h3>
+  <div class="btns"><button class="btn" data-act="editRoute" data-id="${l.id}">Edit stops</button>
+  <button class="btn warn" data-act="closeLine" data-id="${l.id}">${confirming?`Tap again: sell all for ${money(total)}`:'Close line'}</button></div>`);
+}
+function linesSheet(){
+  const prof=S.lines.reduce((s,l)=>s+l.profitYear,0), order=S.lines.slice().sort((a,b)=>a.profitYear-b.profitYear);
+  showSheet(`<h2>Lines${closeBtn}</h2><div class="sub">${S.lines.length} lines · ${S.vehicles.length} vehicles · ${signed(prof)} this year</div>
+  <div class="btns"><button class="btn pri" data-act="newLine">New line</button><button class="btn" data-act="build">Build</button></div>
+  ${order.length?order.map(l=>{ const vs=lineVehicles(l), kinds=lineKinds(l.stops), best=bestModel(l.mode,kinds[0]||'pass');
+    return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span>
+      <small class="m">${modeName(l.mode)} · ${vs.length} ${vehWord(l.mode,vs.length)} · ${Math.floor(lineWaiting(l))} waiting${lineChips(l)}</small></button>
+      <div class="side">${pl(l.profitYear)}<div class="mini"><button data-act="removeOne" data-id="${l.id}" aria-label="Sell one vehicle">−</button><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''}>+</button></div></div></div>`; }).join('')
+    :'<p class="note">No lines yet. Build a road or railway first, then tap New line and pick 2 to 6 stops in order.</p>'}
+  <p class="note">Weakest lines first. + adds the newest model, − sells the oldest vehicle.</p>`);
+}
+function buildSheet(){
+  const ap=S.towns.filter(t=>t.airport).length;
+  showSheet(`<h2>Build${closeBtn}</h2><div class="sub">Terrain shows while you build · planned routes cost half</div>
+  <button class="tool" data-act="tool" data-t="road"><svg viewBox="0 0 24 24"><path d="M8 3L5 21M16 3l3 18M12 4v3M12 11v3M12 18v2"/></svg><b>Road</b><span>For buses and trucks. From ${money(BUILD.road[GRASS]*S.infl)} per tile.</span></button>
+  <button class="tool" data-act="tool" data-t="rail"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M5 6h14M5 10.5h14M5 15h14M5 19.5h14"/></svg><b>Railway</b><span>For passenger and freight trains. From ${money(BUILD.rail[GRASS]*S.infl)} per tile.</span></button>
+  <button class="tool" data-act="tool" data-t="airport"><svg viewBox="0 0 24 24"><path d="M2 16l20-6-3-2-6 2-5-6H6l3 7-4 1-2-2H2z"/></svg><b>Airport</b><span>Towns of ${AIRPORT_MINPOP.toLocaleString('en-US')}+ people. ${money(AIRPORT_COST*S.infl)} plus ${money(AIRPORT_UPKEEP*S.infl)}/mo. You own ${ap}.</span></button>
+  <p class="note">To remove unused track or road, use Road or Railway on two places already linked and choose Remove.</p>`);
+}
+function airportSheet(t){
+  const ok=t.kind==='town'&&t.pop>=AIRPORT_MINPOP, cost=Math.round(AIRPORT_COST*S.infl), others=S.towns.filter(x=>x.airport&&x.id!==t.id);
+  if(t.airport){ showSheet(`<h2>${esc(t.name)} Airport${closeBtn}</h2><div class="sub">Open · ${money(AIRPORT_UPKEEP*S.infl)}/mo upkeep</div>
+    <p>${others.length?`Make an air line to ${others.map(o=>esc(o.name)).join(', ')}.`:'Build a second airport to start flying.'}</p>
+    <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${t.id}">New air line from here</button></div>`); return; }
+  showSheet(`<h2>Airport in ${esc(t.name)}${closeBtn}</h2><div class="sub">${t.pop.toLocaleString('en-US')} people · needs ${AIRPORT_MINPOP.toLocaleString('en-US')}+</div>
+  <p>Planes need no track and fly far, fast. People prefer them for long trips. You need an airport at every stop of an air line.</p>
+  <div class="rows"><div class="row"><span>Build cost</span><b>${money(cost)}</b></div><div class="row"><span>Upkeep</span><b>${money(AIRPORT_UPKEEP*S.infl)}/mo</b></div>
+  <div class="row"><span>Your other airports</span><b>${others.length?others.map(o=>esc(o.name)).join(', '):'none'}</b></div></div>
+  <div class="btns"><button class="btn pri" data-act="buildAirport" data-id="${t.id}" ${!ok||S.money<cost?'disabled':''}>${!ok?'Town too small':S.money<cost?'Not enough cash':'Build airport'}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
+}
+function businessSheet(){
+  const portfolio=S.props.map((b,i)=>{ const n=b.lastNet??(propRent(b)-propUpkeep(b)), tot=propPL(b);
+    return `<div class="lc"><button class="main" data-act="selTown" data-id="${b.town}"><span class="rt">${PT[b.type].name}</span><small class="m">${esc(P(b.town).name)} · <span class="${n>=0?'pos':'neg'}">${signed(n)}</span>/mo · overall <span class="${tot>=0?'pos':'neg'}">${signed(tot)}</span></small></button>
+      <div class="side"><button class="btn warn sm" data-act="sellProp" data-id="${i}">Sell ${money(propValue(b))}</button></div></div>`; }).join('');
+  const monthly=S.props.reduce((s,b)=>s+(b.lastNet??(propRent(b)-propUpkeep(b))),0), worth=S.props.reduce((s,b)=>s+propValue(b),0);
+  const places=S.towns.filter(p=>p.kind!=='village').sort((a,b)=>sizeOf(b)-sizeOf(a));
+  showSheet(`<h2>Businesses${closeBtn}</h2><div class="sub">${S.props.length} owned · worth ${money(worth)} · ${signed(monthly)}/mo</div>
+  ${portfolio||'<p class="note">You own no businesses yet. Open them where your lines bring lots of visitors: hotels and resorts earn more with every arrival, malls and theme parks attract more travellers.</p>'}
+  <h3>Places to invest in</h3>
+  <div class="rows">${places.map(p=>{ const own=S.props.filter(b=>b.town===p.id).length;
+    const info=p.kind==='industry'?`${IND[p.type].name} · ${Math.round(p.shipShare*100)}% shipped`:`${kindLabel(p)} · ${Math.round(p.arrLast||0)} visitors/mo`;
+    return `<button class="row" data-act="selTown" data-id="${p.id}"><span>${esc(p.name)}<small class="m">${info} · ${own}/${maxProps(p)} owned</small></span><b>›</b></button>`; }).join('')}</div>`);
+}
+function tendersSheet(){
+  const open=S.tenders.filter(t=>t.state==='open'), won=S.tenders.filter(t=>t.state==='won'), past=S.tenders.filter(t=>['done','lost','failed','lapsed'].includes(t.state));
+  const row=t=>{ const a=P(t.a), b=P(t.b); const st={open:t.myBid!=null?`Your bid ${Math.round(t.myBid*100)}% · decided ${dateStr(t.bidUntil)}`:`Bids close ${dateStr(t.bidUntil)}`, won:`Finish by ${dateStr(t.deadline)}`, done:'Completed', lost:`Won by ${RIVAL}`, failed:'Missed deadline', lapsed:'Lapsed, no winner'}[t.state];
+    return `<button class="row" data-act="selTender" data-id="${t.id}"><span>${esc(a.name)} – ${esc(b.name)}${t.mode==='rail'?' <span class="chip info">rail</span>':''}<small class="m">${st}</small></span><b>${money(t.reward)}</b></button>`; };
+  showSheet(`<h2>Tenders${closeBtn}</h2><div class="sub">Councils pay for new links · ${RIVAL} bids too</div>
+  <div class="rows"><div class="row"><span>${RIVAL} company value</span><b>${money(S.rival.value)}</b></div><div class="row"><span>Your company value</span><b>${money(companyValue())}</b></div></div>
+  <h3>Open for bids</h3><div class="rows">${open.map(row).join('')||'<div class="row"><span>None right now. New tenders appear every few months.</span><b></b></div>'}</div>
+  ${won.length?`<h3>Won, in progress</h3><div class="rows">${won.map(row).join('')}</div>`:''}
+  ${past.length?`<h3>Past</h3><div class="rows">${past.map(row).join('')}</div>`:''}`);
+}
+function tenderSheet(t){
+  const a=P(t.a), b=P(t.b);
+  const head=`<h2>${esc(a.name)} – ${esc(b.name)}${closeBtn}</h2><div class="sub">${t.mode==='rail'?'Railway link':'Any passenger link'} · up to ${money(t.reward)}</div>`;
+  if(t.state==='open'){
+    const opts=[1,0.9,0.8,0.7];
+    showSheet(`${head}
+    <p>The council pays whoever bids the lowest price to run a ${t.mode==='rail'?'passenger train':'passenger'} line stopping at both places within two years of the decision. ${RIVAL} usually bids between 70% and 100%. If they win, they start a rival service and your demand between these places falls 40%.</p>
+    <div class="rows"><div class="row"><span>Bids close</span><b>${dateStr(t.bidUntil)}</b></div><div class="row"><span>Deadline if you win</span><b>${dateStr(t.deadline)}</b></div>
+    <div class="row"><span>Missing the deadline costs</span><b>25% of your bid</b></div>${t.myBid!=null?`<div class="row"><span>Your bid</span><b>${Math.round(t.myBid*100)}% · ${money(t.reward*t.myBid)}</b></div>`:''}</div>
+    <h3>${t.myBid!=null?'Change your bid':'Place a bid'}</h3>
+    <div class="btns">${opts.map(o=>`<button class="btn ${t.myBid===o?'pri':''}" data-act="bid" data-id="${t.id}" data-v="${o}">${Math.round(o*100)}% · ${money(t.reward*o)}</button>`).join('')}</div>
+    <div class="btns"><button class="btn" data-act="selTown" data-id="${t.a}">Show ${esc(a.name)}</button><button class="btn" data-act="tenders">All tenders</button></div>`); return;
+  }
+  const msg={won:`You won at ${Math.round(t.myBid*100)}%. Run a ${t.mode==='rail'?'passenger train':'passenger'} line stopping at both places by ${dateStr(t.deadline)} to collect ${money(t.reward*t.myBid)}.`,
+    done:`Completed. You were paid ${money(t.reward*t.myBid)}.`, lost:`${RIVAL} won with ${Math.round(t.rivalBid*100)}%${t.myBid!=null?`, against your ${Math.round(t.myBid*100)}%`:''}. They now run a service here.`, failed:'You missed the deadline and paid the penalty.', lapsed:'Nobody won this tender. It may come back later.'}[t.state];
+  showSheet(`${head}<p>${msg}</p><div class="btns">${t.state==='won'?`<button class="btn pri" data-act="tenderLine" data-id="${t.id}">Plan this line</button>`:''}<button class="btn" data-act="tenders">All tenders</button></div>`);
+}
+function chart(){
+  const h=S.hist.slice(-24); if(h.length<2) return '<p class="note">Charts appear after two months.</p>';
+  const vals=h.map(x=>x.value), cash=h.map(x=>x.cash), all=vals.concat(cash), mn=Math.min(0,...all), mx=Math.max(...all)||1;
+  const Wc=300, Hc=110, px=i=>8+i*(Wc-16)/(h.length-1), py=v=>Hc-14-(v-mn)/(mx-mn||1)*(Hc-28);
+  const path=a=>a.map((v,i)=>(i?'L':'M')+px(i).toFixed(1)+' '+py(v).toFixed(1)).join(' ');
+  return `<svg class="chart" viewBox="0 0 ${Wc} ${Hc}" role="img" aria-label="Company value and cash over the last ${h.length} months">
+    <line x1="8" x2="${Wc-8}" y1="${py(0)}" y2="${py(0)}" stroke="#e1e4e8" stroke-width="1"/>
+    <path d="${path(vals)}" fill="none" stroke="#1b2128" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="${path(cash)}" fill="none" stroke="#1f77b4" stroke-width="1.6" stroke-dasharray="4 3" stroke-linejoin="round"/>
+    <circle cx="${px(h.length-1)}" cy="${py(vals[vals.length-1])}" r="3.5" fill="#1b2128"/>
+    <text x="8" y="10" font-size="10" fill="#6b7580" font-family="Barlow, sans-serif">${money(mx)}</text>
+    <text x="8" y="${Hc-2}" font-size="10" fill="#6b7580" font-family="Barlow, sans-serif">${money(mn)}</text>
+  </svg><p class="note" style="margin-top:2px"><b style="color:var(--ink)">━</b> Company value &nbsp; <b style="color:#1f77b4">╍</b> Cash</p>`;
+}
+function companySheet(){
+  const val=companyValue(), last=S.hist[S.hist.length-1]||freshMonth(), pct=clamp(val/GOAL*100,0,100);
+  const net=last.fares+last.cargo+last.rent+last.sales+last.tenders-last.run-last.upkeep-last.interest-last.build-last.vehicles;
+  showSheet(`<h2>Company${closeBtn}</h2><div class="sub">${S.region?esc(S.region)+' · ':''}${S.vehicles.length} vehicles · ${S.lines.length} lines · ${S.props.length} businesses</div>
+  <div class="rows"><div class="row"><span>Company value</span><b>${money(val)}</b></div></div>
+  <div class="goal"><i style="width:${pct}%"></i></div>
+  <div class="sub" style="margin-top:4px">${pct.toFixed(1)}% of ${money(GOAL)} goal</div>
+  ${chart()}
+  <h3>Last month</h3>
+  <div class="rows">
+    <div class="row"><span>Passenger fares</span><b class="pos">${money(last.fares)}</b></div>
+    <div class="row"><span>Freight</span><b class="pos">${money(last.cargo)}</b></div>
+    <div class="row"><span>Business rent</span><b class="pos">${money(last.rent)}</b></div>
+    <div class="row"><span>Tenders and sales</span><b class="${last.tenders+last.sales>=0?'pos':'neg'}">${money(last.tenders+last.sales)}</b></div>
+    <div class="row"><span>Running costs${S.fuelUntil>S.day?' (fuel spike)':''}</span><b class="neg">${money(-last.run)}</b></div>
+    <div class="row"><span>Upkeep, airports and tax</span><b class="neg">${money(-last.upkeep)}</b></div>
+    <div class="row"><span>Loan interest</span><b class="neg">${money(-last.interest)}</b></div>
+    <div class="row"><span>Construction and purchases</span><b class="neg">${money(-(last.build+last.vehicles))}</b></div>
+    <div class="row"><span>Net change</span>${pl(net)}</div>
+  </div>
+  <h3>Money</h3>
+  <div class="rows"><div class="row"><span>Cash</span><b>${money(S.money)}</b></div><div class="row"><span>Loan (${LOAN_RATE*100}% a year)</span><b>${money(S.loan)}</b></div></div>
+  <div class="btns"><button class="btn" data-act="borrow" ${S.loan>=MAX_LOAN?'disabled':''}>Borrow $25,000</button>
+  <button class="btn" data-act="repay" ${S.loan<=0||S.money<25000?'disabled':''}>Repay $25,000</button></div>
+  ${S.news.length?`<h3>News</h3><div class="rows">${S.news.map(n=>`<div class="row"><span>${esc(n)}</span><b></b></div>`).join('')}</div>`:''}
+  <div class="btns"><button class="btn pri" data-act="backup">Backup and restore</button><button class="btn" data-act="newgame">New map or real place</button></div>
+  <p class="note">Last backup: ${S.lastBackup?new Date(S.lastBackup).toLocaleDateString():'<span class="neg">never</span>'}. Back up now and then so you never lose your company.</p>`);
+}
+function buildPlanSheet(){
+  const p=ui.plan, a=P(p.a), b=P(p.b), what=p.mode==='rail'?'railway':'road';
+  if(p.tiles===0){
+    const refund=Math.round(p.removable.reduce((s,i)=>s+BUILD[p.mode][terrain[i]]*S.infl*0.25,0));
+    showSheet(`<h2>Already connected${closeBtn}</h2><div class="sub">${esc(a.name)} ↔ ${esc(b.name)}</div>
+    <p>A ${what} already links these places.</p>
+    <div class="btns"><button class="btn pri" data-act="planLine">New line here</button>
+    ${p.removable.length?`<button class="btn warn" data-act="demolish">Remove ${p.removable.length} unused tiles (+${money(refund)})</button>`:'<button class="btn" disabled>In use by lines</button>'}</div>`); return;
+  }
+  showSheet(`<h2>New ${what}${closeBtn}</h2><div class="sub">${esc(a.name)} → ${esc(b.name)}</div>
+  <div class="rows">
+    <div class="row"><span>New tiles</span><b>${p.tiles}</b></div>
+    ${p.plannedTiles?`<div class="row"><span>On planned route (half price)</span><b>${p.plannedTiles}</b></div>`:''}
+    ${p.bridges?`<div class="row"><span>Bridge tiles</span><b>${p.bridges}</b></div>`:''}
+    <div class="row"><span>Construction cost</span><b>${money(p.cost)}</b></div>
+  </div>
+  <div class="btns"><button class="btn pri" data-act="build" ${S.money<p.cost?'disabled':''}>${S.money<p.cost?'Not enough cash':'Build '+what}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
+}
+function linePlanSheet(){
+  const stops=ui.stops, names=stops.map(s=>esc(P(s).name)).join(' → ');
+  const el=ui.editLine!=null?lineById(ui.editLine):null;
+  if(el){
+    const few=stops.length<2, lp=few?{fail:-1}:buildLinePath(el.mode,stops), dup=few?null:S.lines.find(l=>l.id!==el.id&&l.mode===el.mode&&sameStops(l.stops,stops));
+    showSheet(`<h2>${badge(el)} Edit stops${closeBtn}</h2><div class="sub">${names||'No stops yet'}</div>
+    <p class="note">Tap places to add stops, tap the last stop to remove it, or use Undo. Vehicles restart from the first stop.</p>
+    ${few?'<p class="warnc">A line needs at least 2 stops.</p>':!lp.pts?gapMsg(el.mode,stops,lp):dup?`<p class="neg">Line ${dup.id} already runs these stops.</p>`:''}
+    <div class="btns"><button class="btn pri" data-act="saveRoute" ${few||!lp.pts||dup?'disabled':''}>Save route</button><button class="btn" data-act="selLine" data-id="${el.id}">Cancel</button></div>`);
+    return;
+  }
+  const kinds=lineKinds(stops);
+  const sec=mode=>{
+    const lp=buildLinePath(mode,stops), ex=S.lines.find(l=>l.mode===mode&&sameStops(l.stops,stops));
+    const head=`<h3>${modeName(mode)}${ex?` · adds to line ${ex.id}`:''}</h3>`;
+    if(!lp.pts) return head+gapMsg(mode,stops,lp);
+    const len=lp.cum[lp.cum.length-1];
+    return head+Object.entries(MODELS).filter(([,m])=>m.mode===mode&&kinds.includes(m.kind)).map(([k,m])=>{
+      const locked=year()<m.year, days=Math.round((len/m.speed+stops.length*1.2)*2), pr=price(k);
+      return `<div class="veh"><div class="nm">${m.name}${m.kind==='freight'?' <span class="chip info">freight</span>':''}</div>
+        <div class="sp">${locked?`Available from ${m.year}`:`${m.cap}${m.kind==='freight'?' t':' seats'} · round trip ${days} days · ${money(m.run*S.infl)}/mo`}</div>
+        <button class="btn pri" data-act="buy" data-mode="${mode}" data-model="${k}" ${locked||S.money<pr?'disabled':''}>${money(pr)}</button></div>`; }).join('');
+  };
+  let order=['road','rail','air']; if(ui.prefMode) order=[ui.prefMode,...order.filter(m=>m!==ui.prefMode)];
+  if(!stops.every(s=>P(s).kind==='town')||!kinds.includes('pass')) order=order.filter(m=>m!=='air');
+  showSheet(`<h2>New line${closeBtn}</h2><div class="sub">${names}</div>
+  <p class="note">${stops.length<MAX_STOPS?'Tap more places to add stops.':'Maximum stops reached.'}${kinds.includes('freight')?' Freight only earns between producers and buyers.':''}</p>
+  ${kinds.length?order.map(sec).join(''):'<p class="warnc">Add a town, attraction or industry so this line has something to carry.</p>'}`);
+}
+function gapMsg(mode,stops,lp){
+  if(mode==='air'){ const miss=stops.filter(s=>!P(s).airport).map(s=>P(s)); return `<p class="note">Needs an airport at ${miss.map(m=>esc(m.name)).join(', ')}.</p>${miss[0]&&miss[0].kind==='town'?`<div class="btns"><button class="btn" data-act="airportAt" data-id="${miss[0].id}">Airport in ${esc(miss[0].name)}…</button></div>`:''}`; }
+  const a=P(stops[lp.fail]), b=P(stops[lp.fail+1]);
+  return `<p class="note">No ${mode==='rail'?'railway':'road'} between ${esc(a.name)} and ${esc(b.name)}.</p>
+  <div class="btns"><button class="btn" data-act="planGap" data-mode="${mode}" data-a="${a.id}" data-b="${b.id}">Plan ${mode==='rail'?'railway':'road'} ${esc(a.name)} – ${esc(b.name)}</button></div>`;
+}
+function moveSheet(v){
+  const cur=lineById(v.line), kind=MODELS[v.model].kind, others=S.lines.filter(l=>l.mode===cur.mode&&l.id!==cur.id&&lineKinds(l.stops).includes(kind));
+  showSheet(`<h2>Move ${MODELS[v.model].name}${closeBtn}</h2><div class="sub">From line ${cur.id} · ${route(cur)}</div>
+  <p>Pick a line. Anything on board is dropped, and the vehicle starts at the line's first stop.</p>
+  ${others.length?`<div class="rows">${others.map(l=>`<button class="row" data-act="moveTo" data-id="${v.id}" data-line="${l.id}"><span>${badge(l)}${route(l)}</span><b>${Math.floor(lineWaiting(l))} waiting</b></button>`).join('')}</div>`
+    :`<p class="note">No other matching ${modeName(cur.mode).toLowerCase()} lines.</p>`}
+  <div class="btns"><button class="btn" data-act="selVeh" data-id="${v.id}">Back</button></div>`);
+}
+function mapSheet(err){
+  const can=!!sampleFn;
+  showSheet(`<h2>New map${closeBtn}</h2><div class="sub">Starting a map replaces your current company</div>
+  <p>${can?'Type any real place, like a country, region, island or city. Claude finds its real towns, industries, attractions, main roads, coastline and mountains.':'Real places need Claude, which is not available in this view. You can still play a random map.'}</p>
+  ${err?`<p class="neg">${esc(err)}</p>`:''}
+  ${can?`<label class="sub" for="place">Where?</label>
+  <input id="place" class="field" type="text" maxlength="80" placeholder="e.g. Malaysia, Scotland, Tokyo" autocomplete="off" value="${esc(ui.lastPlace||'')}">
+  <div class="btns"><button class="btn pri" data-act="realMap">Build real map</button></div>`:''}
+  <h3>Ready-made real maps</h3>
+  <div class="btns">${Object.entries(PRESETS).map(([k,v])=>`<button class="btn" data-act="preset" data-k="${k}">${esc(v.label)}</button>`).join('')}</div>
+  <div class="btns"><button class="btn" data-act="randomMap">Random map instead</button></div>`);
+}
+function loadingSheet(place,chars){
+  showSheet(`<h2>Mapping ${esc(place)}</h2><div class="sub">${chars?`Receiving map data · ${chars.toLocaleString('en-US')} characters`:'Claude is surveying the area'}</div>
+  <p>This can take a minute or two. The game keeps running behind this card.</p>
+  <div class="goal"><i style="width:${Math.min(95,5+chars/110)}%"></i></div>
+  <div class="btns"><button class="btn" data-act="stopMap">Stop</button></div>`);
+}
+function overSheet(){
+  showSheet(`<h2>The bank closed your company</h2><div class="sub">${dateStr(S.day)} · ${S.region?esc(S.region):'Random map'}</div>
+  <p>Cash stayed negative for four months. Next time, keep a loan buffer and sell vehicles that lose money.</p>
+  <div class="btns"><button class="btn pri" data-act="newgame">Start again</button></div>`);
+}
+
+const mapPrompt = place => `You generate map data for a transport tycoon game set in a real place. The player typed: ${JSON.stringify(place)}.
+Return ONLY a JSON object, no markdown, no commentary:
+{"region":"short display name","towns":[{"name":"","lat":0,"lon":0,"pop":0,"type":"city"}],"villages":[{"name":"","lat":0,"lon":0,"pop":0}],"industries":[{"name":"","lat":0,"lon":0,"type":"farm"}],"attractions":[{"name":"","lat":0,"lon":0,"kind":"beach"}],"roads":[[[lat,lon],[lat,lon]]],"water":[[[lat,lon],[lat,lon]]],"mountains":[[lat,lon,radius_km]],"forests":[[lat,lon,radius_km]]}
+Rules:
+- Pick the scale from the place: a city gives districts, a region or country gives towns and cities, a continent gives major cities.
+- "towns": 10 to 14 real major places spread across the area, real approximate coordinates (decimal degrees) and populations. "type" is one of capital, city, port, resort, university, industrial, market, matching the real place (at most one capital).
+- "villages": 6 to 12 real smaller places, preferably on main roads between towns.
+- "industries": 4 to 8 real or typical sites: "type" farm (plantations, farmland), mine (mines, quarries, oil fields) or factory (industrial parks, refineries, steel works).
+- "attractions": 3 to 6 real tourist spots (beaches, islands, highlands, national parks, heritage sites); "kind" is a short word.
+- "roads": 6 to 14 polylines tracing the real main highways between towns, 4 to 20 points each.
+- "water": polygons of sea, ocean, big lakes, wide estuaries inside the bounding box of all places extended by 10% on every side. Trace the real coastline with 12 to 40 points per polygon and extend sea polygons past the box edge. Never cover land or places. [] if none.
+- "mountains" and "forests": up to 10 circles each over real ranges and large forests or parks.
+- If the place is vague, choose the most likely real match.`;
+async function buildRealMap(place){
+  ui.mapCtl?.abort(); const ctl=new AbortController(); ui.mapCtl=ctl;
+  ui.sel={kind:'loading'}; loadingSheet(place,0);
+  let lastDraw=0;
+  try{
+    const geo=await sampleFn.json(mapPrompt(place), { signal:ctl.signal, modelTier:'default',
+      onText:({text})=>{ const n=performance.now(); if(n-lastDraw>400 && ui.sel?.kind==='loading'){ lastDraw=n; loadingSheet(place,text.length); } } });
+    if(ctl.signal.aborted) return;
+    let h=0; for(const ch of place.toLowerCase()) h=(h*31+ch.charCodeAt(0))|0;
+    const world=geoWorld(geo||{}, h);
+    newGame(h, world); S.seenIntro=false; save();
+    setTool('inspect'); centerMap(); setSpeed(1); updateDots();
+    ui.sel={kind:'intro'}; introSheet();
+  }catch(e){
+    if(ctl.signal.aborted || e?.code==='cancelled') return;
+    ui.sel={kind:'map'};
+    mapSheet(e?.code==='not_granted' ? 'Claude access was declined, so real maps are off for this visit. Try a random map.'
+      : e?.code==='rate_limited' ? 'Too many requests right now. Wait a minute and try again.'
+      : e?.code==='too_few' ? 'Claude could not find enough towns there. Try a bigger area or a different spelling.'
+      : 'That map could not be built. Try again, or a different spelling.');
+  }finally{ if(ui.mapCtl===ctl) ui.mapCtl=null; }
+}
+
+// ---------- actions ----------
+async function doRestore(code){
+  try{ await importCode(code); ui.backupCode=null; setTool('inspect'); centerMap(); setSpeed(1); updateDots(); toast(`Company restored: ${S.region||'random map'}, ${dateStr(S.day)}.`,'good'); }
+  catch(e){ toast('That backup code is not valid. Copy the whole code and try again.','bad'); }
+}
+function goLine(id){ setTool('inspect'); markTool('lines'); ui.sel={kind:'line',id}; refreshSheet(); }
+$('card').addEventListener('click', e=>{
+  const b=e.target.closest('[data-act]'); if(!b||b.disabled) return;
+  const act=b.dataset.act, id=+b.dataset.id;
+  const A={
+    close(){ if(ui.sel&&ui.sel.kind==='intro'){ S.seenIntro=true; save(); }
+      if(ui.sel&&ui.sel.kind==='away'){ ui.away=null; setTool('inspect'); return; }
+      if(ui.sel&&ui.sel.kind==='loading') ui.mapCtl?.abort();
+      if(S.over) return;
+      if(ui.editLine!=null) return goLine(ui.editLine);
+      setTool(ui.tool==='airport'?'inspect':ui.tool); },
+    cancel(){ A.close(); },
+    tool(){ setTool(b.dataset.t); },
+    build(){ setTool('build'); },
+    tenders(){ setTool('tenders'); },
+    newLine(){ setTool('line'); },
+    lineFrom(){ setTool('line'); ui.stops=[id]; lineHint(); },
+    selLine(){ ui.sel={kind:'line',id}; if(ui.tool!=='inspect'){ ui.tool='inspect'; setHint(null); } markTool('lines'); refreshSheet(); },
+    selVeh(){ ui.sel={kind:'veh',id}; refreshSheet(); },
+    selTown(){ ui.sel={kind:'town',id}; const t=P(id); cam.x=t.x*T+T/2; cam.y=t.y*T+T/2; clampCam(); refreshSheet(); },
+    selTender(){ ui.sel={kind:'tender',id}; refreshSheet(); },
+    trainTo(){ setTool('line'); ui.stops=[id,+b.dataset.b]; ui.prefMode='rail'; lineHint(); linePlanSheet(); },
+    airportAt(){ setTool('inspect'); ui.sel={kind:'airport',id}; refreshSheet(); },
+    buildAirport(){ const t=P(id), cost=Math.round(AIRPORT_COST*S.infl); if(t.airport||S.money<cost||t.pop<AIRPORT_MINPOP) return;
+      t.airport=true; S.money-=cost; S.m.build+=cost; save(); toast(`${t.name} Airport opened.`,'good'); refreshSheet(); },
+    addModel(){ const l=lineById(id); if(!l) return; const m=b.dataset.model; const v=buyVehicle({mode:l.mode,stops:l.stops}, m, false);
+      if(v){ toast(`${MODELS[m].name} added to line ${l.id}.`,'good'); save(); refreshSheet(); } else toast('Not enough cash.','bad'); },
+    addBest(){ const l=lineById(id); if(!l) return; b.dataset.model=bestModel(l.mode,lineKinds(l.stops)[0]||'pass'); A.addModel(); },
+    removeOne(){ const l=lineById(id); if(!l) return; const vs=lineVehicles(l).sort((x,y)=>x.bought-y.bought), v=vs[0]; if(!v) return;
+      const val=sellVehicle(v); toast(`Sold a ${MODELS[v.model].name} for ${money(val)}${vs.length===1?'. Line closed.':'.'}`); save(); refreshSheet(); },
+    closeLine(){ const l=lineById(id); if(!l) return;
+      if(ui.confirm!=='close'+id){ ui.confirm='close'+id; lineSheet(l); return; }
+      ui.confirm=null; let tot=0; for(const v of lineVehicles(l)) tot+=sellVehicle(v);
+      toast(`Line ${id} closed. Vehicles sold for ${money(tot)}.`); save(); ui.sel={kind:'lines'}; markTool('lines'); refreshSheet(); },
+    fare(){ const l=lineById(id); if(!l) return; l.fareMult=clamp(Math.round((l.fareMult+0.1*(+b.dataset.d))*10)/10,0.6,1.6); computeAll(); save(); refreshSheet(); },
+    editRoute(){ const l=lineById(id); if(!l) return; setTool('line'); ui.editLine=id; ui.stops=l.stops.slice(); lineHint(); linePlanSheet(); },
+    saveRoute(){ const l=lineById(ui.editLine); if(!l||ui.stops.length<2) return; const lp=buildLinePath(l.mode,ui.stops); if(!lp.pts) return;
+      l.stops=ui.stops.slice(); linePaths.set(l.id,lp); for(const v of lineVehicles(l)){ v.pos=0; v.dir=1; v.next=0; v.wait=0; v.cargo=[]; }
+      buildOverlay(); computeAll(); save(); toast(`Line ${l.id} now runs ${l.stops.length} stops.`,'good'); goLine(l.id); },
+    moveVeh(){ ui.sel={kind:'move',id}; refreshSheet(); },
+    moveTo(){ const v=S.vehicles.find(x=>x.id===id), to=+b.dataset.line; if(!v||!lineById(to)) return; const from=v.line;
+      moveVehicle(v,to); save(); toast(`Moved to line ${to}.${lineById(from)?'':' Line '+from+' closed.'}`,'good'); goLine(to); },
+    replace(){ const v=S.vehicles.find(x=>x.id===id); if(!v) return; if(replaceVehicle(v)){ toast(`Replaced with a new ${MODELS[v.model].name}.`,'good'); save(); refreshSheet(); } else toast('Not enough cash to replace it.','bad'); },
+    sell(){ const v=S.vehicles.find(x=>x.id===id); if(!v) return; const lid=v.line, val=sellVehicle(v); toast(`Sold for ${money(val)}.`);
+      ui.sel=lineById(lid)?{kind:'line',id:lid}:{kind:'lines'}; save(); refreshSheet(); },
+    build_(){},
+    planLine(){ const p=ui.plan; setTool('line'); ui.stops=[p.a,p.b]; ui.prefMode=p.mode; lineHint(); linePlanSheet(); },
+    planGap(){ const mode=b.dataset.mode, a=P(+b.dataset.a), c=P(+b.dataset.b), back=ui.stops.slice(), re=ui.editLine;
+      const plan=planBuild(mode,a,c); if(!plan){ toast('No way to build there.','bad'); return; }
+      ui.tool=mode; markTool('build'); ui.stops=[]; ui.editLine=null; ui.plan={kind:'build',...plan,returnStops:back,returnEdit:re}; setHint(null); buildPlanSheet(); },
+    buy(){ const v=buyVehicle({mode:b.dataset.mode, stops:ui.stops}, b.dataset.model, false);
+      if(v){ toast(`${MODELS[v.model].name} added to line ${v.line}.`,'good'); save(); goLine(v.line); } },
+    demolish(){ const p=ui.plan; const own=p.mode==='rail'?rails:roads; let refund=0;
+      for(const i of p.removable){ own[i]=0; refund+=BUILD[p.mode][terrain[i]]*S.infl*0.25; }
+      S.money+=refund; S.m.sales+=refund; renderStatic(); save(); toast(`Removed ${p.removable.length} tiles. Refund ${money(refund)}.`); setTool(p.mode); },
+    buyProp(){ const t=P(id), type=b.dataset.type, pr=propPrice(type,t); if(S.money<pr||S.props.filter(x=>x.town===id).length>=maxProps(t)) return;
+      S.money-=pr; S.m.build+=pr; S.props.push({town:id,type,bought:S.day,paid:pr,rentTotal:0,upkeepTotal:0,lastNet:null});
+      computeAll(); save(); toast(`Opened ${PT[type].name} in ${t.name}.`,'good'); refreshSheet(); },
+    sellProp(){ const p=S.props[id]; if(!p) return; const val=propValue(p), tot=propPL(p); S.money+=val; S.m.sales+=val; S.props.splice(id,1);
+      computeAll(); save(); toast(`Sold for ${money(val)}. Overall ${tot>=0?'gain':'loss'} of ${money(Math.abs(tot))}.`, tot>=0?'good':'bad'); refreshSheet(); },
+    bid(){ const t=S.tenders.find(x=>x.id===id); if(!t||t.state!=='open') return; t.myBid=+b.dataset.v; save(); updateDots(); toast(`Bid placed: ${Math.round(t.myBid*100)}%.`); refreshSheet(); },
+    tenderLine(){ const t=S.tenders.find(x=>x.id===id); if(!t) return; setTool('line'); ui.stops=[t.a,t.b]; ui.prefMode=t.mode==='rail'?'rail':null; lineHint(); linePlanSheet(); },
+    backup(){ ui.backupCode=null; ui.confirm=null; ui.sel={kind:'backup'}; backupSheet(); },
+    copyBackup(){ const code=ui.backupCode; if(!code) return; const ta=$('bcode');
+      const done=()=>{ markBackedUp(); toast('Backup code copied. Paste it somewhere safe.','good'); };
+      const fallback=()=>{ ta.focus(); ta.select(); ta.setSelectionRange(0,code.length); try{ if(document.execCommand('copy')){ done(); return; } }catch(e){} toast('Select the code and copy it manually.'); };
+      try{ navigator.clipboard.writeText(code).then(done,fallback); }catch(e){ fallback(); } },
+    downloadBackup(){ const code=ui.backupCode; if(!code) return; const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([code],{type:'text/plain'})); a.download='lineworks-'+(S.region||'random').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+dateStr(S.day).replace(' ','-')+'.txt';
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); markBackedUp(); toast('Save file downloaded.','good'); },
+    restore(){ const code=$('rcode')?.value||''; if(!code.trim()){ $('rcode')?.focus(); return; }
+      if(ui.confirm!=='restore'){ ui.confirm='restore'; const keep=code; backupSheet(); $('rcode').value=keep; return; }
+      ui.confirm=null; doRestore(code); },
+    borrow(){ if(S.loan<MAX_LOAN){ S.loan+=25000; S.money+=25000; save(); } companySheet(); },
+    repay(){ if(S.loan>0&&S.money>=25000){ S.loan-=25000; S.money-=25000; save(); } companySheet(); },
+    newgame(){ if(ui.sel&&ui.sel.kind==='intro') S.seenIntro=true; ui.sel={kind:'map'}; mapSheet(); setTimeout(()=>$('place')?.focus(),50); },
+    randomMap(){ newGame((Math.random()*1e9)|0); save(); setTool('inspect'); centerMap(); setSpeed(1); updateDots(); ui.sel={kind:'intro'}; introSheet(); },
+    preset(){ const pr=PRESETS[b.dataset.k]; if(!pr) return; let h=0; for(const ch of b.dataset.k) h=(h*31+ch.charCodeAt(0))|0;
+      newGame(h, geoWorld(pr.geo,h)); save(); setTool('inspect'); centerMap(); setSpeed(1); updateDots(); ui.sel={kind:'intro'}; introSheet(); },
+    realMap(){ const v=($('place')?.value||'').trim(); if(!v){ $('place')?.focus(); return; } if(!sampleFn){ mapSheet(); return; } ui.lastPlace=v; buildRealMap(v); },
+    stopMap(){ ui.mapCtl?.abort(); ui.mapCtl=null; ui.sel={kind:'map'}; mapSheet(); },
+  };
+  if(act==='build' && ui.plan && ui.plan.kind==='build'){
+    const p=ui.plan; if(S.money<p.cost) return;
+    const own=p.mode==='rail'?rails:roads; for(const i of p.path) if(placeTile[i]<0) own[i]=1;
+    S.money-=p.cost; S.m.build+=p.cost; renderStatic(); save();
+    toast(`${p.mode==='rail'?'Railway':'Road'} ${P(p.a).name} – ${P(p.b).name} opened.`,'good');
+    const back=p.returnStops, el=p.returnEdit;
+    setTool('line'); ui.stops=back&&back.length?back:[p.a,p.b]; ui.editLine=el??null; ui.prefMode=p.mode; lineHint(); linePlanSheet();
+    return;
+  }
+  A[act]?.();
+});
+$('card').addEventListener('change', e=>{ if(e.target.id!=='rfile') return; const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>doRestore(String(rd.result||'')); rd.readAsText(f); });
+$('card').addEventListener('keydown', e=>{ if(e.key==='Enter'&&e.target.id==='place'){ e.preventDefault(); $('card').querySelector('[data-act=realMap]')?.click(); } });
+$('hintCancel').addEventListener('click', ()=>{ if(ui.editLine!=null) return goLine(ui.editLine); setTool('inspect'); });
+$('hintUndo').addEventListener('click', ()=>{ ui.stops.pop(); lineHint(); if(ui.stops.length>=2||ui.editLine!=null) linePlanSheet(); else hideSheet(); });
+$('bar').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b || S.over) return; const t=b.dataset.tool;
+  if(ui.sel&&ui.sel.kind===t){ setTool('inspect'); return; }
+  setTool(t); });
+$('speed').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b && !S.over) setSpeed(+b.dataset.s); });
+const LAYERS=['lines','rail','road','terrain'], LNAMES={lines:'Map: lines',rail:'Map: railways',road:'Map: roads',terrain:'Map: terrain'};
+$('layer').addEventListener('click', ()=>{ ui.layer=LAYERS[(LAYERS.indexOf(ui.layer)+1)%LAYERS.length]; $('layer').textContent=LNAMES[ui.layer]; $('layer').classList.toggle('on',ui.layer!=='lines'); });
+
+// ---------- input ----------
+function placeAt(wx,wy){ let best=null, bd=T*1.8; for(const p of S.towns){ const d=Math.hypot(wx-(p.x*T+T/2),wy-(p.y*T+T/2))*(small(p)?1.3:1); if(d<bd){bd=d;best=p;} } return best; }
+function vehAt(px,py){ let best=null, bd=16; for(const v of S.vehicles){ const p=vehWorld(v); if(!p) continue; const s=w2s(p.x,p.y), d=Math.hypot(s.x-px,s.y-py); if(d<bd){bd=d;best=v;} } return best; }
+function tap(px,py){
+  if(S.over) return;
+  const w=s2w(px,py), t=placeAt(w.x,w.y);
+  if(ui.tool==='road'||ui.tool==='rail'){
+    if(!t) return;
+    if(ui.plan){ ui.plan=null; ui.pickA=null; }
+    if(ui.pickA==null){ ui.pickA=t.id; hideSheet(); setHint('Now tap the second place'); return; }
+    if(t.id===ui.pickA){ ui.pickA=null; setHint('Tap the first place'); return; }
+    const plan=planBuild(ui.tool,P(ui.pickA),t); ui.pickA=null;
+    if(plan){ ui.plan={kind:'build',...plan}; setHint(null); buildPlanSheet(); } else toast('No way to build between those places.','bad');
+    return;
+  }
+  if(ui.tool==='airport'){ if(!t) return; if(t.kind!=='town'){ toast('Airports go in towns.'); return; } ui.sel={kind:'airport',id:t.id}; setHint(null); refreshSheet(); return; }
+  if(ui.tool==='line'){
+    if(!t) return;
+    const at=ui.stops.indexOf(t.id);
+    if(at>=0 && at===ui.stops.length-1) ui.stops.pop();
+    else if(at>=0){ toast('A line can visit each place once.'); return; }
+    else if(ui.stops.length<MAX_STOPS) ui.stops.push(t.id);
+    lineHint();
+    if(ui.stops.length>=2||ui.editLine!=null) linePlanSheet(); else hideSheet();
+    return;
+  }
+  const v=vehAt(px,py);
+  if(v){ ui.sel={kind:'veh',id:v.id}; refreshSheet(); return; }
+  if(t){ ui.sel={kind:'town',id:t.id}; refreshSheet(); return; }
+  if(ui.sel && PANELS.includes(ui.sel.kind)) return;
+  ui.sel=null; hideSheet(); markTool(null);
+}
+const ptrs=new Map(); let gesture=null;
+cv.addEventListener('pointerdown', e=>{
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===1) gesture={ moved:0, multi:false, t:performance.now() }; else if(gesture) gesture.multi=true;
+});
+cv.addEventListener('pointermove', e=>{
+  const p=ptrs.get(e.pointerId); if(!p) return;
+  const prev=[...ptrs.values()].map(q=>({...q}));
+  const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+  if(!gesture) return;
+  if(ptrs.size===1){ gesture.moved+=Math.abs(dx)+Math.abs(dy); if(gesture.moved>8){ cam.x-=dx/cam.z; cam.y-=dy/cam.z; clampCam(); } }
+  else if(ptrs.size===2){
+    const now=[...ptrs.values()];
+    const d0=Math.hypot(prev[0].x-prev[1].x,prev[0].y-prev[1].y), d1=Math.hypot(now[0].x-now[1].x,now[0].y-now[1].y);
+    const mx=(now[0].x+now[1].x)/2, my=(now[0].y+now[1].y)/2, pmx=(prev[0].x+prev[1].x)/2, pmy=(prev[0].y+prev[1].y)/2;
+    if(d0>0) zoomAt(mx,my,d1/d0);
+    cam.x-=(mx-pmx)/cam.z; cam.y-=(my-pmy)/cam.z; clampCam();
+  }
+});
+function endPtr(e){
+  if(!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
+  if(ptrs.size===0&&gesture){ if(!gesture.multi&&gesture.moved<=8&&performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
+}
+cv.addEventListener('pointerup',endPtr); cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('wheel', e=>{ e.preventDefault(); zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*0.0015)); }, {passive:false});
+function zoomAt(mx,my,f){ const w=s2w(mx,my); cam.z*=f; clampCam(); cam.x=w.x-(mx-cw/2)/cam.z; cam.y=w.y-(my-ch/2)/cam.z; clampCam(); }
+function centerMap(){
+  const l=S.lines[0];
+  if(l){ const a=P(l.stops[0]), b=P(l.stops[l.stops.length-1]); cam.x=(a.x+b.x)/2*T+T/2; cam.y=(a.y+b.y)/2*T+T/2; cam.z=Math.max(0.9,Math.min(cw,ch)/((dist(a,b)+12)*T)); }
+  else { const top=S.towns.filter(p=>p.kind==='town').sort((a,b)=>b.pop-a.pop)[0]; cam.x=top.x*T+T/2; cam.y=top.y*T+T/2+T*3; cam.z=0.85; }
+  clampCam();
+}
+
+// ---------- backup ----------
+function b64(buf){ const u=new Uint8Array(buf); let s=''; for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); return btoa(s); }
+function unb64(str){ const s=atob(str.replace(/\s+/g,'')), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+async function exportCode(){
+  const json=serialize();
+  if(window.CompressionStream){ try{ const st=new Blob([json]).stream().pipeThrough(new CompressionStream('gzip')); return 'LW1g:'+b64(await new Response(st).arrayBuffer()); }catch(e){} }
+  return 'LW1j:'+b64(new TextEncoder().encode(json));
+}
+async function importCode(code){
+  code=(code||'').trim(); let json;
+  if(code.startsWith('LW1g:')){ const st=new Blob([unb64(code.slice(5))]).stream().pipeThrough(new DecompressionStream('gzip')); json=await new Response(st).text(); }
+  else if(code.startsWith('LW1j:')) json=new TextDecoder().decode(unb64(code.slice(5)));
+  else if(code.startsWith('{')) json=code;
+  else throw new Error('format');
+  const prev=serialize();
+  if(!loadGame(json)){ loadGame(prev); throw new Error('bad'); }
+  S.savedAt=Date.now(); save();
+}
+function backupSheet(){
+  const last=S.lastBackup?new Date(S.lastBackup).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'never';
+  showSheet(`<h2>Backup and restore${closeBtn}</h2><div class="sub">Last backup: ${last} · company value ${money(companyValue())}</div>
+  <p>Your game is saved on this device only. Copy this code into Notes or a message to yourself, ${IN_CLAUDE?'':'or download a save file, '}so you can restore it anywhere.</p>
+  <textarea id="bcode" class="field" rows="4" readonly style="font-size:12px;font-family:ui-monospace,monospace;word-break:break-all">${ui.backupCode?esc(ui.backupCode):'Preparing backup code…'}</textarea>
+  <div class="btns"><button class="btn pri" data-act="copyBackup" ${ui.backupCode?'':'disabled'}>Copy backup code</button>${IN_CLAUDE?'':`<button class="btn" data-act="downloadBackup" ${ui.backupCode?'':'disabled'}>Download save file</button>`}</div>
+  <h3>Restore a company</h3>
+  <textarea id="rcode" class="field" rows="3" placeholder="Paste a backup code here" style="font-size:12px;font-family:ui-monospace,monospace"></textarea>
+  <div class="btns"><button class="btn warn" data-act="restore">${ui.confirm==='restore'?'Tap again to replace this company':'Restore from code'}</button>
+  <label class="btn" style="text-align:center;display:flex;align-items:center;justify-content:center;cursor:pointer">Open save file<input id="rfile" type="file" accept=".txt,.json,text/plain,application/json" hidden></label></div>
+  <p class="note">Restoring replaces the company on this device.</p>`);
+  if(!ui.backupCode) exportCode().then(c=>{ ui.backupCode=c; if(ui.sel&&ui.sel.kind==='backup') backupSheet(); });
+}
+function markBackedUp(){ S.lastBackup=Date.now(); save(); }
+
+// ---------- time away ----------
+const AWAY_DAYS_PER_HOUR=60, AWAY_MAX_DAYS=360;
+function fmtDur(ms){ const m=Math.round(ms/60000); if(m<60) return m+' min'; const h=Math.floor(m/60); if(h<48) return h+' h '+(m%60)+' min'; return Math.floor(h/24)+' days'; }
+function catchUp(ms){
+  if(!S||S.over||!(ms>120000)) return false;
+  const days=Math.min(ms/3600000*AWAY_DAYS_PER_HOUR, AWAY_MAX_DAYS); if(days<1) return false;
+  const m0=S.money, v0=companyValue(), d0=S.day, n0=S.news[0], mo0=Math.floor(S.day/30);
+  ui.quiet=true; let left=days; while(left>0){ const d=Math.min(0.25,left); step(d); left-=d; } ui.quiet=false;
+  const passed=Math.floor(S.day/30)-mo0, rec=S.hist.slice(-Math.min(passed,S.hist.length));
+  const sum=k=>rec.reduce((s,h)=>s+(h[k]||0),0);
+  const fresh=[]; for(const n of S.news){ if(n===n0) break; fresh.push(n); }
+  ui.away={ ms, d0, d1:S.day, money:S.money-m0, value:companyValue()-v0, fares:sum('fares'), cargo:sum('cargo'), rent:sum('rent'), tenders:sum('tenders'),
+    costs:sum('run')+sum('upkeep')+sum('interest'), news:fresh.slice(0,6), capped:ms/3600000*AWAY_DAYS_PER_HOUR>AWAY_MAX_DAYS, debt:S.debtMonths };
+  save(); updateDots(); return true;
+}
+function awaySheet(){
+  const a=ui.away; if(!a){ hideSheet(); return; }
+  const losing=S.lines.filter(l=>diagnose(l).losing).length;
+  showSheet(`<h2>While you were away${closeBtn}</h2><div class="sub">${fmtDur(a.ms)} · ${dateStr(a.d0)} → ${dateStr(a.d1)}</div>
+  <div class="rows">
+    <div class="row"><span>Cash</span>${pl(a.money)}</div>
+    <div class="row"><span>Company value</span>${pl(a.value)}</div>
+    <div class="row"><span>Passenger fares</span><b class="pos">${money(a.fares)}</b></div>
+    <div class="row"><span>Freight</span><b class="pos">${money(a.cargo)}</b></div>
+    <div class="row"><span>Business rent</span><b class="pos">${money(a.rent)}</b></div>
+    ${a.tenders?`<div class="row"><span>Tenders</span>${pl(a.tenders)}</div>`:''}
+    <div class="row"><span>Running costs, upkeep and interest</span><b class="neg">${money(-a.costs)}</b></div>
+  </div>
+  ${a.debt?'<p class="neg">Cash went negative while you were away. Borrow or sell soon, or the bank will close the company.</p>':''}
+  ${losing?`<p class="warnc">${losing} line${losing>1?'s are':' is'} losing money. Open Lines to see why.</p>`:''}
+  ${a.news.length?`<h3>What happened</h3><div class="rows">${a.news.map(n=>`<div class="row"><span>${esc(n)}</span><b></b></div>`).join('')}</div>`:''}
+  <p class="note">Your company keeps running while the game is closed: each real hour is about two game months, up to one game year${a.capped?' (this visit hit the limit)':''}.</p>
+  <div class="btns"><button class="btn pri" data-act="close">Continue</button>${losing?'<button class="btn" data-act="tool" data-t="lines">Open Lines</button>':''}</div>`);
+}
+function showAway(){ ui.sel={kind:'away'}; markTool(null); awaySheet(); }
+
+// ---------- loop ----------
+let lastT=performance.now(), saveTimer=0, sheetTimer=0;
+function frame(now){
+  const dt=Math.min(0.1,(now-lastT)/1000); lastT=now;
+  if(ui.speed>0 && !S.over){ let days=dt*ui.speed*2; while(days>0){ const d=Math.min(0.25,days); step(d); days-=d; } }
+  floats.forEach(f=>f.life-=dt); floats=floats.filter(f=>f.life>0);
+  draw(); hud();
+  saveTimer+=dt; if(saveTimer>15){ saveTimer=0; save(); }
+  sheetTimer+=dt; if(sheetTimer>0.6){ sheetTimer=0; if(ui.sel&&ui.sel.kind==='veh') refreshSheet(); }
+  requestAnimationFrame(frame);
+}
+function start(data){
+  resize();
+  try{ navigator.storage?.persist?.(); }catch(e){}
+  let raw=typeof data?.save==='string'?data.save:null;
+  if(!raw){ try{ raw=localStorage.getItem(SAVE_KEY); }catch(e){} }
+  const fromHot=typeof data?.save==='string';
+  let away=false;
+  if(raw&&loadGame(raw)){ if(!fromHot&&S.seenIntro) away=catchUp(Date.now()-(S.savedAt||Date.now())); }
+  else newGame(20261127);
+  centerMap(); setTool('inspect'); markTool(null); setSpeed(S.over?0:1); updateDots();
+  if(S.over){ ui.sel={kind:'over'}; overSheet(); }
+  else if(away) showAway();
+  else if(!S.seenIntro){ ui.sel={kind:'intro'}; introSheet(); }
+  requestAnimationFrame(t=>{ lastT=t; frame(t); });
+}
+addEventListener('resize',resize);
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ hiddenAt=Date.now(); save(); }
+  else if(hiddenAt && S && !S.over){ const ms=Date.now()-hiddenAt; hiddenAt=0; if(catchUp(ms)) showAway(); }
+});
+window.claude?.hot?.snapshot?.(()=>({ save:serialize() }));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
