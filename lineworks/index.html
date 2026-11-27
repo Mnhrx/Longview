@@ -272,7 +272,8 @@ const year = () => START_YEAR + Math.floor(S.day/360);
 const monthIdx = () => Math.floor(S.day/30)%12;
 const season = () => SEASON[monthIdx()];
 const dateStr = d => MONTHS[Math.floor(d/30)%12] + ' ' + (START_YEAR + Math.floor(d/360));
-const fare = (mode,a,b) => (mode==='air' ? 1.2+0.9*eDist(a,b) : mode==='rail' ? 0.8+0.65*dist(a,b) : 0.8+0.6*dist(a,b)) * S.fareInfl;
+const DWELL = { road:0.6, rail:0.8, air:1.0 };
+const fare = (mode,a,b) => (mode==='air' ? 4+0.9*eDist(a,b) : mode==='rail' ? 2.5+0.65*dist(a,b) : 1.6+0.6*dist(a,b)) * S.fareInfl;
 const CARGO_VALUE = { food:1.1, ore:1.0, goods:1.5 };
 const cargoFare = (a,b,good) => (1.8+1.25*dist(a,b)) * (CARGO_VALUE[good]||1) * S.fareInfl;
 const price = m => Math.round(MODELS[m].cost * S.infl);
@@ -690,7 +691,7 @@ function buyVehicle(spec, model, free){
     S.lines.push(line); linePaths.set(line.id, lp); buildOverlay(); if(S.stats) S.stats.linesOpened++;
   }
   const n=S.vehicles.filter(x=>x.line===line.id).length, lp0=linePaths.get(line.id), len0=lp0&&lp0.cum.length?lp0.cum[lp0.cum.length-1]:10;
-  const rt=2*(len0/MODELS[model].speed + line.stops.length*1.2);
+  const rt=2*(len0/MODELS[model].speed + line.stops.length*DWELL[line.mode]);
   const v={ id:S.nextVeh++, line:line.id, model, pos:0, dir:1, next:0, wait:n?rt*((n*0.618)%1):0, cargo:[], bought:S.day, paid:cost, profitYear:0, profitLast:0, broken:false, cars:0 };
   S.vehicles.push(v);
   if(!free && S.stats) S.stats.vehiclesBought++;
@@ -748,7 +749,7 @@ function arrive(v, k){
     }
   }
   if(v.next>=0 && v.next<l.stops.length){ l.offM=(l.offM||0)+vCap(v); l.carM=(l.carM||0)+aboard(v); }
-  v.wait = l.mode==='air' ? 1.2 : l.mode==='rail' ? 1.5 : 1;
+  v.wait = DWELL[l.mode];
   v.broken=false;
 }
 const segKey = (i,j) => i<j ? i+'-'+j : j+'-'+i;
@@ -1148,7 +1149,7 @@ const badge=l=>`<span class="badge" style="background:${l.color}">${l.id}</span>
 const pl=n=>`<b class="${n>=0?'pos':'neg'}">${signed(n)}</b>`;
 const route=l=>l.stops.map(s=>esc(P(s).name)).join(' – ');
 function lineStats(l){
-  const lp=linePaths.get(l.id), vs=lineVehicles(l), len=lp&&lp.cum.length?lp.cum[lp.cum.length-1]:1, wait=l.mode==='air'?1.2:l.mode==='rail'?1.5:1;
+  const lp=linePaths.get(l.id), vs=lineVehicles(l), len=lp&&lp.cum.length?lp.cum[lp.cum.length-1]:1, wait=DWELL[l.mode];
   const st={pass:{seats:0,demand:0,n:0}, freight:{seats:0,demand:0,n:0}, run:0, old:vs.filter(v=>vAge(v)>MODELS[v.model].life), len};
   for(const v of vs){ const m=MODELS[v.model], rt=2*(len/vSpeed(v)+l.stops.length*wait); st[m.kind].seats+=vCap(v)*2/rt; st[m.kind].n++; st.run+=runCost(v); }
   for(const a of l.stops){ const p=P(a);
@@ -1165,6 +1166,13 @@ function diagnose(l){
   const rev=l.revLast||0, cost=l.costLast||st.run, losing=(l.months||0)>=1 ? rev<cost : l.profitYear<0;
   if(l.suspendUntil>S.day) add('flood','closed','Floods have closed this line, so it earns nothing until they clear. Running costs still count.',null);
   if((l.months||0)<2) add('new','new line','New lines need a month or two before passengers build up at the stops.',null);
+  const full=st.load!=null&&st.load>=0.8, perRider=l.carLast?rev/l.carLast:0;
+  if(losing && full && st.pass.n){
+    const canRaise=l.fareMult<1.6;
+    add('cheap','riders pay too little',`Every ${l.mode==='air'?'plane':l.mode==='rail'?'train':'vehicle'} leaves ${Math.round(st.load*100)}% full, but each rider pays only about ${money(perRider)} on these short hops, less than the vehicles cost to run. More vehicles just add more loss.${st.pass.demand>st.pass.seats?' Far more people want to ride than you can carry, so higher fares will still fill every seat.':''}`,
+      canRaise?{act:'fare',id:l.id,d:1,label:'Raise fares'}:{act:'removeOne',id:l.id,label:'Sell one vehicle'});
+    if(l.mode==='rail'&&lineVehicles(l).length>3&&lineVehicles(l).some(v=>vCars(v)<CAR.max)) add('cars','use carriages',`Carriages add seats for ${money(CAR.run*S.infl)}/mo each, against ${money(runCost(lineVehicles(l)[0]))}/mo for a whole train. Fewer, longer trains cost much less.`,{act:'removeOne',id:l.id,label:'Sell one train'});
+  }
   if(st.old.length) add('old','worn out',`${st.old.length} vehicle${st.old.length>1?'s are':' is'} past service life: they cost more to run and break down often.`,{act:'replace',id:st.old[0].id,label:'Replace oldest'});
   for(const kind of ['pass','freight']){
     const k=st[kind]; if(!k.n) continue;
@@ -1176,15 +1184,16 @@ function diagnose(l){
   for(const kind of ['pass','freight']){ const k=st[kind]; if(k.n && k.demand>k.seats*1.2){
     const canCar=l.mode==='rail'&&lineVehicles(l).some(v=>vCars(v)<CAR.max);
     add('under-'+kind,'not enough seats',`About ${Math.round(k.demand)} ${kind==='pass'?'people':'tonnes'} a day want this line but it carries ${Math.round(k.seats)}. The rest wait and give up, which lowers town ratings.`,
-      canCar?{act:'addCarLine',id:l.id,label:'Add a carriage'}:{act:'addBest',id:l.id,label:'Add a vehicle'}); } }
+      losing&&full?(l.fareMult<1.6?{act:'fare',id:l.id,d:1,label:'Raise fares'}:null):canCar?{act:'addCarLine',id:l.id,label:'Add a carriage'}:{act:'addBest',id:l.id,label:'Add a vehicle'}); } }
   if(st.load!=null && st.load<0.35 && !out.some(o=>o.key.startsWith('over'))) add('empty','mostly empty',`Vehicles left stops only ${Math.round(st.load*100)}% full last month.`,l.fareMult>1?{act:'fare',id:l.id,d:-1,label:'Lower fares'}:{act:'removeOne',id:l.id,label:'Sell one vehicle'});
-  if(l.fareMult>=1.3 && st.pass.n) add('fare','fares high',`Fares are at ${Math.round(l.fareMult*100)}%, which puts many riders off.`,{act:'fare',id:l.id,d:-1,label:'Lower fares'});
+  if(l.fareMult>=1.3 && st.pass.n && !full) add('fare','fares high',`Fares are at ${Math.round(l.fareMult*100)}%, which puts many riders off.`,{act:'fare',id:l.id,d:-1,label:'Lower fares'});
   if(l.mode!=='air' && st.endDist<9 && st.pass.n) add('short','short route',`The ends are only ${st.endDist} tiles apart. Fares grow with distance, so short trips earn little per rider.`,{act:'editRoute',id:l.id,label:'Extend the line'});
   if(l.mode==='road' && st.pass.n && st.trip>9) add('slow','slow for distance',`A bus takes about ${Math.round(st.trip)} days end to end. On long trips people prefer trains or planes, so demand drops.`,{act:'tool',t:'rail',label:'Build a railway'});
   const heavy=lineVehicles(l).filter(v=>['rail','air'].includes(MODELS[v.model].mode)&&MODELS[v.model].kind==='pass');
   if(heavy.length && st.pass.demand*1.6<st.pass.seats && st.pass.demand<MODELS[heavy[0].model].cap/4) add('big','too big for demand',`${MODELS[heavy[0].model].name}s carry ${MODELS[heavy[0].model].cap} and cost ${money(runCost(heavy[0]))}/mo each. These places are too small to fill them.`,{act:'editRoute',id:l.id,label:'Add bigger towns'});
   if(st.freight.n && l.stops.filter(s=>P(s).kind==='industry'&&fRoutes.has(s)&&[...fRoutes.get(s)].some(x=>l.stops.includes(x))).length===1 && l.stops.length===2) add('return','empty returns','Freight only travels one way here, so vehicles drive back empty. A stop that ships something back (a factory) doubles the earnings.',{act:'editRoute',id:l.id,label:'Edit stops'});
   for(let i=0;i<l.stops.length;i++) for(let j=i+1;j<l.stops.length;j++) if(rivalOn(l.stops[i],l.stops[j])){ add('rival','rival',`${RIVAL} competes between ${P(l.stops[i]).name} and ${P(l.stops[j]).name}, taking 40% of those riders.`,null); i=99; break; }
+  if(l.mode==='air' && st.endDist<22) add('airshort','too short to fly',`These airports are only ${Math.round(st.endDist)} tiles apart. Planes cost a lot to run and only pay on long trips. Trains or buses suit this distance.`,{act:'removeOne',id:l.id,label:'Sell one plane'});
   if(l.mode==='air' && S.towns.filter(t=>t.airport).length) add('air','airport costs',`Each airport costs ${money(AIRPORT_UPKEEP*S.infl)}/mo, counted in company upkeep. Air pays best between big, far-apart towns.`,null);
   if(S.fuelUntil>S.day) add('fuel','fuel spike','A fuel price spike has raised running costs 30% for now.',null);
   const res = out.some(o=>o.key==='return') ? out.filter(o=>o.key!=='empty') : out;
@@ -1211,7 +1220,7 @@ function lineChips(l){
   const vs=lineVehicles(l), w=lineWaiting(l), old=vs.filter(v=>vAge(v)>MODELS[v.model].life).length; let out='';
   if(l.suspendUntil>S.day) out+='<span class="chip bad">closed by floods</span>';
   const dg=(l.months||0)>=1?diagnose(l):null;
-  if(dg&&dg.losing){ const top=dg.reasons.find(x=>!['new','air','fuel'].includes(x.key)); out+=`<span class="chip bad">losing${top?': '+top.short:''}</span>`; }
+  if(dg&&dg.losing){ const top=dg.reasons.find(x=>!['new','air','fuel'].includes(x.key)&&!x.key.startsWith('under'))||dg.reasons.find(x=>x.key.startsWith('under')); out+=`<span class="chip bad">losing${top?': '+top.short:''}</span>`; }
   else if(!dg && l.profitYear<0 && S.day%360>60) out+='<span class="chip bad">losing money</span>';
   if(w>lineCap(l)*1.2) out+='<span class="chip warn">needs vehicles</span>';
   if(old) out+=`<span class="chip bad">${old} worn out</span>`;
@@ -1529,7 +1538,7 @@ function linePlanSheet(){
     if(!lp.pts) return head+gapMsg(mode,stops,lp);
     const len=lp.cum[lp.cum.length-1];
     return head+Object.entries(MODELS).filter(([,m])=>m.mode===mode&&kinds.includes(m.kind)).map(([k,m])=>{
-      const locked=year()<m.year, days=Math.round((len/m.speed+stops.length*1.2)*2), pr=price(k);
+      const locked=year()<m.year, days=Math.round((len/m.speed+stops.length*DWELL[mode])*2), pr=price(k);
       return `<div class="veh"><div class="nm">${m.name}${m.kind==='freight'?' <span class="chip info">freight</span>':''}</div>
         <div class="sp">${locked?`Available from ${m.year}`:`${m.cap}${m.kind==='freight'?' t':' seats'} · round trip ${days} days · ${money(m.run*S.infl)}/mo`}</div>
         <button class="btn pri" data-act="buy" data-mode="${mode}" data-model="${k}" ${locked||S.money<pr?'disabled':''}>${money(pr)}</button></div>`; }).join('');
@@ -1615,7 +1624,7 @@ function whatWentWrong(){
   out.push(`In the last ${h.length} months you earned about ${money(inc)} a month but spent ${money(run+up+int)} a month running the company${spend>inc*0.3?`, plus ${money(spend)} a month on new building and vehicles`:''}.`);
   if(inc>run+up+int) out.push(`Day-to-day running was profitable, so the cash crunch came from one-off costs: ${spend>0?money(spend*h.length)+' spent on building and vehicles in that time, ':''}${S.loan>0?'a '+money(S.loan)+' loan, ':''}or penalties. Spend only cash you can spare, and keep some in reserve.`);
   const losers=S.lines.map(l=>({l,d:diagnose(l)})).filter(x=>x.d.losing).sort((a,b)=>(a.d.rev-a.d.cost)-(b.d.rev-b.d.cost));
-  if(losers.length){ const w=losers[0]; const why=w.d.reasons.find(x=>!['new','air','fuel'].includes(x.key));
+  if(losers.length){ const w=losers[0]; const why=w.d.reasons.find(x=>!['new','air','fuel'].includes(x.key)&&!x.key.startsWith('under'));
     out.push(`${losers.length} line${losers.length>1?'s were':' was'} losing money. The worst, line ${w.l.id} (${w.l.stops.map(x=>esc(P(x).name)).join(' – ')}), lost ${money(w.d.cost-w.d.rev)} a month${why?`: ${esc(why.short)}`:''}.`); }
   if(int>inc*0.15) out.push(`Loan interest took ${money(int)} a month, ${Math.round(int/Math.max(inc,1)*100)}% of income.`);
   const old=S.vehicles.filter(v=>vAge(v)>MODELS[v.model].life).length; if(old) out.push(`${old} vehicle${old>1?'s were':' was'} worn out, costing more to run and breaking down often.`);
