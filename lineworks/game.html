@@ -134,14 +134,14 @@ svg.chart{width:100%;height:auto;display:block;margin-top:8px}
     <button data-s="1">1×</button>
     <button data-s="4">4×</button>
     <button data-s="12" aria-label="12 times speed">12×</button>
-  </div><button class="layer panel" id="layer">Map: lines</button></div>
+  </div><button class="layer panel" id="layer">Map: clean</button></div>
 </div>
 <div class="hint" id="hint" hidden><span id="hintText"></span><button id="hintUndo" hidden>Undo</button><button id="hintCancel">Cancel</button></div>
 <div class="toasts" id="toasts"></div>
 <div class="sheet" id="sheet" hidden><div class="card" id="card"></div></div>
 
 <nav class="bar panel" id="bar">
-  <button data-tool="lines"><svg viewBox="0 0 24 24"><path d="M4 18c3 0 4-12 8-12s5 12 8 12"/><circle cx="4" cy="18" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="20" cy="18" r="2"/></svg>Lines</button>
+  <button data-tool="lines"><span class="dot" id="ldot" hidden>0</span><svg viewBox="0 0 24 24"><path d="M4 18c3 0 4-12 8-12s5 12 8 12"/><circle cx="4" cy="18" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="20" cy="18" r="2"/></svg>Lines</button>
   <button data-tool="build"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M5 6h14M5 10.5h14M5 15h14M5 19.5h14"/></svg>Build</button>
   <button data-tool="business"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"/></svg>Business</button>
   <button data-tool="tenders"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"/></svg>Tenders<span class="dot" id="tdot" hidden>0</span></button>
@@ -237,6 +237,9 @@ let roads, rails, planned, terrain, placeTile;
 let linePaths = new Map(), overlay = [], laneOff = new Map();
 let routes = new Map(), fRoutes = new Map(), rates = new Map(), lineCount = new Map();
 let railSegsW = [], roadSegsW = [];
+let problemLines = new Set();
+const prefs = () => (S.prefs ||= { vehicles:true, waits:true, pops:true, rival:false });
+const autos = () => (S.auto ||= { replace:false, fares:false, cars:false });
 const ui = { tool:'inspect', pickA:null, stops:[], plan:null, sel:null, speed:1, lastPlace:'', mapCtl:null, layer:'lines', editLine:null, prefMode:null, confirm:null };
 const PANELS = ['lines','build','business','tenders','company'];
 let floats = [];
@@ -259,6 +262,7 @@ const monthIdx = () => Math.floor(S.day/30)%12;
 const season = () => SEASON[monthIdx()];
 const dateStr = d => MONTHS[Math.floor(d/30)%12] + ' ' + (START_YEAR + Math.floor(d/360));
 const DWELL = { road:0.6, rail:0.8, air:1.0 };
+const FARE_MAX = 3.0;
 const fare = (mode,a,b) => (mode==='air' ? 4+0.9*eDist(a,b) : mode==='rail' ? 2.5+0.65*dist(a,b) : 1.6+0.6*dist(a,b)) * S.fareInfl;
 const CARGO_VALUE = { food:1.1, ore:1.0, goods:1.5 };
 const cargoFare = (a,b,good) => (1.8+1.25*dist(a,b)) * (CARGO_VALUE[good]||1) * S.fareInfl;
@@ -631,12 +635,13 @@ function computeRoutes(){
   }
 }
 const rivalOn = (a,b) => S.rival.routes.some(r=>(r.a===a&&r.b===b)||(r.a===b&&r.b===a));
+const softPop = p => p<=4000 ? p : 4000*Math.pow(p/4000,0.6);
 function pairRate(a,b,r){
   const d=Math.max(1,dist(a,b)), t=d/(r?r.speed:2.5);
   const modeF = r ? clamp(1.4 - t/12, 0.35, 1.35) : 1;
   const fareF = r ? Math.pow(r.fm,-1.4) : 1;
   const tf = r&&r.transfer ? 0.6 : 1, rv = rivalOn(a.id,b.id) ? 0.6 : 1;
-  return popO(a)*popD(b)*attrOf(b)*modeF*fareF*tf*rv/((d+6)*40000);
+  return softPop(popO(a))*softPop(popD(b))*attrOf(b)*modeF*fareF*tf*rv/((d+6)*40000);
 }
 function computeDemand(){
   rates=new Map();
@@ -790,7 +795,8 @@ function newTender(r, first){
   if(!cand.length) return;
   const c=cand[Math.floor(r()*Math.min(cand.length,6))];
   const mode = c.d>=20 && r()<0.6 ? 'rail' : 'any';
-  const reward=Math.round((12000 + c.d*2200)*(mode==='rail'?1.7:1)*S.infl/500)*500;
+  const scale=clamp(Math.pow(Math.max(companyValue(),1)/3e6,0.55),1,80);
+  const reward=Math.round((12000 + c.d*2200)*(mode==='rail'?1.7:1)*S.infl*scale/500)*500;
   S.tenders.push({ id:S.nextTender++, a:c.a.id, b:c.b.id, mode, reward, bidUntil:S.day+(first?75:60), deadline:S.day+(first?75:60)+720,
     state:'open', myBid:null, rivalBid:0.7+r()*0.3 });
   if(!first) toast(`New tender: link ${c.a.name} and ${c.b.name}${mode==='rail'?' by rail':''}.`, '');
@@ -830,7 +836,7 @@ function monthlyEvents(r){
 function step(dt){
   for(const a of S.towns){
     if(isPax(a)){
-      const cap=Math.max(popD(a),popO(a))*0.1;
+      const cap=Math.max(softPop(popD(a)),softPop(popO(a)))*0.06;
       for(const {f,rate} of (rates.get(a.id)||[])){
         let w=(a.waiting[f]||0)+rate*dt;
         const gone=w*0.02*dt; w-=gone; a.lost+=gone;
@@ -897,7 +903,7 @@ function endMonth(){
     for(const k in MODELS) if(MODELS[k].year===year()) toast(`New model: ${MODELS[k].name}.`, 'good');
     for(const k in PT) if(PT[k].year===year()) toast(`New business: ${PT[k].name}.`, 'good');
   }
-  monthlyEvents(r); monthlyTenders(r);
+  monthlyEvents(r); monthlyTenders(r); autopilot();
   if(S.money<0){ S.debtMonths++;
     if(ui.quiet) S.debtMonths=Math.min(S.debtMonths,3);
     else if(S.debtMonths>=4){ S.over=true; setSpeed(0); ui.sel={kind:'over'}; overSheet(); save(); return; }
@@ -953,6 +959,7 @@ function renderStatic(){
 }
 
 function layerNow(){ return ui.tool==='rail' ? 'rail' : ui.tool==='road' ? 'road' : ui.layer; }
+function refreshProblems(){ problemLines=new Set(); for(const l of S.lines){ const d=diagnose(l); if(d.losing||d.reasons.some(x=>x.key.startsWith('under')||x.key==='old')) problemLines.add(l.id); } }
 function draw(){
   const c=cx;
   c.setTransform(dpr,0,0,dpr,0,0);
@@ -968,21 +975,24 @@ function draw(){
     if(layer==='rail'){ c.strokeStyle='#fff'; c.lineWidth=1.6; c.setLineDash([4,4]); c.beginPath(); for(const s of segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke(); c.setLineDash([]); }
   }
   // rival services
+  const showRival = prefs().rival || (ui.sel && (ui.sel.kind==='tenders'||ui.sel.kind==='tender'));
+  if(showRival){
   c.strokeStyle='rgba(110,118,126,.55)'; c.lineWidth=3; c.setLineDash([2,6]); c.lineCap='round';
   for(const r of S.rival.routes){ const a=P(r.a), b=P(r.b); c.beginPath(); c.moveTo(a.x*T+T/2,a.y*T+T/2); c.lineTo(b.x*T+T/2,b.y*T+T/2); c.stroke(); }
-  c.setLineDash([]);
+  c.setLineDash([]); }
+  const far = cam.z<0.75;
   const focus=focusLine(), showLines = layer!=='terrain';
   c.lineCap='round'; c.lineJoin='round';
   if(showLines) for(const o of overlay){
     if((layer==='rail'||layer==='road') && o.mode!==layer) continue;
-    c.globalAlpha = focus==null || focus===o.id ? 1 : 0.15;
+    c.globalAlpha = focus!=null ? (focus===o.id?1:0.15) : layer==='problems' ? (problemLines.has(o.id)?1:0.15) : 1;
     if(o.mode==='air'){
       c.strokeStyle=o.color; c.lineWidth=3; c.setLineDash([7,6]);
       for(const [a,b] of o.arcs){ const k=airCtrl(a,b); c.beginPath(); c.moveTo(a[0]*T+T/2,a[1]*T+T/2); c.quadraticCurveTo(k[0]*T+T/2,k[1]*T+T/2,b[0]*T+T/2,b[1]*T+T/2); c.stroke(); }
       c.setLineDash([]); continue;
     }
-    c.strokeStyle='#fff'; c.lineWidth=9; c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
-    c.strokeStyle=o.color; c.lineWidth=o.mode==='rail'?6:5; c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
+    c.strokeStyle='#fff'; c.lineWidth=far?7:9; c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
+    c.strokeStyle=layer==='problems'&&problemLines.has(o.id)?'#d2402f':o.color; c.lineWidth=(o.mode==='rail'?6:5)-(far?1.5:0); c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
   }
   c.globalAlpha=1;
   if(ui.plan && ui.plan.kind==='build'){ c.strokeStyle='#1b2128'; c.globalAlpha=.25; c.lineWidth=12;
@@ -1002,6 +1012,7 @@ function draw(){
     const p=vehWorld(v); if(!p) continue; const l=lineById(v.line), m=MODELS[v.model];
     if((layer==='rail'||layer==='road') && l.mode!==layer) continue;
     if(layer==='terrain') continue;
+    if((!prefs().vehicles || far || layer==='problems') && focus!==l.id) continue;
     c.globalAlpha = focus==null||focus===l.id ? 1 : 0.25;
     c.save(); c.translate(p.x,p.y); c.rotate(p.ang);
     if(m.mode==='air'){
@@ -1024,7 +1035,7 @@ function draw(){
   }
   c.globalAlpha=1;
   c.textAlign='center'; c.textBaseline='alphabetic'; c.font='700 13px Barlow Condensed, Arial Narrow, sans-serif';
-  for(const f of floats){ c.globalAlpha=Math.min(1,f.life); c.lineWidth=3.5; c.strokeStyle='#fff';
+  if(prefs().pops && !far) for(const f of floats){ c.globalAlpha=Math.min(1,f.life); c.lineWidth=3.5; c.strokeStyle='#fff';
     const y=f.y-(2.6-f.life)*12; c.strokeText(f.txt,f.x,y); c.fillStyle=f.rent?'#17673f':'#1b2128'; c.fillText(f.txt,f.x,y); }
   c.globalAlpha=1;
   c.restore();
@@ -1048,7 +1059,7 @@ function drawPlace(c,p,focus){
     c.fill(); c.stroke();
     if(p.airport){ c.fillStyle='#1b2128'; c.save(); c.translate(x+r+5,y-r-3); c.rotate(-Math.PI/4); c.beginPath(); c.moveTo(6,0); c.lineTo(-5,-4.5); c.lineTo(-3,0); c.lineTo(-5,4.5); c.closePath(); c.fill(); c.restore(); }
   }
-  const owned=S.props.filter(b=>b.town===p.id).length;
+  const owned=cam.z<0.8?0:S.props.filter(b=>b.town===p.id).length;
   if(owned){ const bx=x-(p.kind==='town'?14:10), by=y-(p.kind==='town'?12:9); c.fillStyle='#1b2128'; c.save(); c.translate(bx,by); c.rotate(Math.PI/4); c.fillRect(-4,-4,8,8); c.restore();
     if(owned>1){ c.fillStyle='#fff'; c.font='700 8px Barlow, sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(owned,bx,by+0.5); } }
   c.globalAlpha=1;
@@ -1080,7 +1091,8 @@ function drawLabels(c){
     c.strokeText(name,at.x,ny); c.fillStyle='#1b2128'; c.fillText(name,at.x,ny);
     if(sub){ c.font='500 11px Barlow, system-ui, sans-serif'; c.strokeText(sub,at.x,at.y+21); c.fillStyle='#6b7580'; c.fillText(sub,at.x,at.y+21); }
     let wait=0; if(isPax(p)) for(const f in p.waiting) wait+=p.waiting[f]; else for(const d in p.cwait) wait+=p.cwait[d];
-    if(wait>=1){
+    const bad=isPax(p)&&p.rating<0.45;
+    if(wait>=1 && prefs().waits && (!(cam.z<0.75||ui.layer==='problems') || bad)){
       const wt=Math.floor(wait)+(isPax(p)?'':'t'); c.font='700 10.5px Barlow, system-ui, sans-serif'; const ww=c.measureText(wt).width+10;
       const bx=s.x-rr-ww+4, by=s.y-rr-4;
       c.fillStyle=isPax(p)&&p.rating<0.45?'#d2402f':'#1b2128'; roundRect(c,bx,by-8,ww,16,8); c.fill(); c.fillStyle='#fff'; c.fillText(wt,bx+5,by+0.5);
@@ -1104,7 +1116,8 @@ function hud(){
   if(m!==lastCash){ lastCash=m; $('cash').textContent=money(m); $('cash').classList.toggle('neg',m<0); }
   const d=dateStr(S.day); if(d!==lastDate){ lastDate=d; $('date').textContent=d; }
 }
-function updateDots(){ const n=S.tenders.filter(t=>t.state==='open'&&t.myBid==null).length; $('tdot').textContent=n; $('tdot').hidden=!n; }
+function updateDots(){ const n=S.tenders.filter(t=>t.state==='open'&&t.myBid==null).length; $('tdot').textContent=n; $('tdot').hidden=!n;
+  const w=S.vehicles.filter(v=>vAge(v)>MODELS[v.model].life).length; $('ldot').textContent=w; $('ldot').hidden=!w; }
 function setSpeed(s){ ui.speed=s; document.querySelectorAll('#speed button').forEach(b=>b.classList.toggle('on',+b.dataset.s===s)); }
 function toast(msg,kind){
   if(ui.quiet) return;
@@ -1154,7 +1167,7 @@ function diagnose(l){
   if((l.months||0)<2) add('new','new line','New lines need a month or two before passengers build up at the stops.',null);
   const full=st.load!=null&&st.load>=0.8, perRider=l.carLast?rev/l.carLast:0;
   if(losing && full && st.pass.n){
-    const canRaise=l.fareMult<1.6;
+    const canRaise=l.fareMult<FARE_MAX;
     add('cheap','riders pay too little',`Every ${l.mode==='air'?'plane':l.mode==='rail'?'train':'vehicle'} leaves ${Math.round(st.load*100)}% full, but each rider pays only about ${money(perRider)} on these short hops, less than the vehicles cost to run. More vehicles just add more loss.${st.pass.demand>st.pass.seats?' Far more people want to ride than you can carry, so higher fares will still fill every seat.':''}`,
       canRaise?{act:'fare',id:l.id,d:1,label:'Raise fares'}:{act:'removeOne',id:l.id,label:'Sell one vehicle'});
     if(l.mode==='rail'&&lineVehicles(l).length>3&&lineVehicles(l).some(v=>vCars(v)<CAR.max)) add('cars','use carriages',`Carriages add seats for ${money(CAR.run*S.infl)}/mo each, against ${money(runCost(lineVehicles(l)[0]))}/mo for a whole train. Fewer, longer trains cost much less.`,{act:'removeOne',id:l.id,label:'Sell one train'});
@@ -1178,7 +1191,7 @@ function diagnose(l){
   for(const kind of ['pass','freight']){ const k=st[kind]; if(k.n && k.demand>k.seats*1.2){
     const canCar=l.mode==='rail'&&lineVehicles(l).some(v=>vCars(v)<CAR.max);
     add('under-'+kind,'not enough seats',`About ${Math.round(k.demand)} ${kind==='pass'?'people':'tonnes'} a day want this line but it carries ${Math.round(k.seats)}. The rest wait and give up, which lowers town ratings.`,
-      losing&&full?(l.fareMult<1.6?{act:'fare',id:l.id,d:1,label:'Raise fares'}:null):canCar?{act:'addCarLine',id:l.id,label:'Add a carriage'}:{act:'addBest',id:l.id,label:'Add a vehicle'}); } }
+      losing&&full?(l.fareMult<FARE_MAX?{act:'fare',id:l.id,d:1,label:'Raise fares'}:null):canCar?{act:'addCarLine',id:l.id,label:'Add a carriage'}:{act:'addBest',id:l.id,label:'Add a vehicle'}); } }
   if(st.load!=null && st.load<0.35 && !out.some(o=>o.key.startsWith('over'))) add('empty','mostly empty',`Vehicles left stops only ${Math.round(st.load*100)}% full last month.`,l.fareMult>1?{act:'fare',id:l.id,d:-1,label:'Lower fares'}:{act:'removeOne',id:l.id,label:'Sell one vehicle'});
   if(l.fareMult>=1.3 && st.pass.n && !full) add('fare','fares high',`Fares are at ${Math.round(l.fareMult*100)}%, which puts many riders off.`,{act:'fare',id:l.id,d:-1,label:'Lower fares'});
   if(l.mode!=='air' && st.endDist<9 && st.pass.n) add('short','short route',`The ends are only ${st.endDist} tiles apart. Fares grow with distance, so short trips earn little per rider.`,{act:'editRoute',id:l.id,label:'Extend the line'});
@@ -1237,6 +1250,8 @@ function refreshSheet(){
   else if(s.kind==='airport') airportSheet(P(s.id));
   else if(s.kind==='away') awaySheet();
   else if(s.kind==='backup') backupSheet();
+  else if(s.kind==='mapview') mapViewSheet();
+  else if(s.kind==='fleet') fleetSheet();
   else ({lines:linesSheet, build:buildSheet, business:businessSheet, tenders:tendersSheet, company:companySheet, intro:introSheet, map:mapSheet, over:overSheet}[s.kind]||hideSheet)();
 }
 function introSheet(){
@@ -1384,9 +1399,9 @@ function lineSheet(l){
     <div class="row"><span>Profit this year</span>${pl(l.profitYear)}</div>
     <div class="row"><span>Profit last year</span>${pl(l.profitLast)}</div>
     <div class="row"><span>Capacity</span><b>${lineCap(l)}</b></div>
-    <div class="row"><span>Ticket price</span><span class="mini"><button data-act="fare" data-id="${l.id}" data-d="-1" ${l.fareMult<=0.6?'disabled':''} aria-label="Lower fares">−</button><b style="min-width:52px;text-align:center;color:var(--ink)">${Math.round(l.fareMult*100)}%</b><button data-act="fare" data-id="${l.id}" data-d="1" ${l.fareMult>=1.6?'disabled':''} aria-label="Raise fares">+</button></span></div>
+    <div class="row"><span>Ticket price</span><span class="mini"><button data-act="fare" data-id="${l.id}" data-d="-1" ${l.fareMult<=0.6?'disabled':''} aria-label="Lower fares">−</button><b style="min-width:52px;text-align:center;color:var(--ink)">${Math.round(l.fareMult*100)}%</b><button data-act="fare" data-id="${l.id}" data-d="1" ${l.fareMult>=FARE_MAX?'disabled':''} aria-label="Raise fares">+</button></span></div>
   </div>
-  <p class="note">Higher fares earn more per rider but fewer people travel. Raise them on full lines, lower them on empty ones.</p>
+  <p class="note">Higher fares earn more per rider but fewer people travel. Up to 300%. Raise them on full lines, lower them on empty ones.</p>
   ${healthSection(l)}
   <h3>Stops · waiting for this line</h3>
   <div class="rows">${l.stops.map(id=>{ const t=P(id), w=Math.floor(waitAtFor(t,l)); return `<button class="row" data-act="selTown" data-id="${id}"><span>${esc(t.name)}</span><b class="${w>40?'warnc':''}">${w}${t.kind==='industry'?' t':''} waiting</b></button>`; }).join('')}</div>
@@ -1402,7 +1417,7 @@ function lineSheet(l){
 function linesSheet(){
   const prof=S.lines.reduce((s,l)=>s+l.profitYear,0), order=S.lines.slice().sort((a,b)=>a.profitYear-b.profitYear);
   showSheet(`<h2>Lines${closeBtn}</h2><div class="sub">${S.lines.length} lines · ${S.vehicles.length} vehicles · ${signed(prof)} this year</div>
-  <div class="btns"><button class="btn pri" data-act="newLine">New line</button><button class="btn" data-act="build">Build</button></div>
+  <div class="btns"><button class="btn pri" data-act="newLine">New line</button><button class="btn" data-act="fleet">Fleet manager${fleetPlan().worn.length?` · ${fleetPlan().worn.length} worn`:''}</button><button class="btn" data-act="build">Build</button></div>
   ${order.length?order.map(l=>{ const vs=lineVehicles(l), kinds=lineKinds(l.stops), best=bestModel(l.mode,kinds[0]||'pass');
     return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span>
       <small class="m">${modeName(l.mode)} · ${vs.length} ${vehWord(l.mode,vs.length)} · ${Math.floor(lineWaiting(l))} waiting${lineChips(l)}</small></button>
@@ -1509,6 +1524,7 @@ function companySheet(){
   <button class="btn" data-act="repay" ${S.loan<=0||S.money<25000?'disabled':''}>Repay $25,000</button></div>
   <h3>Career</h3>${statsGrid(false)}
   ${S.news.length?`<h3>News</h3><div class="rows">${S.news.map(n=>`<div class="row"><span>${esc(n)}</span><b></b></div>`).join('')}</div>`:''}
+  <div class="btns"><button class="btn" data-act="fleet">Fleet manager and autopilot</button></div>
   <div class="btns"><button class="btn pri" data-act="backup">Backup and restore</button><button class="btn" data-act="newgame">New map or real place</button></div>
   <p class="note">Last backup: ${S.lastBackup?new Date(S.lastBackup).toLocaleDateString():'<span class="neg">never</span>'}. Back up now and then so you never lose your company.</p>`);
 }
@@ -1729,7 +1745,7 @@ $('card').addEventListener('click', e=>{
       if(ui.confirm!=='close'+id){ ui.confirm='close'+id; lineSheet(l); return; }
       ui.confirm=null; let tot=0; for(const v of lineVehicles(l)) tot+=sellVehicle(v);
       toast(`Line ${id} closed. Vehicles sold for ${money(tot)}.`); save(); ui.sel={kind:'lines'}; markTool('lines'); refreshSheet(); },
-    fare(){ const l=lineById(id); if(!l) return; l.fareMult=clamp(Math.round((l.fareMult+0.1*(+b.dataset.d))*10)/10,0.6,1.6); computeAll(); save(); refreshSheet(); },
+    fare(){ const l=lineById(id); if(!l) return; l.fareMult=clamp(Math.round((l.fareMult+(l.fareMult>=1.6||(+b.dataset.d>0&&l.fareMult>=1.5)?0.2:0.1)*(+b.dataset.d))*10)/10,0.6,FARE_MAX); computeAll(); save(); refreshSheet(); },
     editRoute(){ const l=lineById(id); if(!l) return; setTool('line'); ui.editLine=id; ui.stops=l.stops.slice(); lineHint(); linePlanSheet(); },
     saveRoute(){ const l=lineById(ui.editLine); if(!l||ui.stops.length<2) return; const lp=buildLinePath(l.mode,ui.stops); if(!lp.pts) return;
       l.stops=ui.stops.slice(); linePaths.set(l.id,lp); for(const v of lineVehicles(l)){ v.pos=0; v.dir=1; v.next=0; v.wait=0; v.cargo=[]; }
@@ -1762,6 +1778,15 @@ $('card').addEventListener('click', e=>{
       computeAll(); save(); toast(`Sold for ${money(val)}. Overall ${tot>=0?'gain':'loss'} of ${money(Math.abs(tot))}.`, tot>=0?'good':'bad'); refreshSheet(); },
     bid(){ const t=S.tenders.find(x=>x.id===id); if(!t||t.state!=='open') return; t.myBid=+b.dataset.v; save(); updateDots(); toast(`Bid placed: ${Math.round(t.myBid*100)}%.`); refreshSheet(); },
     tenderLine(){ const t=S.tenders.find(x=>x.id===id); if(!t) return; setTool('line'); ui.stops=[t.a,t.b]; ui.prefMode=t.mode==='rail'?'rail':null; lineHint(); linePlanSheet(); },
+    setLayer(){ setLayer(b.dataset.k); mapViewSheet(); },
+    togglePref(){ const k=b.dataset.k; prefs()[k]=!prefs()[k]; save(); mapViewSheet(); },
+    fleet(){ setTool('inspect'); markTool('lines'); ui.sel={kind:'fleet'}; fleetSheet(); },
+    toggleAuto(){ const k=b.dataset.k; autos()[k]=!autos()[k]; save(); toast(`Autopilot ${k==='replace'?'vehicle replacement':k==='fares'?'fares':'carriages'} ${autos()[k]?'on':'off'}.`); fleetSheet(); },
+    bulk(){ const k=b.dataset.k; if(ui.confirm!==k){ ui.confirm=k; fleetSheet(); return; } ui.confirm=null; const f=fleetPlan();
+      if(k==='biz'){ let tot=0; for(const bz of f.losingBiz){ const i=S.props.indexOf(bz); if(i<0) continue; tot+=propValue(bz); S.money+=propValue(bz); S.m.sales+=propValue(bz); S.props.splice(i,1); }
+        computeAll(); save(); toast(`Sold ${f.losingBiz.length} businesses for ${money(tot)}.`,'good'); fleetSheet(); return; }
+      const list=k==='worn'?f.worn:k==='ageing'?f.worn.concat(f.ageing):f.outdated;
+      const res=replaceMany(list); save(); toast(res.n?`Replaced ${res.n} of ${list.length} vehicles for ${money(res.spent)}.${res.n<list.length?' Stopped to keep a cash reserve.':''}`:'Not enough spare cash to replace any.', res.n?'good':'bad'); fleetSheet(); },
     copySummary(){ const st=S.stats||freshStats();
       const txt=`Lineworks: ${S.region||'random map'}, ${START_YEAR}–${dateStr(S.day)} (${playedFor()}). Peak value ${money(st.peakValue)}. ${Math.round(st.pax).toLocaleString('en-US')} passengers, ${Math.round(st.cargo).toLocaleString('en-US')} t cargo, ${st.linesOpened} lines, ${st.vehiclesBought} vehicles.${st.best?' Best line: '+st.best.route+' ('+signed(st.best.profit)+').':''}`;
       try{ navigator.clipboard.writeText(txt).then(()=>toast('Summary copied.','good'),()=>toast(txt)); }catch(e){ toast(txt); } },
@@ -1805,8 +1830,9 @@ $('bar').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!
   if(ui.sel&&ui.sel.kind===t){ setTool('inspect'); return; }
   setTool(t); });
 $('speed').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b && !S.over) setSpeed(+b.dataset.s); });
-const LAYERS=['lines','rail','road','terrain'], LNAMES={lines:'Map: lines',rail:'Map: railways',road:'Map: roads',terrain:'Map: terrain'};
-$('layer').addEventListener('click', ()=>{ ui.layer=LAYERS[(LAYERS.indexOf(ui.layer)+1)%LAYERS.length]; $('layer').textContent=LNAMES[ui.layer]; $('layer').classList.toggle('on',ui.layer!=='lines'); });
+const LNAMES={lines:'Map: clean',problems:'Map: problems',rail:'Map: railways',road:'Map: roads',terrain:'Map: terrain'};
+function setLayer(k){ ui.layer=k; $('layer').textContent=LNAMES[k]; $('layer').classList.toggle('on',k!=='lines'); if(k==='problems') refreshProblems(); }
+$('layer').addEventListener('click', ()=>{ if(ui.sel&&ui.sel.kind==='mapview'){ setTool('inspect'); return; } setTool('inspect'); ui.sel={kind:'mapview'}; mapViewSheet(); });
 
 // ---------- input ----------
 function placeAt(wx,wy){ let best=null, bd=T*1.8; for(const p of S.towns){ const d=Math.hypot(wx-(p.x*T+T/2),wy-(p.y*T+T/2))*(small(p)?1.3:1); if(d<bd){bd=d;best=p;} } return best; }
@@ -1891,6 +1917,84 @@ async function importCode(code){
   if(!loadGame(json)){ loadGame(prev); throw new Error('bad'); }
   S.savedAt=Date.now(); save();
 }
+function mapViewSheet(){
+  const pr=prefs(), opt=(k,label,desc)=>`<button class="row" data-act="setLayer" data-k="${k}"><span>${label}<small class="m">${desc}</small></span><b>${ui.layer===k?'●':''}</b></button>`;
+  const tog=(k,label)=>`<button class="row" data-act="togglePref" data-k="${k}"><span>${label}</span><b>${pr[k]?'On':'Off'}</b></button>`;
+  showSheet(`<h2>Map view${closeBtn}</h2><div class="sub">Zoom out and small details hide on their own</div>
+  <div class="rows">
+    ${opt('lines','Clean','All your lines in colour')}
+    ${opt('problems','Problems only','Losing or overloaded lines in red, the rest faded')}
+    ${opt('rail','Railways','Just your track')}
+    ${opt('road','Roads','Just your roads')}
+    ${opt('terrain','Terrain','Hills and forests, for planning')}
+  </div>
+  <h3>Show on the map</h3>
+  <div class="rows">${tog('vehicles','Vehicles')}${tog('waits','Waiting counts')}${tog('pops','Money pop-ups')}${tog('rival',RIVAL+' routes')}</div>`);
+}
+function fleetPlan(){
+  const worn=[], ageing=[], outdated=[];
+  for(const v of S.vehicles){ const m=MODELS[v.model], l=lineById(v.line), best=bestModel(l.mode,m.kind), age=vAge(v);
+    if(age>m.life) worn.push(v); else if(age>m.life*0.7) ageing.push(v);
+    if(best!==v.model) outdated.push(v); }
+  const cost=list=>list.reduce((s2,v)=>{ const l=lineById(v.line); return s2+Math.max(0,price(bestModel(l.mode,MODELS[v.model].kind))-vehValue(v)); },0);
+  const losingBiz=S.props.filter(b=>(b.lastNet??(propRent(b)-propUpkeep(b)))<0);
+  return { worn, ageing, outdated, wornCost:cost(worn), ageCost:cost(worn.concat(ageing)), upCost:cost(outdated), losingBiz, bizValue:losingBiz.reduce((s2,b)=>s2+propValue(b),0) };
+}
+function replaceMany(list){ let n=0, spent=0; const reserve=autoReserve(); for(const v of list.slice().sort((a,b)=>vAge(b)-vAge(a))){ const l=lineById(v.line), cost=price(bestModel(l.mode,MODELS[v.model].kind))-vehValue(v); if(S.money-cost<reserve) break; const before=S.money; if(replaceVehicle(v)){ n++; spent+=before-S.money; } else break; } computeAll(); return {n,spent}; }
+function fleetSheet(){
+  const f=fleetPlan(), a=autos(), run=S.vehicles.reduce((s2,v)=>s2+runCost(v),0), broken=S.vehicles.filter(v=>v.broken).length;
+  const conf=k=>ui.confirm===k;
+  const att=S.lines.map(l=>({l,d:diagnose(l)})).filter(x=>x.d.losing||x.d.reasons.some(r2=>r2.key.startsWith('under'))).sort((x,y)=>(x.d.rev-x.d.cost)-(y.d.rev-y.d.cost)).slice(0,8);
+  const fixBtn=fx=>fx?`<button class="btn sm" data-act="${fx.act}" ${fx.id!=null?`data-id="${fx.id}"`:''} ${fx.d!=null?`data-d="${fx.d}"`:''} ${fx.t?`data-t="${fx.t}"`:''}>${fx.label}</button>`:'';
+  const tog=(k,label,desc)=>`<button class="row" data-act="toggleAuto" data-k="${k}"><span>${label}<small class="m">${desc}</small></span><b class="${a[k]?'pos':''}">${a[k]?'On':'Off'}</b></button>`;
+  showSheet(`<h2>Fleet manager${closeBtn}</h2><div class="sub">${S.vehicles.length} vehicles · ${money(run)}/mo to run · ${broken} broken down</div>
+  <h3>Fix everything at once</h3>
+  <div class="rows">
+    <div class="row"><span>Worn out (past service life)</span><b class="${f.worn.length?'neg':''}">${f.worn.length}</b></div>
+    <div class="row"><span>Ageing (over 70% of life)</span><b class="${f.ageing.length?'warnc':''}">${f.ageing.length}</b></div>
+    <div class="row"><span>Older models (newer available)</span><b>${f.outdated.length}</b></div>
+    <div class="row"><span>Businesses losing money</span><b class="${f.losingBiz.length?'neg':''}">${f.losingBiz.length}</b></div>
+  </div>
+  <div class="btns" style="flex-direction:column">
+    <button class="btn pri" data-act="bulk" data-k="worn" ${!f.worn.length?'disabled':''}>${conf('worn')?'Tap again to confirm':`Replace ${f.worn.length} worn-out · ${money(f.wornCost)}`}</button>
+    <button class="btn" data-act="bulk" data-k="ageing" ${!(f.worn.length+f.ageing.length)?'disabled':''}>${conf('ageing')?'Tap again to confirm':`Replace worn and ageing (${f.worn.length+f.ageing.length}) · ${money(f.ageCost)}`}</button>
+    <button class="btn" data-act="bulk" data-k="upgrade" ${!f.outdated.length?'disabled':''}>${conf('upgrade')?'Tap again to confirm':`Upgrade ${f.outdated.length} to newest models · ${money(f.upCost)}`}</button>
+    <button class="btn warn" data-act="bulk" data-k="biz" ${!f.losingBiz.length?'disabled':''}>${conf('biz')?'Tap again to confirm':`Sell ${f.losingBiz.length} losing businesses · +${money(f.bizValue)}`}</button>
+  </div>
+  <p class="note">Replacing trades in the old vehicle and keeps any carriages. It replaces the oldest first and stops before cash drops below ${money(autoReserve())}.</p>
+  <h3>Autopilot · runs every month</h3>
+  <div class="rows">
+    ${tog('replace','Replace worn-out vehicles','Swaps them for the newest model')}
+    ${tog('fares','Adjust fares','Raises fares on full lines, lowers them on empty ones')}
+    ${tog('cars','Add carriages','Adds a carriage to overloaded railways that make money')}
+  </div>
+  <p class="note">Autopilot keeps at least ${money(autoReserve())} in cash and never borrows.</p>
+  <h3>Lines needing attention</h3>
+  ${att.length?att.map(x=>{ const top=x.d.reasons.find(r2=>!['new','air','fuel'].includes(r2.key)); return `<div class="lc"><button class="main" data-act="selLine" data-id="${x.l.id}"><span class="rt">${badge(x.l)}${route(x.l)}</span><small class="m">${x.d.losing?`<span class="neg">${signed(x.d.rev-x.d.cost)}/mo</span>`:'<span class="pos">profitable</span>'}${top?' · '+esc(top.short):''}</small></button><div class="side">${top?fixBtn(top.fix):''}</div></div>`; }).join('')
+    :'<p class="note">Every line is earning and has enough seats.</p>'}`);
+}
+const autoReserve = () => Math.max(50000*S.infl, S.vehicles.reduce((s2,v)=>s2+runCost(v),0)*2);
+function autopilot(){
+  const a=autos(); if(!a.replace&&!a.fares&&!a.cars) return;
+  const reserve=autoReserve(), log=[];
+  if(a.replace){ let n=0, spent=0;
+    for(const v of S.vehicles.filter(v=>vAge(v)>MODELS[v.model].life).sort((x,y)=>vAge(y)-vAge(x))){
+      const l=lineById(v.line), cost=price(bestModel(l.mode,MODELS[v.model].kind))-vehValue(v); if(S.money-cost<reserve) break;
+      if(replaceVehicle(v)){ n++; spent+=cost; } }
+    if(n) log.push(`replaced ${n} vehicle${n>1?'s':''} (${money(spent)})`); }
+  if(a.fares){ let up=0, down=0;
+    for(const l of S.lines){ const st=lineStats(l); if(st.load==null||!st.pass.n) continue;
+      if(st.load>=0.9 && st.pass.demand>st.pass.seats*1.15 && l.fareMult<FARE_MAX){ l.fareMult=Math.min(FARE_MAX,Math.round((l.fareMult+(st.pass.demand>st.pass.seats*2?0.3:0.1))*10)/10); up++; }
+      else if(st.load<0.4 && l.fareMult>0.7){ l.fareMult=Math.round((l.fareMult-0.1)*10)/10; down++; } }
+    if(up||down){ computeAll(); log.push(`fares ${up?'up on '+up+' line'+(up>1?'s':''):''}${up&&down?', ':''}${down?'down on '+down+' line'+(down>1?'s':''):''}`); } }
+  if(a.cars){ let n=0;
+    for(const l of S.lines){ if(l.mode!=='rail') continue; const st=lineStats(l); if(!(l.revLast>l.costLast)) continue;
+      for(const kind of ['pass','freight']){ const k=st[kind]; if(!k.n||k.demand<=k.seats*1.2) continue;
+        const v=lineVehicles(l).filter(x=>MODELS[x.model].kind===kind&&vCars(x)<CAR.max).sort((x,y)=>vCars(x)-vCars(y))[0];
+        if(v && S.money-carPrice()>=reserve){ v.cars=(v.cars||0)+1; v.paid+=carPrice(); S.money-=carPrice(); S.m.vehicles+=carPrice(); n++; } } }
+    if(n) log.push(`added ${n} carriage${n>1?'s':''}`); }
+  if(log.length){ toast('Autopilot: '+log.join('; ')+'.','good'); news('Autopilot '+log.join('; ')+'.'); }
+}
 function backupSheet(){
   const last=S.lastBackup?new Date(S.lastBackup).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'never';
   showSheet(`<h2>Backup and restore${closeBtn}</h2><div class="sub">Last backup: ${last} · company value ${money(companyValue())}</div>
@@ -1950,7 +2054,7 @@ function frame(now){
   floats.forEach(f=>f.life-=dt); floats=floats.filter(f=>f.life>0);
   draw(); hud();
   saveTimer+=dt; if(saveTimer>15){ saveTimer=0; save(); }
-  sheetTimer+=dt; if(sheetTimer>0.6){ sheetTimer=0; if(ui.sel&&ui.sel.kind==='veh') refreshSheet(); }
+  sheetTimer+=dt; if(sheetTimer>0.6){ sheetTimer=0; if(ui.sel&&ui.sel.kind==='veh') refreshSheet(); if(ui.layer==='problems') refreshProblems(); }
   requestAnimationFrame(frame);
 }
 function start(data){
