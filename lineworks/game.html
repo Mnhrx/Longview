@@ -43,12 +43,12 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .layer{border:0;border-radius:999px;padding:6px 12px;font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
 .layer.on{background:var(--ink);color:#fff}
 
-.hint{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 70px);z-index:4;
+.hint{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 112px);z-index:4;
   background:var(--ink);color:#fff;font-weight:600;border-radius:999px;padding:8px 10px 8px 16px;display:flex;gap:8px;align-items:center;
   max-width:calc(100vw - 32px);box-shadow:0 4px 14px rgba(0,0,0,.2);white-space:nowrap}
 .hint span{overflow:hidden;text-overflow:ellipsis}
 .hint button{background:rgba(255,255,255,.18);border:0;border-radius:999px;padding:4px 10px;font-weight:600;font-size:13px;color:#fff}
-.toasts{position:fixed;top:calc(env(safe-area-inset-top,0px) + 118px);left:0;right:0;z-index:4;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding-left:16px;padding-right:16px}
+.toasts{position:fixed;top:calc(env(safe-area-inset-top,0px) + 160px);left:0;right:0;z-index:4;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;padding-left:16px;padding-right:16px}
 .toast{background:var(--paper);border-left:4px solid var(--ink);border-radius:8px;padding:8px 12px;font-size:14px;max-width:420px;box-shadow:0 4px 14px rgba(20,25,30,.14);animation:tin .25s ease-out}
 .toast.bad{border-left-color:var(--stop)}.toast.good{border-left-color:var(--go)}
 @keyframes tin{from{transform:translateY(-6px);opacity:0}}
@@ -66,6 +66,11 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .card{pointer-events:auto;background:var(--paper);border-radius:14px 14px 10px 10px;width:100%;max-width:480px;max-height:56vh;overflow:auto;padding:14px 16px 16px;box-shadow:0 -4px 24px rgba(20,25,30,.16);margin-bottom:8px;animation:sin .2s ease-out;box-sizing:border-box}
 @keyframes sin{from{transform:translateY(12px);opacity:0}}
 @media (prefers-reduced-motion:reduce){.card,.toast{animation:none}}
+.card.compact{padding:10px 12px;max-height:none}
+.cpt{display:flex;align-items:center;gap:10px}
+.cpt>div{flex:1;min-width:0}
+.cpt b{display:block;font-family:var(--display);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cpt small{color:var(--muted);font-size:12.5px}
 .card h2{font-family:var(--display);font-weight:700;font-size:25px;margin:0;line-height:1.1;text-wrap:balance;display:flex;align-items:center;gap:8px}
 .card .sub{color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--display);margin-top:2px}
 .card h3{font-family:var(--display);font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:18px 0 2px;font-weight:600}
@@ -214,7 +219,10 @@ const PT = {
   warehouse:{ name:'Logistics Warehouse', base:40000,  rate:0.012, where:'industry', prodBoost:0.5 },
 };
 const UPKEEP = 0.004;
-const GOAL = 2500000, MAX_LOAN = 300000, LOAN_RATE = 0.08, MAX_STOPS = 6, RIVAL = 'Meridian Transit';
+const GOAL = 2500000, MAX_STOPS = 6, RIVAL = 'Meridian Transit';
+const LEGACY_KEY = 'lineworks-legacy';
+const BUYERS = [RIVAL, 'Harbourline Group', 'Aster Capital Partners'];
+const TYCOONS = [['Ada Okafor',45e6],['Ren Takahashi',180e6],['Mira Castell',750e6],['Jonah Fairweather',2.4e9],['Sana Idris',9e9]];
 const SEASON = [0.8,0.8,0.9,1,1,1.3,1.7,1.7,1.1,0.9,1,1.6];
 
 // ---------- helpers ----------
@@ -319,6 +327,12 @@ const airportValue = () => S.towns.filter(t=>t.airport).length * AIRPORT_COST * 
 function assetsOf(o){ return o.vehicles.reduce((s2,v)=>s2+vehValue(v),0) + o.props.reduce((s2,b)=>s2+Math.round(propPrice(b.type,o.towns[b.town])*0.9),0) + o.towns.filter(t=>t.airport).length*AIRPORT_COST*0.5*S.infl; }
 let bgActive=null, bgIndex=-1;
 const intlValue = () => (S.intl||[]).reduce((s2,rt)=>s2+rt.veh.reduce((a,v)=>a+vehValue(v),0),0);
+function loadLegacy(){ let a=null, b2=S&&S.legacy; try{ a=JSON.parse(localStorage.getItem(LEGACY_KEY)||'null'); }catch(e){}
+  const pick=[a,b2].filter(Boolean).sort((x,y)=>(y.hall||[]).length-(x.hall||[]).length)[0]; return pick||{rep:0,hall:[]}; }
+function saveLegacy(L){ if(S) S.legacy=L; try{ localStorage.setItem(LEGACY_KEY,JSON.stringify(L)); }catch(e){} }
+const repLevel = () => Math.min(10,(S.legacy?.rep)||0);
+const loanRate = () => Math.max(0.04, 0.08-0.005*repLevel());
+const maxLoan = () => 300000 + 100000*repLevel();
 const companyValue = () => S.money - S.loan + assetsOf(S) + (S.others||[]).reduce((s2,o,i)=>i===bgIndex?s2:s2+assetsOf(o),0) + (bgActive?assetsOf(bgActive):0) + intlValue();
 
 const IN_CLAUDE = !!window.claude;
@@ -525,6 +539,7 @@ function newGame(seed, world){
         towns:places, lines:[], vehicles:[], props:[], nextLine:1, nextVeh:1, nextTender:1, hist:[], m:freshMonth(), yearFares:0,
         infl:1, fareInfl:1, fuelUntil:0, tourismUntil:0, events:[], news:[], tenders:[], rival:{ value:400000, routes:[] },
         debtMonths:0, over:false, won:false, seenIntro:false, region, stats:freshStats(), others:[], intl:[], perf:{rev:0,last:0}, nextIntl:1 };
+  S.legacy=loadLegacy(); S.money=Math.round(80000*(1+0.5*repLevel()));
   hydrate();
   for(const l of plannedLines) rasterPlanned(l);
   S.planned=Array.from(planned);
@@ -554,7 +569,7 @@ let saveDirty=false, lastSave=0;
 function requestSave(){ saveDirty=true; }
 function save(){ saveDirty=false; lastSave=performance.now(); if(S) S.savedAt=Date.now(); try{ localStorage.setItem(SAVE_KEY, serialize()); }catch(e){} }
 function loadGame(raw){
-  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; S.others=S.others||[]; S.intl=S.intl||[]; S.perf=S.perf||{rev:0,last:0}; S.nextIntl=S.nextIntl||1; hydrate(); renderStatic(); return true; }
+  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; S.legacy=loadLegacy(); saveLegacy(S.legacy); S.others=S.others||[]; S.intl=S.intl||[]; S.perf=S.perf||{rev:0,last:0}; S.nextIntl=S.nextIntl||1; hydrate(); renderStatic(); return true; }
   catch(e){ return false; }
 }
 
@@ -942,7 +957,7 @@ function regionMonth(isActive){
   monthlyTenders(r); autopilot(); computeDemand();
 }
 function globalMonth(){
-  S.m.interest=S.loan*LOAN_RATE/12; S.money-=S.m.interest;
+  S.m.interest=S.loan*loanRate()/12; S.money-=S.m.interest;
   S.hist.push({...S.m, cash:S.money, value:companyValue()}); if(S.hist.length>36) S.hist.shift(); S.m=freshMonth();
   ensureStats(); if(monthIdx()===0) S.stats.years.push({y:year(), v:Math.round(companyValue()), c:Math.round(S.money)});
   if(monthIdx()===0){
@@ -1074,9 +1089,9 @@ function intlSheet(rt){
   </div>
   <p class="note">International trips are long, so fares are high. Travellers also count as visitors for hotels and resorts at both ends.</p>
   <h3>${rt.mode==='air'?'Planes':'Trains'} (${rt.veh.length})</h3>
-  <div class="rows">${rt.veh.map((v,i)=>{ const m=MODELS[v.model], age=vAge(v); return `<div class="row"><span style="color:var(--ink)">${m.name}${v.cars?` +${v.cars} cars`:''}<small class="m"><span class="${age>m.life?'neg':''}">${age.toFixed(1)} of ${m.life} yrs</span> · worth ${money(vehValue(v))}</small></span><span class="mini">${rt.mode==='rail'?`<button class="txt" data-act="intlCar" data-id="${rt.id}" data-v="${i}" ${(v.cars||0)>=CAR.max||S.money<carPrice()?'disabled':''}>+car</button>`:''}<button class="txt" data-act="intlSell" data-id="${rt.id}" data-v="${i}">Sell</button></span></div>`; }).join('')}</div>
+  <div class="rows">${rt.veh.map((v,i)=>{ const m=MODELS[v.model], age=vAge(v); return `<div class="row"><span style="color:var(--ink)">${m.name}${v.cars?` +${v.cars} cars`:''}<small class="m"><span class="${age>m.life?'neg':''}">${age.toFixed(1)} of ${m.life} yrs</span> · worth ${money(vehValue(v))}</small></span><span class="mini">${rt.mode==='rail'?`<button class="txt" data-act="intlCar" data-id="${rt.id}" data-v="${i}" ${(v.cars||0)>=CAR.max||S.money<carPrice()?'disabled':''} ${(v.cars||0)>=CAR.max?'':`data-cost="${carPrice()}"`}>+car</button>`:''}<button class="txt" data-act="intlSell" data-id="${rt.id}" data-v="${i}">Sell</button></span></div>`; }).join('')}</div>
   <h3>Add a ${rt.mode==='air'?'plane':'train'}</h3>
-  ${models.map(([k,m])=>`<div class="veh"><div class="nm">${m.name}</div><div class="sp">${m.cap} seats · speed ${m.speed} · ${money(m.run*S.infl)}/mo</div><button class="btn pri" data-act="intlAdd" data-id="${rt.id}" data-model="${k}" ${S.money<price(k)?'disabled':''}>${money(price(k))}</button></div>`).join('')}
+  ${models.map(([k,m])=>`<div class="veh"><div class="nm">${m.name}</div><div class="sp">${m.cap} seats · speed ${m.speed} · ${money(m.run*S.infl)}/mo</div><button class="btn pri" data-act="intlAdd" data-id="${rt.id}" data-model="${k}" ${S.money<price(k)?'disabled':''} data-cost="${price(k)}">${money(price(k))}</button></div>`).join('')}
   <div class="btns"><button class="btn warn" data-act="closeIntl" data-id="${rt.id}">${conf?'Tap again: sell all and close':'Close route'}</button><button class="btn" data-act="regions">All regions</button></div>`);
 }
 function intlSection(p){
@@ -1086,7 +1101,7 @@ function intlSection(p){
   const cands=ui.intlFor===p.id?intlCandidates(p).filter(c=>!has(c)):null;
   return `<h3>International</h3>
   ${mine.map(rt=>{ const o=rt.a.r===S.region?townOf(rt.b.r,rt.b.t):townOf(rt.a.r,rt.a.t), oreg=rt.a.r===S.region?rt.b.r:rt.a.r; return `<button class="row" data-act="selIntl" data-id="${rt.id}"><span>${rt.mode==='air'?'✈':'🚆'} ${esc(o?.name||'?')}, ${esc(oreg)}</span>${pl((rt.revLast||0)-(rt.costLast||0))}</button>`; }).join('')}
-  ${cands?(cands.length?cands.slice(0,10).map((c,i)=>{ const m=bestModel(c.mode,'pass'); return `<div class="lc"><div class="main"><span class="rt">${c.mode==='air'?'✈':'🚆'} ${esc(c.t.name)}, ${esc(c.reg)}</span><small class="m">${Math.round(c.km)} km${c.via?' · via '+esc(c.via):''}</small></div><div class="side"><button class="btn pri sm" data-act="intlStart" data-id="${p.id}" data-i="${i}" ${S.money<price(m)?'disabled':''}>${MODELS[m].name} ${money(price(m))}</button></div></div>`; }).join('')
+  ${cands?(cands.length?cands.slice(0,10).map((c,i)=>{ const m=bestModel(c.mode,'pass'); return `<div class="lc"><div class="main"><span class="rt">${c.mode==='air'?'✈':'🚆'} ${esc(c.t.name)}, ${esc(c.reg)}</span><small class="m">${Math.round(c.km)} km${c.via?' · via '+esc(c.via):''}</small></div><div class="side"><button class="btn pri sm" data-act="intlStart" data-id="${p.id}" data-i="${i}" ${S.money<price(m)?'disabled':''} data-cost="${price(m)}">${MODELS[m].name} ${money(price(m))}</button></div></div>`; }).join('')
       :`<p class="note">No links possible yet. Build an airport here and in a town in another region, or lay track to a border town on both maps.</p>`)
     :`<div class="btns"><button class="btn" data-act="intlFind" data-id="${p.id}">Link to another region…</button></div>`}`;
 }
@@ -1336,7 +1351,7 @@ function setHint(text){ if(text){ $('hintText').textContent=text; $('hint').hidd
 function lineHint(){ setHint(ui.stops.length===0 ? 'Tap the first stop' : ui.stops.length<MAX_STOPS ? `Tap stop ${ui.stops.length+1}` : 'Line is full'); }
 function markTool(t){ document.querySelectorAll('#bar button').forEach(b=>b.classList.toggle('on',b.dataset.tool===t)); }
 function setTool(t){
-  ui.pickA=null; ui.plan=null; ui.sel=null; ui.stops=[]; ui.editLine=null; ui.prefMode=null; ui.confirm=null;
+  ui.pickA=null; ui.plan=null; ui.sel=null; ui.stops=[]; ui.editLine=null; ui.prefMode=null; ui.confirm=null; ui.planOpen=false;
   if(PANELS.includes(t)){ ui.tool='inspect'; markTool(t); setHint(null); ui.sel={kind:t}; refreshSheet(); return; }
   ui.tool=t; markTool(t==='inspect'?null:(t==='line'?'lines':'build')); hideSheet();
   if(t==='road') setHint('Tap the first place for the road');
@@ -1348,7 +1363,8 @@ function setTool(t){
 
 // ---------- sheets ----------
 function sheetKey(){ return ui.sel ? ui.sel.kind+':'+(ui.sel.id??'') : ui.plan ? 'plan' : 'stops'; }
-function showSheet(html){ const card=$('card'), keep=card.scrollTop, same=card.dataset.k===sheetKey(); card.innerHTML=html; $('sheet').hidden=false; card.dataset.k=sheetKey(); if(same) card.scrollTop=keep; }
+function showSheet(html,compact){ const card=$('card'); card.classList.toggle('compact',!!compact); const keep=card.scrollTop, same=card.dataset.k===sheetKey(); card.innerHTML=html; $('sheet').hidden=false; card.dataset.k=sheetKey(); if(same) card.scrollTop=keep; }
+function refreshCosts(){ for(const b of $('card').querySelectorAll('[data-cost]')){ const d=S.money<+b.dataset.cost; if(b.disabled!==d) b.disabled=d; } }
 function hideSheet(){ $('sheet').hidden=true; $('card').dataset.k=''; }
 const closeBtn='<button class="x" data-act="close" aria-label="Close">×</button>';
 const badge=l=>`<span class="badge" style="background:${l.color}">${l.id}</span>`;
@@ -1457,6 +1473,9 @@ function refreshSheet(){
   else if(s.kind==='airport') airportSheet(P(s.id));
   else if(s.kind==='away') awaySheet();
   else if(s.kind==='backup') backupSheet();
+  else if(s.kind==='sell') sellSheet();
+  else if(s.kind==='hall') hallSheet();
+  else if(s.kind==='sold') soldSheet(ui.soldInfo);
   else if(s.kind==='mapview') mapViewSheet();
   else if(s.kind==='regions') regionsSheet();
   else if(s.kind==='intl'){ const rt=(S.intl||[]).find(x=>x.id===s.id); if(rt) intlSheet(rt); else regionsSheet(); }
@@ -1492,7 +1511,7 @@ function placeSheet(p){
   ${lines.length?lines.map(l=>{ const w=Math.floor(waitAtFor(p,l)), best=bestModel(l.mode,'pass');
     return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span>
       <small class="m">${modeName(l.mode)} · ${lineVehicles(l).length} ${vehWord(l.mode,lineVehicles(l).length)} · <b class="${w>40?'warnc':''}">${w} waiting here</b>${lineChips(l)}</small></button>
-      <div class="side"><div class="mini"><button class="add" data-act="addBest" data-id="${l.id}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''}>+</button></div></div></div>`; }).join('')
+      <div class="side"><div class="mini"><button class="add" data-act="addBest" data-id="${l.id}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''} data-cost="${price(best)}">+</button></div></div></div>`; }).join('')
     :'<p class="note">No lines stop here yet. Places without service barely grow.</p>'}
   ${rn.length?`<h3>Your railway reaches</h3>${rn.map(id=>`<div class="lc"><div class="main"><span class="rt">${esc(P(id).name)}</span><small class="m">Track built, no train line yet</small></div><div class="side"><button class="btn pri sm" data-act="trainTo" data-id="${p.id}" data-b="${id}">Add train</button></div></div>`).join('')}`:''}
   ${intlSection(p)}
@@ -1529,7 +1548,7 @@ function industrySheet(p){
   <p class="note">${p.type==='factory'?'Factories make some goods on their own, and far more from delivered ore (each tonne of ore becomes 1.2 t of goods). Goods pay 50% more per tonne than raw cargo.':`${CARGO[good]} sells to ${good==='ore'?'factories':'towns and villages'}.`} Output grows when you ship more than half of it. Nearest buyers: ${acc.map(q=>esc(q.name)).join(', ')||'none'}.</p>
   <h3>Lines stopping here</h3>
   ${lines.length?lines.map(l=>{ const best=bestModel(l.mode,'freight'); return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span><small class="m">${modeName(l.mode)} · ${Math.floor(waitAtFor(p,l))} t waiting${lineChips(l)}</small></button>
-    <div class="side">${best?`<div class="mini"><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''}>+</button></div>`:''}</div></div>`; }).join('')
+    <div class="side">${best?`<div class="mini"><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''} data-cost="${price(best)}">+</button></div>`:''}</div></div>`; }).join('')
     :'<p class="note">No freight line yet. Make a line from here to a buyer and add a truck or freight train.</p>'}
   <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New freight line from here</button></div>
   ${propSection(p)}`);
@@ -1568,7 +1587,7 @@ function propSection(p){
     const extra=pt.boost?` Draws ${Math.round(pt.boost*100)}% more travellers here.`:pt.prodBoost?' Raises output 50%.':pt.visitors?' Earns more with more visitors.':'';
     return `<div class="veh"><div class="nm">${pt.name}</div>
       <div class="sp">${locked?(pt.year&&year()<pt.year?`Available from ${pt.year}`:`Needs ${pt.minPop.toLocaleString('en-US')}+ people`):`About ${signed(est)}/mo now.${extra}`}</div>
-      <button class="btn pri" data-act="buyProp" data-type="${k}" data-id="${p.id}" ${locked||S.money<pr?'disabled':''}>${money(pr)}</button></div>`; }).join('');
+      <button class="btn pri" data-act="buyProp" data-type="${k}" data-id="${p.id}" ${locked||S.money<pr?'disabled':''} ${locked?'':`data-cost="${pr}"`}>${money(pr)}</button></div>`; }).join('');
   return `<h3>Businesses · ${mine.length}/${maxProps(p)}</h3>${owned}${buy}`;
 }
 function vehSheet(v){
@@ -1586,9 +1605,9 @@ function vehSheet(v){
   </div>
   ${m.mode==='rail'?`<h3>Carriages · ${vCars(v)}/${CAR.max}</h3>
   <p class="note">Each carriage adds ${m.kind==='freight'?CAR.tonnes+' t':CAR.seats+' seats'} for ${money(carPrice())} and ${money(CAR.run*S.infl)}/mo, much cheaper than a new train. Trains slow down ${Math.round(CAR.slow*100)}% per carriage.</p>
-  <div class="btns"><button class="btn pri" data-act="addCar" data-id="${v.id}" ${vCars(v)>=CAR.max||S.money<carPrice()?'disabled':''}>Add carriage (${money(carPrice())})</button><button class="btn" data-act="removeCar" data-id="${v.id}" ${vCars(v)<=0?'disabled':''}>Remove one</button></div>`:''}
+  <div class="btns"><button class="btn pri" data-act="addCar" data-id="${v.id}" ${vCars(v)>=CAR.max||S.money<carPrice()?'disabled':''} ${vCars(v)>=CAR.max?'':`data-cost="${carPrice()}"`}>Add carriage (${money(carPrice())})</button><button class="btn" data-act="removeCar" data-id="${v.id}" ${vCars(v)<=0?'disabled':''}>Remove one</button></div>`:''}
   <div class="btns">
-    ${(old||upgrade)?`<button class="btn pri" data-act="replace" data-id="${v.id}" ${S.money<repCost?'disabled':''}>Replace with ${MODELS[best].name} (${money(repCost)})</button>`:''}
+    ${(old||upgrade)?`<button class="btn pri" data-act="replace" data-id="${v.id}" ${S.money<repCost?'disabled':''} data-cost="${repCost}">Replace with ${MODELS[best].name} (${money(repCost)})</button>`:''}
     <button class="btn" data-act="moveVeh" data-id="${v.id}">Move to another line</button>
   </div>
   <div class="btns"><button class="btn" data-act="selLine" data-id="${l.id}">Back to line</button><button class="btn warn" data-act="sell" data-id="${v.id}">Sell ${money(vehValue(v))}</button></div>`);
@@ -1598,7 +1617,7 @@ function modelRows(l, kinds){
     const list=Object.entries(MODELS).filter(([,m])=>m.mode===l.mode&&m.kind===kind&&m.year<=year());
     if(!list.length) return '';
     return `<h3>Add ${kind==='freight'?'freight':'passenger'} ${l.mode==='air'?'plane':l.mode==='rail'?'train':'vehicle'}</h3>`+list.map(([k,m])=>`<div class="veh"><div class="nm">${m.name}</div><div class="sp">${m.cap}${kind==='freight'?' t':' seats'} · speed ${m.speed} · ${money(m.run*S.infl)}/mo to run</div>
-      <button class="btn pri" data-act="addModel" data-id="${l.id}" data-model="${k}" ${S.money<price(k)?'disabled':''}>${money(price(k))}</button></div>`).join('');
+      <button class="btn pri" data-act="addModel" data-id="${l.id}" data-model="${k}" ${S.money<price(k)?'disabled':''} data-cost="${price(k)}">${money(price(k))}</button></div>`).join('');
   }).join('');
 }
 function lineKinds(stops){ const k=[]; if(stops.filter(s=>isPax(P(s))).length>=2) k.push('pass'); if(stops.some(s=>P(s).kind==='industry')) k.push('freight'); return k; }
@@ -1618,7 +1637,7 @@ function lineSheet(l){
   <h3>${vehWord(l.mode,2).replace(/^./,c=>c.toUpperCase())} (${vs.length})</h3>
   <div class="rows">${vs.map(v=>{ const m=MODELS[v.model], age=vAge(v); return `<div class="row"><button class="main" style="background:none;border:0;padding:0;text-align:left;font:inherit;color:var(--ink);min-width:0" data-act="selVeh" data-id="${v.id}">${m.name}${vCars(v)?` +${vCars(v)} car${vCars(v)>1?'s':''}`:''}<small class="m">${aboard(v)}/${vCap(v)} aboard · <span class="${age>m.life?'neg':''}">${age.toFixed(1)} yrs</span> · ${signed(v.profitYear)} this year</small></button>
     <span class="mini"><button class="txt" data-act="moveVeh" data-id="${v.id}">Move</button><button class="txt" data-act="sell" data-id="${v.id}">Sell</button></span></div>`; }).join('')}</div>
-  ${l.mode==='rail'&&vs.some(v=>vCars(v)<CAR.max)?`<div class="btns"><button class="btn pri" data-act="addCarLine" data-id="${l.id}" ${S.money<carPrice()?'disabled':''}>Add a carriage (${money(carPrice())}) · cheapest way to add seats</button></div>`:''}
+  ${l.mode==='rail'&&vs.some(v=>vCars(v)<CAR.max)?`<div class="btns"><button class="btn pri" data-act="addCarLine" data-id="${l.id}" ${S.money<carPrice()?'disabled':''} data-cost="${carPrice()}">Add a carriage (${money(carPrice())}) · cheapest way to add seats</button></div>`:''}
   ${modelRows(l, lineKinds(l.stops))}
   <h3>Change this line</h3>
   <div class="btns"><button class="btn" data-act="editRoute" data-id="${l.id}">Edit stops</button>
@@ -1631,7 +1650,7 @@ function linesSheet(){
   ${order.length?order.map(l=>{ const vs=lineVehicles(l), kinds=lineKinds(l.stops), best=bestModel(l.mode,kinds[0]||'pass');
     return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span>
       <small class="m">${modeName(l.mode)} · ${vs.length} ${vehWord(l.mode,vs.length)} · ${Math.floor(lineWaiting(l))} waiting${lineChips(l)}</small></button>
-      <div class="side">${pl(l.profitYear)}<div class="mini"><button data-act="removeOne" data-id="${l.id}" aria-label="Sell one vehicle">−</button><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''}>+</button></div></div></div>`; }).join('')
+      <div class="side">${pl(l.profitYear)}<div class="mini"><button data-act="removeOne" data-id="${l.id}" aria-label="Sell one vehicle">−</button><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''} data-cost="${price(best)}">+</button></div></div></div>`; }).join('')
     :'<p class="note">No lines yet. Build a road or railway first, then tap New line and pick 2 to 6 stops in order.</p>'}
   <p class="note">Weakest lines first. + adds the newest model, − sells the oldest vehicle.</p>`);
 }
@@ -1652,7 +1671,7 @@ function airportSheet(t){
   <p>Planes need no track and fly far, fast. People prefer them for long trips. You need an airport at every stop of an air line.</p>
   <div class="rows"><div class="row"><span>Build cost</span><b>${money(cost)}</b></div><div class="row"><span>Upkeep</span><b>${money(AIRPORT_UPKEEP*S.infl)}/mo</b></div>
   <div class="row"><span>Your other airports</span><b>${others.length?others.map(o=>esc(o.name)).join(', '):'none'}</b></div></div>
-  <div class="btns"><button class="btn pri" data-act="buildAirport" data-id="${t.id}" ${!ok||S.money<cost?'disabled':''}>${!ok?'Town too small':S.money<cost?'Not enough cash':'Build airport'}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
+  <div class="btns"><button class="btn pri" data-act="buildAirport" data-id="${t.id}" ${!ok||S.money<cost?'disabled':''} ${!ok?'':`data-cost="${cost}"`}>${!ok?'Town too small':'Build airport'}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
 }
 function businessSheet(){
   const portfolio=S.props.map((b,i)=>{ const n=b.lastNet??(propRent(b)-propUpkeep(b)), tot=propPL(b);
@@ -1729,12 +1748,13 @@ function companySheet(){
     <div class="row"><span>Net change</span>${pl(net)}</div>
   </div>
   <h3>Money</h3>
-  <div class="rows"><div class="row"><span>Cash</span><b>${money(S.money)}</b></div><div class="row"><span>Loan (${LOAN_RATE*100}% a year)</span><b>${money(S.loan)}</b></div></div>
-  <div class="btns"><button class="btn" data-act="borrow" ${S.loan>=MAX_LOAN?'disabled':''}>Borrow $25,000</button>
+  <div class="rows"><div class="row"><span>Cash</span><b>${money(S.money)}</b></div><div class="row"><span>Loan (${(loanRate()*100).toFixed(1)}% a year)</span><b>${money(S.loan)}</b></div></div>
+  <div class="btns"><button class="btn" data-act="borrow" ${S.loan>=maxLoan()?'disabled':''}>Borrow $25,000</button>
   <button class="btn" data-act="repay" ${S.loan<=0||S.money<25000?'disabled':''}>Repay $25,000</button></div>
   <h3>Career</h3>${statsGrid(false)}
   ${S.news.length?`<h3>News</h3><div class="rows">${S.news.map(n=>`<div class="row"><span>${esc(n)}</span><b></b></div>`).join('')}</div>`:''}
   <div class="btns"><button class="btn" data-act="fleet">Fleet manager and autopilot</button></div>
+  <div class="btns"><button class="btn" data-act="sellCo">Sell the company</button><button class="btn" data-act="hall">Hall of fame · level ${repLevel()}</button></div>
   <div class="btns"><button class="btn pri" data-act="backup">Backup and restore</button><button class="btn" data-act="newgame">New map or real place</button></div>
   <p class="note">Last backup: ${S.lastBackup?new Date(S.lastBackup).toLocaleDateString():'<span class="neg">never</span>'}. Back up now and then so you never lose your company.</p>`);
 }
@@ -1754,14 +1774,19 @@ function buildPlanSheet(){
     ${p.bridges?`<div class="row"><span>Bridge tiles</span><b>${p.bridges}</b></div>`:''}
     <div class="row"><span>Construction cost</span><b>${money(p.cost)}</b></div>
   </div>
-  <div class="btns"><button class="btn pri" data-act="build" ${S.money<p.cost?'disabled':''}>${S.money<p.cost?'Not enough cash':'Build '+what}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
+  <div class="btns"><button class="btn pri" data-act="build" ${S.money<p.cost?'disabled':''} data-cost="${p.cost}">${'Build '+what}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
 }
 function linePlanSheet(){
   const stops=ui.stops, names=stops.map(s=>esc(P(s).name)).join(' → ');
   const el=ui.editLine!=null?lineById(ui.editLine):null;
+  if(!ui.planOpen){
+    showSheet(`<div class="cpt"><div><b>${names||'No stops yet'}</b><small>${stops.length} stop${stops.length===1?'':'s'} · ${stops.length<MAX_STOPS?'tap more places to add':'line is full'}</small></div>
+    <button class="btn pri sm" data-act="planOpen" ${stops.length<2?'disabled':''}>${el?'Review ▲':'Choose vehicle ▲'}</button></div>`, true);
+    return;
+  }
   if(el){
     const few=stops.length<2, lp=few?{fail:-1}:buildLinePath(el.mode,stops), dup=few?null:S.lines.find(l=>l.id!==el.id&&l.mode===el.mode&&sameStops(l.stops,stops));
-    showSheet(`<h2>${badge(el)} Edit stops${closeBtn}</h2><div class="sub">${names||'No stops yet'}</div>
+    showSheet(`<h2>${badge(el)} Edit stops<button class="btn sm" data-act="planClose" style="margin-left:auto">▼ Map</button>${closeBtn}</h2><div class="sub">${names||'No stops yet'}</div>
     <p class="note">Tap places to add stops, tap the last stop to remove it, or use Undo. Vehicles restart from the first stop.</p>
     ${few?'<p class="warnc">A line needs at least 2 stops.</p>':!lp.pts?gapMsg(el.mode,stops,lp):dup?`<p class="neg">Line ${dup.id} already runs these stops.</p>`:''}
     <div class="btns"><button class="btn pri" data-act="saveRoute" ${few||!lp.pts||dup?'disabled':''}>Save route</button><button class="btn" data-act="selLine" data-id="${el.id}">Cancel</button></div>`);
@@ -1777,11 +1802,11 @@ function linePlanSheet(){
       const locked=year()<m.year, days=Math.round((len/m.speed+stops.length*DWELL[mode])*2), pr=price(k);
       return `<div class="veh"><div class="nm">${m.name}${m.kind==='freight'?' <span class="chip info">freight</span>':''}</div>
         <div class="sp">${locked?`Available from ${m.year}`:`${m.cap}${m.kind==='freight'?' t':' seats'} · round trip ${days} days · ${money(m.run*S.infl)}/mo`}</div>
-        <button class="btn pri" data-act="buy" data-mode="${mode}" data-model="${k}" ${locked||S.money<pr?'disabled':''}>${money(pr)}</button></div>`; }).join('');
+        <button class="btn pri" data-act="buy" data-mode="${mode}" data-model="${k}" ${locked||S.money<pr?'disabled':''} ${locked?'':`data-cost="${pr}"`}>${money(pr)}</button></div>`; }).join('');
   };
   let order=['road','rail','air']; if(ui.prefMode) order=[ui.prefMode,...order.filter(m=>m!==ui.prefMode)];
   if(!stops.every(s=>P(s).kind==='town')||!kinds.includes('pass')) order=order.filter(m=>m!=='air');
-  showSheet(`<h2>New line${closeBtn}</h2><div class="sub">${names}</div>
+  showSheet(`<h2>New line<button class="btn sm" data-act="planClose" style="margin-left:auto">▼ Map</button>${closeBtn}</h2><div class="sub">${names}</div>
   <p class="note">${stops.length<MAX_STOPS?'Tap more places to add stops.':'Maximum stops reached.'}${kinds.includes('freight')?' Freight only earns between producers and buyers.':''}</p>
   ${kinds.length?order.map(sec).join(''):'<p class="warnc">Add a town, attraction or industry so this line has something to carry.</p>'}`);
 }
@@ -1934,7 +1959,7 @@ $('card').addEventListener('click', e=>{
     close(){ if(ui.sel&&ui.sel.kind==='intro'){ S.seenIntro=true; save(); }
       if(ui.sel&&ui.sel.kind==='away'){ ui.away=null; setTool('inspect'); return; }
       if(ui.sel&&ui.sel.kind==='loading') ui.mapCtl?.abort();
-      if(S.over){ ui.sel={kind:'over'}; overSheet(); return; }
+      if(S.over){ if(S.sold){ ui.soldInfo=S.sold; ui.sel={kind:'sold'}; soldSheet(S.sold); } else { ui.sel={kind:'over'}; overSheet(); } return; }
       if(ui.editLine!=null) return goLine(ui.editLine);
       setTool(ui.tool==='airport'?'inspect':ui.tool); },
     cancel(){ A.close(); },
@@ -1947,7 +1972,7 @@ $('card').addEventListener('click', e=>{
     selVeh(){ ui.sel={kind:'veh',id}; refreshSheet(); },
     selTown(){ ui.sel={kind:'town',id}; const t=P(id); cam.x=t.x*T+T/2; cam.y=t.y*T+T/2; clampCam(); refreshSheet(); },
     selTender(){ ui.sel={kind:'tender',id}; refreshSheet(); },
-    trainTo(){ setTool('line'); ui.stops=[id,+b.dataset.b]; ui.prefMode='rail'; lineHint(); linePlanSheet(); },
+    trainTo(){ setTool('line'); ui.stops=[id,+b.dataset.b]; ui.prefMode='rail'; ui.planOpen=true; lineHint(); linePlanSheet(); },
     airportAt(){ setTool('inspect'); ui.sel={kind:'airport',id}; refreshSheet(); },
     buildAirport(){ const t=P(id), cost=Math.round(AIRPORT_COST*S.infl); if(t.airport||S.money<cost||t.pop<AIRPORT_MINPOP) return;
       t.airport=true; S.money-=cost; S.m.build+=cost; S.stats.airports++; save(); toast(`${t.name} Airport opened.`,'good'); refreshSheet(); },
@@ -1961,7 +1986,7 @@ $('card').addEventListener('click', e=>{
       ui.confirm=null; let tot=0; for(const v of lineVehicles(l)) tot+=sellVehicle(v);
       toast(`Line ${id} closed. Vehicles sold for ${money(tot)}.`); save(); ui.sel={kind:'lines'}; markTool('lines'); refreshSheet(); },
     fare(){ const l=lineById(id); if(!l) return; l.fareMult=clamp(Math.round((l.fareMult+(l.fareMult>=1.6||(+b.dataset.d>0&&l.fareMult>=1.5)?0.2:0.1)*(+b.dataset.d))*10)/10,0.6,FARE_MAX); computeAll(); save(); refreshSheet(); },
-    editRoute(){ const l=lineById(id); if(!l) return; setTool('line'); ui.editLine=id; ui.stops=l.stops.slice(); lineHint(); linePlanSheet(); },
+    editRoute(){ const l=lineById(id); if(!l) return; setTool('line'); ui.editLine=id; ui.stops=l.stops.slice(); ui.planOpen=true; lineHint(); linePlanSheet(); },
     saveRoute(){ const l=lineById(ui.editLine); if(!l||ui.stops.length<2) return; const lp=buildLinePath(l.mode,ui.stops); if(!lp.pts) return;
       l.stops=ui.stops.slice(); linePaths.set(l.id,lp); for(const v of lineVehicles(l)){ v.pos=0; v.dir=1; v.next=0; v.wait=0; v.cargo=[]; }
       buildOverlay(); computeAll(); save(); toast(`Line ${l.id} now runs ${l.stops.length} stops.`,'good'); goLine(l.id); },
@@ -1977,7 +2002,7 @@ $('card').addEventListener('click', e=>{
     sell(){ const v=S.vehicles.find(x=>x.id===id); if(!v) return; const lid=v.line, val=sellVehicle(v); toast(`Sold for ${money(val)}.`);
       ui.sel=lineById(lid)?{kind:'line',id:lid}:{kind:'lines'}; save(); refreshSheet(); },
     build_(){},
-    planLine(){ const p=ui.plan; setTool('line'); ui.stops=[p.a,p.b]; ui.prefMode=p.mode; lineHint(); linePlanSheet(); },
+    planLine(){ const p=ui.plan; setTool('line'); ui.stops=[p.a,p.b]; ui.prefMode=p.mode; ui.planOpen=true; lineHint(); linePlanSheet(); },
     planGap(){ const mode=b.dataset.mode, a=P(+b.dataset.a), c=P(+b.dataset.b), back=ui.stops.slice(), re=ui.editLine;
       const plan=planBuild(mode,a,c); if(!plan){ toast('No way to build there.','bad'); return; }
       ui.tool=mode; markTool('build'); ui.stops=[]; ui.editLine=null; ui.plan={kind:'build',...plan,returnStops:back,returnEdit:re}; setHint(null); buildPlanSheet(); },
@@ -1992,8 +2017,10 @@ $('card').addEventListener('click', e=>{
     sellProp(){ const p=S.props[id]; if(!p) return; const val=propValue(p), tot=propPL(p); S.money+=val; S.m.sales+=val; S.props.splice(id,1);
       computeAll(); save(); toast(`Sold for ${money(val)}. Overall ${tot>=0?'gain':'loss'} of ${money(Math.abs(tot))}.`, tot>=0?'good':'bad'); refreshSheet(); },
     bid(){ const t=S.tenders.find(x=>x.id===id); if(!t||t.state!=='open') return; t.myBid=+b.dataset.v; save(); updateDots(); toast(`Bid placed: ${Math.round(t.myBid*100)}%.`); refreshSheet(); },
-    tenderLine(){ const t=S.tenders.find(x=>x.id===id); if(!t) return; setTool('line'); ui.stops=[t.a,t.b]; ui.prefMode=t.mode==='rail'?'rail':null; lineHint(); linePlanSheet(); },
+    tenderLine(){ const t=S.tenders.find(x=>x.id===id); if(!t) return; setTool('line'); ui.stops=[t.a,t.b]; ui.prefMode=t.mode==='rail'?'rail':null; ui.planOpen=true; lineHint(); linePlanSheet(); },
     setLayer(){ setLayer(b.dataset.k); mapViewSheet(); },
+    planOpen(){ ui.planOpen=true; linePlanSheet(); },
+    planClose(){ ui.planOpen=false; linePlanSheet(); },
     regions(){ setTool('inspect'); ui.sel={kind:'regions'}; regionsSheet(); },
     switchRegion(){ switchRegion(b.dataset.k); },
     openPreset(){ const pr=PRESETS[b.dataset.k]; if(!pr||S.money<REGION_COST) return; let h=0; for(const ch of b.dataset.k) h=(h*31+ch.charCodeAt(0))|0;
@@ -2017,6 +2044,14 @@ $('card').addEventListener('click', e=>{
         computeAll(); save(); toast(`Sold ${f.losingBiz.length} businesses for ${money(tot)}.`,'good'); fleetSheet(); return; }
       const list=k==='worn'?f.worn:k==='ageing'?f.worn.concat(f.ageing):f.outdated;
       const res=replaceMany(list); save(); toast(res.n?`Replaced ${res.n} of ${list.length} vehicles for ${money(res.spent)}.${res.n<list.length?' Stopped to keep a cash reserve.':''}`:'Not enough spare cash to replace any.', res.n?'good':'bad'); fleetSheet(); },
+    sellCo(){ setTool('inspect'); markTool('company'); ui.confirm=null; ui.sel={kind:'sell'}; sellSheet(); },
+    hall(){ ui.sel={kind:'hall'}; hallSheet(); },
+    newBids(){ getBids(true); sellSheet(); },
+    acceptBid(){ const i=+b.dataset.i; if(ui.confirm!=='bid'+i){ ui.confirm='bid'+i; sellSheet(); return; } ui.confirm=null;
+      const x=S.bids.list[i]; if(!x) return; ensureStats();
+      const h={ regions:allRegions().map(o=>o.region||'Random map').join(' + '), from:START_YEAR, to:year(), peak:Math.max(S.stats.peakValue||0,companyValue()), sale:x.offer, buyer:x.name, at:Date.now() };
+      const L=loadLegacy(); L.hall=(L.hall||[]).concat([h]); L.rep=(L.rep||0)+1+(x.offer>=1e8?1:0)+(x.offer>=1e9?1:0); saveLegacy(L);
+      S.over=true; S.sold=h; setSpeed(0); ui.soldInfo=h; save(); ui.sel={kind:'sold'}; soldSheet(h); },
     copySummary(){ const st=S.stats||freshStats();
       const txt=`Lineworks: ${S.region||'random map'}, ${START_YEAR}–${dateStr(S.day)} (${playedFor()}). Peak value ${money(st.peakValue)}. ${Math.round(st.pax).toLocaleString('en-US')} passengers, ${Math.round(st.cargo).toLocaleString('en-US')} t cargo, ${st.linesOpened} lines, ${st.vehiclesBought} vehicles.${st.best?' Best line: '+st.best.route+' ('+signed(st.best.profit)+').':''}`;
       try{ navigator.clipboard.writeText(txt).then(()=>toast('Summary copied.','good'),()=>toast(txt)); }catch(e){ toast(txt); } },
@@ -2031,7 +2066,7 @@ $('card').addEventListener('click', e=>{
     restore(){ const code=$('rcode')?.value||''; if(!code.trim()){ $('rcode')?.focus(); return; }
       if(ui.confirm!=='restore'){ ui.confirm='restore'; const keep=code; backupSheet(); $('rcode').value=keep; return; }
       ui.confirm=null; doRestore(code); },
-    borrow(){ if(S.loan<MAX_LOAN){ S.loan+=25000; S.money+=25000; save(); } companySheet(); },
+    borrow(){ if(S.loan<maxLoan()){ S.loan+=25000; S.money+=25000; save(); } companySheet(); },
     repay(){ if(S.loan>0&&S.money>=25000){ S.loan-=25000; S.money-=25000; save(); } companySheet(); },
     newgame(){ if(ui.sel&&ui.sel.kind==='intro') S.seenIntro=true; ui.sel={kind:'map'}; mapSheet(); setTimeout(()=>$('place')?.focus(),50); },
     randomMap(){ newGame((Math.random()*1e9)|0); save(); setTool('inspect'); centerMap(); setSpeed(1); updateDots(); updateRegionBtn(); ui.sel={kind:'intro'}; introSheet(); },
@@ -2046,7 +2081,7 @@ $('card').addEventListener('click', e=>{
     S.money-=p.cost; S.m.build+=p.cost; renderStatic(); save();
     toast(`${p.mode==='rail'?'Railway':'Road'} ${P(p.a).name} – ${P(p.b).name} opened.`,'good');
     const back=p.returnStops, el=p.returnEdit;
-    setTool('line'); ui.stops=back&&back.length?back:[p.a,p.b]; ui.editLine=el??null; ui.prefMode=p.mode; lineHint(); linePlanSheet();
+    setTool('line'); ui.stops=back&&back.length?back:[p.a,p.b]; ui.editLine=el??null; ui.prefMode=p.mode; ui.planOpen=true; lineHint(); linePlanSheet();
     return;
   }
   A[act]?.();
@@ -2055,7 +2090,7 @@ $('card').addEventListener('change', e=>{ if(e.target.id!=='rfile') return; cons
   const rd=new FileReader(); rd.onload=()=>doRestore(String(rd.result||'')); rd.readAsText(f); });
 $('card').addEventListener('keydown', e=>{ if(e.key==='Enter'&&e.target.id==='place'){ e.preventDefault(); $('card').querySelector('[data-act=realMap]')?.click(); } });
 $('hintCancel').addEventListener('click', ()=>{ if(ui.editLine!=null) return goLine(ui.editLine); setTool('inspect'); });
-$('hintUndo').addEventListener('click', ()=>{ ui.stops.pop(); lineHint(); if(ui.stops.length>=2||ui.editLine!=null) linePlanSheet(); else hideSheet(); });
+$('hintUndo').addEventListener('click', ()=>{ ui.stops.pop(); ui.planOpen=false; lineHint(); if(ui.stops.length>=2||ui.editLine!=null) linePlanSheet(); else hideSheet(); });
 $('bar').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b || S.over) return; const t=b.dataset.tool;
   if(ui.sel&&ui.sel.kind===t){ setTool('inspect'); return; }
   setTool(t); });
@@ -2087,7 +2122,7 @@ function tap(px,py){
     if(at>=0 && at===ui.stops.length-1) ui.stops.pop();
     else if(at>=0){ toast('A line can visit each place once.'); return; }
     else if(ui.stops.length<MAX_STOPS) ui.stops.push(t.id);
-    lineHint();
+    ui.planOpen=false; lineHint();
     if(ui.stops.length>=2||ui.editLine!=null) linePlanSheet(); else hideSheet();
     return;
   }
@@ -2226,6 +2261,43 @@ function autopilot(){
     if(n) log.push(`added ${n} carriage${n>1?'s':''}`); }
   if(log.length){ toast('Autopilot: '+log.join('; ')+'.','good'); news('Autopilot '+log.join('; ')+'.'); }
 }
+function annualProfit(){ return S.hist.slice(-12).reduce((s2,x)=>s2+(x.fares+x.cargo+x.rent+(x.tenders||0)-x.run-x.upkeep-x.interest),0); }
+function getBids(fresh){
+  if(!fresh && S.bids && S.day-S.bids.day<180) return S.bids;
+  const v=Math.max(companyValue(),1), prof=annualProfit(), ys=S.stats?.years||[];
+  const growth = ys.length>=2 ? v/Math.max(1,ys[ys.length-2].v)-1 : 0;
+  const base = 0.85 + clamp(prof/v*1.5,-0.25,0.45) + clamp(growth*0.3,-0.1,0.2);
+  const r=rng((S.day|0)+S.seed*7);
+  S.bids={ day:S.day, value:v, list:BUYERS.map(n=>({ name:n, offer:Math.max(0,Math.round(v*clamp(base+(r()-0.5)*0.16,0.4,2.2)/1000)*1000) })).sort((a,b)=>b.offer-a.offer) };
+  return S.bids;
+}
+function sellSheet(){
+  const B=getBids(false), wait=Math.max(0,Math.ceil((180-(S.day-B.day))/30)), prof=annualProfit(), conf=k=>ui.confirm===k;
+  showSheet(`<h2>Sell the company${closeBtn}</h2><div class="sub">Value ${money(companyValue())} · profit last 12 months ${signed(prof)}</div>
+  <p>Buyers bid on your whole company: every region, line, vehicle and business. Strong profits and growth raise the offers; losses lower them.</p>
+  <div class="rows">${B.list.map((x,i)=>`<div class="row"><span style="color:var(--ink)">${esc(x.name)}<small class="m">${Math.round(x.offer/Math.max(B.value,1)*100)}% of value when offered</small></span><button class="btn ${i?'':'pri'} sm" data-act="acceptBid" data-i="${i}">${conf('bid'+i)?'Tap again to sell':money(x.offer)}</button></div>`).join('')}</div>
+  <div class="btns"><button class="btn" data-act="newBids" ${wait?'disabled':''}>${wait?`New bids in ${wait} month${wait>1?'s':''}`:'Invite new bids'}</button><button class="btn" data-act="hall">Hall of fame</button></div>
+  <p class="note">Selling ends this company. Your run goes into the Hall of Fame and your founder reputation rises to level ${repLevel()+1}: your next company starts with ${money(80000*(1+0.5*Math.min(10,repLevel()+1)))} and loans at ${(Math.max(0.04,0.08-0.005*Math.min(10,repLevel()+1))*100).toFixed(1)}%.</p>`);
+}
+function hallSheet(){
+  const L=S.legacy||loadLegacy(), mine=(L.hall||[]).slice().sort((a,b)=>b.sale-a.sale);
+  const best=mine[0]?.sale||0, cur=companyValue();
+  const board=TYCOONS.map(([n,v])=>({n,v,you:false})).concat(best?[{n:'You (best sale)',v:best,you:true}]:[]).concat([{n:'You (this company)',v:cur,you:true,cur:true}]).sort((a,b)=>b.v-a.v);
+  showSheet(`<h2>Hall of fame${closeBtn}</h2><div class="sub">Founder reputation level ${repLevel()} · ${mine.length} compan${mine.length===1?'y':'ies'} sold</div>
+  <h3>Tycoon rankings</h3>
+  <div class="rows">${board.map((x,i)=>`<div class="row"><span style="color:var(--ink)${x.you?';font-weight:700':''}">${i+1}. ${esc(x.n)}</span><b>${money(x.v)}</b></div>`).join('')}</div>
+  <h3>Your companies</h3>
+  ${mine.length?`<div class="rows">${mine.map(h=>`<div class="row"><span style="color:var(--ink)">${esc(h.regions)}<small class="m">${h.from}–${h.to} · peak ${money(h.peak)} · bought by ${esc(h.buyer)}</small></span><b>${money(h.sale)}</b></div>`).join('')}</div>`:'<p class="note">None sold yet. Sell a company from the Company tab to enter the hall.</p>'}
+  <p class="note">Each sale raises your founder reputation (up to level 10): new companies start with more cash, cheaper loans and a bigger loan limit.</p>
+  <div class="btns"><button class="btn" data-act="sellCo">Sell the company</button></div>`);
+}
+function soldSheet(h){
+  showSheet(`<h2>Sold to ${esc(h.buyer)}</h2><div class="sub">${esc(h.regions)} · ${h.from}–${h.to}</div>
+  <div class="stats"><div class="stat wide"><span>Sale price</span><b>${money(h.sale)}</b><small>peak value ${money(h.peak)}</small></div></div>
+  ${statsGrid(true)}
+  <p class="pos" style="font-weight:600">Founder reputation is now level ${repLevel()}. Your next company starts with ${money(80000*(1+0.5*repLevel()))} and loans at ${(loanRate()*100).toFixed(1)}%.</p>
+  <div class="btns"><button class="btn pri" data-act="newgame">Start a new company</button><button class="btn" data-act="hall">Hall of fame</button></div>`);
+}
 function backupSheet(){
   const last=S.lastBackup?new Date(S.lastBackup).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'never';
   showSheet(`<h2>Backup and restore${closeBtn}</h2><div class="sub">Last backup: ${last} · company value ${money(companyValue())}</div>
@@ -2285,7 +2357,7 @@ function frame(now){
   floats.forEach(f=>f.life-=dt); floats=floats.filter(f=>f.life>0);
   draw(); hud();
   saveTimer+=dt; if((saveDirty && now-lastSave>6000) || saveTimer>20){ saveTimer=0; save(); }
-  sheetTimer+=dt; if(sheetTimer>0.6){ sheetTimer=0; if(ui.sel&&ui.sel.kind==='veh') refreshSheet(); if(ui.layer==='problems') refreshProblems(); }
+  sheetTimer+=dt; if(sheetTimer>0.5){ sheetTimer=0; refreshCosts(); if(ui.sel&&ui.sel.kind==='veh') refreshSheet(); if(ui.layer==='problems') refreshProblems(); }
   requestAnimationFrame(frame);
 }
 function start(data){
@@ -2298,7 +2370,8 @@ function start(data){
   if(raw&&loadGame(raw)){ if(!fromHot&&S.seenIntro) away=catchUp(Date.now()-(S.savedAt||Date.now())); }
   else newGame(20261127);
   centerMap(); setTool('inspect'); markTool(null); setSpeed(S.over?0:1); updateDots(); updateRegionBtn();
-  if(S.over){ ui.sel={kind:'over'}; overSheet(); }
+  if(S.over&&S.sold){ ui.soldInfo=S.sold; ui.sel={kind:'sold'}; soldSheet(S.sold); }
+  else if(S.over){ ui.sel={kind:'over'}; overSheet(); }
   else if(away) showAway();
   else if(!S.seenIntro){ ui.sel={kind:'intro'}; introSheet(); }
   requestAnimationFrame(t=>{ lastT=t; frame(t); });
