@@ -122,6 +122,7 @@ svg.chart{width:100%;height:auto;display:block;margin-top:8px}
 .stat.wide{grid-column:1/3}
 .why{margin:8px 0 0;padding-left:18px;line-height:1.45}
 .why li{margin-bottom:6px}
+.why.steps{list-style:none;padding-left:0}
 </style>
 
 <canvas id="map"></canvas>
@@ -1136,7 +1137,7 @@ const route=l=>l.stops.map(s=>esc(P(s).name)).join(' – ');
 function lineStats(l){
   const lp=linePaths.get(l.id), vs=lineVehicles(l), len=lp&&lp.cum.length?lp.cum[lp.cum.length-1]:1, wait=DWELL[l.mode];
   const st={pass:{seats:0,demand:0,n:0}, freight:{seats:0,demand:0,n:0}, run:0, old:vs.filter(v=>vAge(v)>MODELS[v.model].life), len};
-  for(const v of vs){ const m=MODELS[v.model], rt=2*(len/vSpeed(v)+l.stops.length*wait); st[m.kind].seats+=vCap(v)*2/rt; st[m.kind].n++; st.run+=runCost(v); }
+  for(const v of vs){ const m=MODELS[v.model], rt=2*(len/vSpeed(v)+l.stops.length*wait); st[m.kind].seats+=vCap(v)*(m.kind==='freight'?1:2)/rt; st[m.kind].n++; st.run+=runCost(v); }
   for(const a of l.stops){ const p=P(a);
     if(isPax(p)){ const rt=routes.get(a); for(const {f,rate} of (rates.get(a)||[])){ const r=rt.get(f); if(r&&l.stops.includes(r.hop)) st.pass.demand+=rate; } }
     else { const d=fRoutes.get(a); if(d&&d.size){ const on=[...d].filter(x=>l.stops.includes(x)).length; st.freight.demand+=prodRate(p)*on/d.size; } } }
@@ -1164,6 +1165,14 @@ function diagnose(l){
     const word=kind==='pass'?'people':'tonnes of cargo';
     if(k.demand<=0.05){ add('nodemand-'+kind, kind==='pass'?'no riders':'no cargo',
         kind==='pass'?'Nobody on this line wants these trips. Passenger vehicles need at least two towns or attractions.':'No stop on this line produces cargo that another stop buys. Check what each industry sells.',{act:'editRoute',id:l.id,label:'Edit stops'}); continue; }
+    if(kind==='freight' && k.seats>k.demand*1.6 && k.n===1){
+      const prods=l.stops.map(P).filter(x=>x.kind==='industry'&&fRoutes.has(x.id)&&[...fRoutes.get(x.id)].some(y=>l.stops.includes(y)));
+      const pr=prods[0], isTrain=l.mode==='rail';
+      add('smallcargo','too little cargo',`${pr?esc(pr.name)+' makes':'The industries here make'} about ${Math.round(k.demand)} t a day, but this ${isTrain?'train':'vehicle'} can move ${Math.round(k.seats)} t a day, so it runs mostly empty.${isTrain?' A freight train only pays off with a big supply: a mine, a factory fed with ore, or several producers on one line.':''} Output also grows each month you ship more than half of it.`,
+        pr?{act:'selTown',id:pr.id,label:isTrain?'Boost output':'Open warehouse'}:null);
+      if(isTrain) add('usetruck','use trucks',`For small producers, a Flatbed Truck (25 t, ${money(MODELS.truck.run*S.infl)}/mo) earns more than a freight train (${money(MODELS.fsteam.run*S.infl)}/mo). Build a road and swap the train for trucks.`,{act:'tool',t:'road',label:'Build a road'});
+      continue;
+    }
     if(k.seats>k.demand*1.6) add('over-'+kind,'too many vehicles',`${k.demand<1?'Fewer than 1':'About '+Math.round(k.demand)} ${k.demand<1&&kind==='pass'?'person':word} a day ${k.demand<1?'wants':'want'} this route, but its vehicles offer ${Math.round(k.seats)} spaces a day. They run mostly empty.`,{act:'removeOne',id:l.id,label:'Sell one vehicle'});
   }
   for(const kind of ['pass','freight']){ const k=st[kind]; if(k.n && k.demand>k.seats*1.2){
@@ -1176,6 +1185,8 @@ function diagnose(l){
   if(l.mode==='road' && st.pass.n && st.trip>9) add('slow','slow for distance',`A bus takes about ${Math.round(st.trip)} days end to end. On long trips people prefer trains or planes, so demand drops.`,{act:'tool',t:'rail',label:'Build a railway'});
   const heavy=lineVehicles(l).filter(v=>['rail','air'].includes(MODELS[v.model].mode)&&MODELS[v.model].kind==='pass');
   if(heavy.length && st.pass.demand*1.6<st.pass.seats && st.pass.demand<MODELS[heavy[0].model].cap/4) add('big','too big for demand',`${MODELS[heavy[0].model].name}s carry ${MODELS[heavy[0].model].cap} and cost ${money(runCost(heavy[0]))}/mo each. These places are too small to fill them.`,{act:'editRoute',id:l.id,label:'Add bigger towns'});
+  for(const sid of l.stops){ const fp=P(sid); if(fp.kind==='industry'&&fp.type==='factory'&&st.freight.n&&(fp.oreLast||0)<30){
+    add('noore','factory not fed',`${esc(fp.name)} makes only about 3 t of goods a day on its own. Deliver ore from a mine to it and it makes far more: every tonne of ore becomes 1.2 t of goods, which pay 50% more than raw cargo.`,{act:'selTown',id:fp.id,label:'See factory'}); break; } }
   if(st.freight.n && l.stops.filter(s=>P(s).kind==='industry'&&fRoutes.has(s)&&[...fRoutes.get(s)].some(x=>l.stops.includes(x))).length===1 && l.stops.length===2) add('return','empty returns','Freight only travels one way here, so vehicles drive back empty. A stop that ships something back (a factory) doubles the earnings.',{act:'editRoute',id:l.id,label:'Edit stops'});
   for(let i=0;i<l.stops.length;i++) for(let j=i+1;j<l.stops.length;j++) if(rivalOn(l.stops[i],l.stops[j])){ add('rival','rival',`${RIVAL} competes between ${P(l.stops[i]).name} and ${P(l.stops[j]).name}, taking 40% of those riders.`,null); i=99; break; }
   if(l.mode==='air' && st.endDist<22) add('airshort','too short to fly',`These airports are only ${Math.round(st.endDist)} tiles apart. Planes cost a lot to run and only pay on long trips. Trains or buses suit this distance.`,{act:'removeOne',id:l.id,label:'Sell one plane'});
@@ -1288,6 +1299,8 @@ function industrySheet(p){
     ${p.type==='factory'?`<div class="row"><span>Ore delivered last month</span><b>${Math.round(p.oreLast)} t</b></div>`:''}
     ${dests.map(id=>`<div class="row"><span>Waiting for ${esc(P(id).name)}</span><b>${Math.floor(p.cwait[id]||0)} t</b></div>`).join('')}
   </div>
+  <h3>How to earn here</h3>
+  <ul class="why steps">${industrySteps(p,dests,acc)}</ul>
   <p class="note">${p.type==='factory'?'Factories make some goods on their own, and far more from delivered ore (each tonne of ore becomes 1.2 t of goods). Goods pay 50% more per tonne than raw cargo.':`${CARGO[good]} sells to ${good==='ore'?'factories':'towns and villages'}.`} Output grows when you ship more than half of it. Nearest buyers: ${acc.map(q=>esc(q.name)).join(', ')||'none'}.</p>
   <h3>Lines stopping here</h3>
   ${lines.length?lines.map(l=>{ const best=bestModel(l.mode,'freight'); return `<div class="lc"><button class="main" data-act="selLine" data-id="${l.id}"><span class="rt">${badge(l)}${route(l)}</span><small class="m">${modeName(l.mode)} · ${Math.floor(waitAtFor(p,l))} t waiting${lineChips(l)}</small></button>
@@ -1295,6 +1308,18 @@ function industrySheet(p){
     :'<p class="note">No freight line yet. Make a line from here to a buyer and add a truck or freight train.</p>'}
   <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New freight line from here</button></div>
   ${propSection(p)}`);
+}
+function industrySteps(p,dests,acc){
+  const good=IND[p.type].cargo, made=Math.round(prodRate(p)), lines=S.lines.filter(l=>l.stops.includes(p.id)&&lineVehicles(l).some(v=>MODELS[v.model].kind==='freight'));
+  const ok=t=>`<span class="pos">✓</span> ${t}`, todo=t=>`<span class="warnc">○</span> ${t}`;
+  const out=[];
+  if(p.type==='factory'){ const fed=(p.oreLast||0)>=30;
+    out.push(fed?ok(`Getting ore: ${Math.round(p.oreLast)} t last month, so it makes ${made} t of goods a day.`):todo(`Feed it ore: make a freight line from a mine to here. Right now it only makes ${made} t a day.`)); }
+  out.push(dests.length?ok(`Shipping ${CARGO[good].toLowerCase()} to ${dests.map(id=>esc(P(id).name)).join(', ')}.`):todo(`Make a freight line from here to a buyer${acc.length?`, like ${esc(acc[0].name)}`:''}, and add a freight vehicle.`));
+  out.push(made<15?todo(`Output is small (${made} t a day): use trucks, not a freight train. A train pays off from about 30 t a day.`):ok(`Output is ${made} t a day, enough for a freight train on a long route.`));
+  out.push(p.shipShare>0.5?ok('Shipping more than half: output grows 1.5% a month.'):todo('Ship more than half of the output each month and it grows 1.5% a month.'));
+  out.push(S.props.some(b=>b.town===p.id&&b.type==='warehouse')?ok('Warehouse open: +50% output.'):todo('Open a Logistics Warehouse below for +50% output.'));
+  return out.map(x=>`<li>${x}</li>`).join('');
 }
 function railNeighbours(t){
   const seen=new Uint8Array(W*H), out=new Set(), q=[];
