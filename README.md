@@ -11,5 +11,6 @@ A collection of small personal web apps. Each one is a single folder you can ope
 | **Redline** | [`redline/`](redline/) | Bike dashboard: range, service countdowns, renewals and auto-logged rides. |
 | **Slice** | [`slice/`](slice/) | Personal spending tracker with optional Cloudflare sync — see [`slice/SETUP.md`](slice/SETUP.md). |
 | **Spore** | [`spore/`](spore/) | Spore (v10). |
+| **Lineworks** | [`lineworks/`](lineworks/) | Transit tycoon: roads, railways, airports, freight, businesses and tenders against a rival. Ready-made Singapore and Malaysia maps. Saves stay on the device; use Company → Backup and restore. Edit `game.html`, then run `./build.sh` to rebuild `index.html`. |
 
 Older versions are kept in git history rather than as copies in the repo — use `git log` or tags to find them.
