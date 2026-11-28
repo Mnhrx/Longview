@@ -267,7 +267,18 @@ let linePaths = new Map(), overlay = [], laneOff = new Map();
 let mailRates = new Map(), routes = new Map(), fRoutes = new Map(), rates = new Map(), lineCount = new Map();
 let railSegsW = [], roadSegsW = [];
 let problemLines = new Map();
-const prefs = () => (S.prefs ||= { vehicles:true, waits:true, pops:true, rival:false });
+const prefs = () => (S.prefs ||= { vehicles:true, waits:true, pops:true, rival:false, sound:true, night:true });
+const RESEARCH = {
+  boarding:    { name:'Faster boarding',      desc:'Vehicles spend 15% less time at stops.',          months:12, cost:40000 },
+  fuel:        { name:'Fuel efficiency',      desc:'Running costs 10% lower.',                         months:18, cost:60000 },
+  early:       { name:'Advanced engineering', desc:'New vehicle models arrive 5 years early.',         months:24, cost:90000 },
+  signals:     { name:'Modern signalling',    desc:'Trains and metros run 10% faster.',                months:18, cost:70000 },
+  logistics:   { name:'Logistics systems',    desc:'Farms, mines and factories produce 15% more.',     months:12, cost:45000 },
+  marketing:   { name:'Marketing',            desc:'8% more people want to travel on your network.',   months:12, cost:50000 },
+  construction:{ name:'Construction methods', desc:'Building takes 25% less time.',                    months:15, cost:55000 },
+};
+const res = k => !!(S && S.research && S.research.done.includes(k));
+const availYear = () => year() + (res('early') ? 5 : 0);
 const autos = () => (S.auto ||= { replace:false, fares:false, cars:false });
 const ui = { tool:'inspect', pickA:null, stops:[], plan:null, sel:null, speed:1, lastPlace:'', mapCtl:null, layer:'lines', editLine:null, prefMode:null, confirm:null };
 const PANELS = ['lines','build','business','tenders','company'];
@@ -314,11 +325,11 @@ const fuel = () => S.fuelUntil>S.day ? 1.3 : 1;
 const CAR = { seats:40, tonnes:60, cost:8000, run:450, max:6, slow:0.04 };
 const vCars = v => MODELS[v.model].mode==='rail' ? (v.cars||0) : 0;
 const vCap = v => MODELS[v.model].cap + vCars(v)*(MODELS[v.model].kind==='freight'?CAR.tonnes:CAR.seats);
-const vSpeed = v => MODELS[v.model].speed * (1 - CAR.slow*vCars(v));
+const vSpeed = v => MODELS[v.model].speed * (1 - CAR.slow*vCars(v)) * (res('signals')&&(MODELS[v.model].mode==='rail'||MODELS[v.model].mode==='metro')?1.1:1);
 const carPrice = () => Math.round(CAR.cost*S.infl*DF().cost);
-const runCost = v => (MODELS[v.model].run + vCars(v)*CAR.run) * S.infl * (1 + 0.05*vAge(v)) * fuel() * DF().run;
+const runCost = v => (MODELS[v.model].run + vCars(v)*CAR.run) * S.infl * (1 + 0.05*vAge(v)) * fuel() * DF().run * (res('fuel')?0.9:1);
 const vehValue = v => Math.round(v.paid * 0.75 * Math.max(0.1, 1 - vAge(v)/MODELS[v.model].life));
-const bestModel = (mode,kind) => Object.keys(MODELS).filter(k=>MODELS[k].mode===mode && MODELS[k].kind===kind && MODELS[k].year<=year() && !MODELS[k].track).pop();
+const bestModel = (mode,kind) => Object.keys(MODELS).filter(k=>MODELS[k].mode===mode && MODELS[k].kind===kind && MODELS[k].year<=availYear() && !MODELS[k].track).pop();
 const aboard = v => v.cargo.reduce((s,c)=>s+c.n,0);
 const lineVehicles = l => S.vehicles.filter(v=>v.line===l.id);
 const kindLabel = p => p.kind==='industry' ? IND[p.type].name : p.kind==='attraction' ? 'Tourist attraction' : (TOWN_TYPES[p.type]?.name || 'Town');
@@ -330,6 +341,7 @@ function attrOf(p){
   if(p.kind==='attraction'||p.type==='resort'){ a*=season(); if(S.tourismUntil>S.day) a*=1.5; }
   for(const b of S.props) if(b.town===p.id && PT[b.type].boost) a*=1+PT[b.type].boost;
   if(S.events.some(e=>e.type==='festival'&&e.town===p.id&&e.until>S.day)) a*=2.5;
+  if(p.landmark) a*=1.15; if(p.hub) a*=1.2;
   return a*(1+0.05*stLv(p));
 }
 
@@ -356,6 +368,7 @@ const propUpkeep = b => b.paid * UPKEEP;
 const propPL = b => propValue(b) + b.rentTotal - b.upkeepTotal - b.paid;
 const maxProps = p => p.kind==='town' ? 3 : p.kind==='attraction' ? 2 : 1;
 const PORT_COST=120000, PORT_UPKEEP=800;
+const hubCost = () => Math.round(15e6*S.infl*DF().cost);
 const STATION_LEVELS=[ {name:'Basic stop'}, {name:'Interchange', cost:60000}, {name:'Major station', cost:250000}, {name:'Grand terminal', cost:900000, minPop:4000} ];
 const stLv = p => p.station||0;
 const stationCost = lv => Math.round(STATION_LEVELS[lv].cost*S.infl*DF().cost);
@@ -376,10 +389,15 @@ const saleRep = (sale,diff) => 1+(sale>=1e8?1:0)+(sale>=1e9?1:0)+((DIFF[diff]||D
 function normLegacy(L){
   const seen=new Set(), hall=[];
   for(const h of (L&&L.hall)||[]){ const k=h.cid||[h.regions,h.from,h.to,h.sale,h.buyer].join('|'); if(seen.has(k)) continue; seen.add(k); hall.push(h); }
-  return { hall, rep:hall.reduce((s2,h)=>s2+saleRep(h.sale||0,h.diff),0) };
+  return { hall, rep:hall.reduce((s2,h)=>s2+saleRep(h.sale||0,h.diff),0), medals:(L&&L.medals)||{}, ach:(L&&L.ach)||{}, friends:(L&&L.friends)||[], name:(L&&L.name)||'' };
 }
+const MEDAL_RANK={gold:3,silver:2,bronze:1,finished:0};
 function loadLegacy(){ let a=null, b2=S&&S.legacy; try{ a=JSON.parse(localStorage.getItem(LEGACY_KEY)||'null'); }catch(e){}
-  const all=[].concat((a&&a.hall)||[],(b2&&b2.hall)||[]); return normLegacy({hall:all}); }
+  const all=[].concat((a&&a.hall)||[],(b2&&b2.hall)||[]);
+  const medals={...((a&&a.medals)||{})}; for(const [k,v] of Object.entries((b2&&b2.medals)||{})) if(!medals[k]||MEDAL_RANK[v]>MEDAL_RANK[medals[k]]) medals[k]=v;
+  const ach={...((b2&&b2.ach)||{}),...((a&&a.ach)||{})};
+  const fr=[...((a&&a.friends)||[])]; for(const f of ((b2&&b2.friends)||[])) if(!fr.some(x=>x.name===f.name)) fr.push(f);
+  return normLegacy({hall:all, medals, ach, friends:fr, name:(a&&a.name)||(b2&&b2.name)||''}); }
 function saveLegacy(L){ if(S) S.legacy=L; try{ localStorage.setItem(LEGACY_KEY,JSON.stringify(L)); }catch(e){} }
 const repLevel = () => Math.min(10,(S.legacy?.rep)||0);
 const loanRate = () => Math.max(0.04, 0.08-0.005*repLevel());
@@ -726,7 +744,7 @@ function pairRate(a,b,r){
   const modeF = r ? clamp(1.4 - t/12, 0.35, 1.35) : 1;
   const fareF = r ? Math.pow(r.fm,-1.4) : 1;
   const tf = r&&r.transfer ? 0.6 : 1, rv = rivalOn(a.id,b.id) ? 0.6 : 1;
-  return softPop(popO(a))*softPop(popD(b))*attrOf(b)*modeF*fareF*tf*rv*(S.recessUntil>S.day?0.75:1)/((d+6)*40000);
+  return softPop(popO(a))*softPop(popD(b))*attrOf(b)*modeF*fareF*tf*rv*(S.recessUntil>S.day?0.75:1)*(res('marketing')?1.08:1)/((d+6)*40000);
 }
 function computeDemand(){
   rates=new Map(); mailRates=new Map();
@@ -743,7 +761,7 @@ function wishList(a){
 }
 function prodRate(p){
   const wh=S.props.filter(b=>b.town===p.id&&b.type==='warehouse').length;
-  const base = p.type==='factory' ? 3 + (p.oreLast/30)*1.2 : IND[p.type].rate;
+  const base = (p.type==='factory' ? 3 + (p.oreLast/30)*1.2 : IND[p.type].rate) * (res('logistics')?1.15:1);
   return base * p.prod * (1+0.5*wh);
 }
 function waitAtFor(p,l){
@@ -807,7 +825,7 @@ function arrive(v, k){
     return false; });
   if(rev>0){
     S.money+=rev; if(m.kind==='pass') S.m.fares+=rev; else S.m.cargo+=rev; S.yearFares+=rev; v.profitYear+=rev; l.profitYear+=rev; l.revM=(l.revM||0)+rev; l.life=(l.life||0)+rev; if(S.stats) S.stats.income+=rev;
-    if(!ui.bg) floats.push({ x:at.x*T+T/2, y:at.y*T-T*0.5, txt:'+'+money(rev), life:2 });
+    if(!ui.bg){ floats.push({ x:at.x*T+T/2, y:at.y*T-T*0.5, txt:'+'+money(rev), life:2 }); if(rev>500&&cam.z>=0.75) sfx('coin'); }
     S.perf=S.perf||{rev:0,last:0}; S.perf.rev+=rev;
   }
   if(k===l.stops.length-1) v.dir=-1; else if(k===0) v.dir=1;
@@ -833,7 +851,7 @@ function arrive(v, k){
     }
   }
   if(v.next>=0 && v.next<l.stops.length){ l.offM=(l.offM||0)+vCap(v); l.carM=(l.carM||0)+aboard(v); }
-  v.wait = DWELL[l.mode]*(1-0.2*stLv(at));
+  v.wait = DWELL[l.mode]*(1-0.2*stLv(at))*(res('boarding')?0.85:1);
   v.broken=false;
 }
 const segKey = (i,j) => i<j ? i+'-'+j : j+'-'+i;
@@ -919,12 +937,12 @@ function monthlyTenders(r){
 const TOWN_COST = 250000, NEW_TOWN_NAMES=['Harbour View','Northgate','Riverside','Hillcrest','Lakeside','Fairmont','Greenhaven','Eastbrook','Westfield','Sunpoint','Cedar Park','Maple Rise','Bayshore','Kingsmead','Palm Grove','Stonebridge'];
 const townCost = () => Math.round(TOWN_COST*S.infl*DF().cost);
 function buildDays(kind, mode, tiles, bridges){
-  const base = kind==='airport' ? 150 : kind==='port' ? 80 : kind==='station' ? [0,30,60,120][mode||1] : kind==='town' ? 90 : mode==='rail' ? 1.2*tiles+4*bridges : 0.6*tiles+2*bridges;
-  return Math.max(5, Math.round(base*DF().time));
+  const base = kind==='bridge' ? 360 : kind==='hub' ? 540 : kind==='airport' ? 150 : kind==='port' ? 80 : kind==='station' ? [0,30,60,120][mode||1] : kind==='town' ? 90 : mode==='rail' ? 1.2*tiles+4*bridges : 0.6*tiles+2*bridges;
+  return Math.max(5, Math.round(base*DF().time*(res('construction')?0.75:1)));
 }
 function pendingSet(mode){ const s2=new Set(); for(const pj of S.projects||[]) if(pj.kind==='track'&&pj.mode===mode) for(const i of pj.tiles) s2.add(i); return s2; }
 function startProject(pj){ pj.id=S.nextProj++; pj.start=S.day; S.projects.push(pj); netVer++; requestSave(); return pj; }
-function projName(pj){ if(pj.kind==='tunnel') return `Metro tunnel ${P(pj.a)?.name||'?'} – ${P(pj.b)?.name||'?'}`; if(pj.kind==='upgrade') return `${TRACK_NAMES[pj.level]} on line ${pj.line}`; if(pj.kind==='port') return `${P(pj.town)?.name||'?'} Port`; if(pj.kind==='station') return `${P(pj.town)?.name||'?'} ${STATION_LEVELS[pj.level].name}`; return pj.kind==='track' ? `${pj.mode==='rail'?'Railway':'Road'} ${P(pj.a)?.name||'?'} – ${P(pj.b)?.name||'?'}` : pj.kind==='airport' ? `${P(pj.town)?.name||'?'} Airport` : `New town ${pj.name}`; }
+function projName(pj){ if(pj.kind==='bridge') return `${pj.name} (${P(pj.a)?.name||'?'} – ${P(pj.b)?.name||'?'})`; if(pj.kind==='hub') return `${P(pj.town)?.name||'?'} hub airport`; if(pj.kind==='tunnel') return `Metro tunnel ${P(pj.a)?.name||'?'} – ${P(pj.b)?.name||'?'}`; if(pj.kind==='upgrade') return `${TRACK_NAMES[pj.level]} on line ${pj.line}`; if(pj.kind==='port') return `${P(pj.town)?.name||'?'} Port`; if(pj.kind==='station') return `${P(pj.town)?.name||'?'} ${STATION_LEVELS[pj.level].name}`; return pj.kind==='track' ? `${pj.mode==='rail'?'Railway':'Road'} ${P(pj.a)?.name||'?'} – ${P(pj.b)?.name||'?'}` : pj.kind==='airport' ? `${P(pj.town)?.name||'?'} Airport` : `New town ${pj.name}`; }
 function checkProjects(){
   if(!S.projects||!S.projects.length) return;
   const done=S.projects.filter(pj=>S.day>=pj.done); if(!done.length) return;
@@ -932,12 +950,14 @@ function checkProjects(){
   for(const pj of done){
     if(pj.kind==='track'){ const own=pj.mode==='rail'?rails:roads; for(const i of pj.tiles) if(placeTile[i]<0) own[i]=Math.max(own[i],1); }
     else if(pj.kind==='airport'){ const t=P(pj.town); if(t) t.airport=true; }
+    else if(pj.kind==='bridge'){ for(const i of pj.rail) if(placeTile[i]<0) rails[i]=Math.max(rails[i],1); for(const i of pj.road) if(placeTile[i]<0) roads[i]=1; const a=P(pj.a), b2=P(pj.b); if(a) a.landmark=true; if(b2) b2.landmark=true; sfx('build'); }
+    else if(pj.kind==='hub'){ const t=P(pj.town); if(t) t.hub=true; }
     else if(pj.kind==='tunnel'){ S.tunnels=(S.tunnels||[]).concat([pj.key]); }
     else if(pj.kind==='upgrade'){ for(const i of pj.tiles) if(rails[i]) rails[i]=Math.max(rails[i],pj.level); }
     else if(pj.kind==='port'){ const t=P(pj.town); if(t){ t.port=true; buildHarbour(); } }
     else if(pj.kind==='station'){ const t=P(pj.town); if(t) t.station=pj.level; }
     else if(pj.kind==='town'){ foundTown(pj); }
-    toast(`${projName(pj)} is open.`,'good'); news(`${projName(pj)} opened.`);
+    toast(`${projName(pj)} is open.`,'good'); news(`${projName(pj)} opened.`); sfx('build');
   }
   renderStatic(); computeAll(); requestSave();
 }
@@ -960,6 +980,49 @@ function promoteTowns(){
     p.kind='town'; p.type='city'; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const i=idx(p.x+dx,p.y+dy); terrain[i]=GRASS; placeTile[i]=p.id; }
     toast(`${p.name} has grown into a town!`,'good'); news(`${p.name} became a town.`); renderStatic();
   }
+}
+const SCENARIOS = [
+  { id:'island',    name:'Island Hopper',     map:'singapore', diff:'normal', goal:'Reach a company value of $5 million.',                                   medals:[1972,1978,1986], check:()=>companyValue()>=5e6 },
+  { id:'peninsula', name:'Peninsula Express', map:'malaysia',  diff:'hard',   goal:'Run passenger trains linking Kuala Lumpur, Ipoh, George Town and Johor Bahru.', medals:[1972,1978,1988], check:()=>{ const names=['Kuala Lumpur','Ipoh','George Town','Johor Bahru'], ids=names.map(n=>S.towns.find(t=>t.name===n)?.id); if(ids.some(x=>x==null)) return false; const rl=S.lines.filter(l=>l.mode==='rail'&&lineVehicles(l).some(v=>MODELS[v.model].kind==='pass')); if(!ids.every(id=>rl.some(l=>l.stops.includes(id)))) return false; const rt=routes.get(ids[0]); return ids.slice(1).every(id=>rt&&rt.has(id)); } },
+  { id:'freight',   name:'Freight Baron',     map:'malaysia',  diff:'normal', goal:'Haul 150,000 tonnes of cargo.',                                          medals:[1975,1982,1990], check:()=>(S.stats?.cargo||0)>=150000 },
+  { id:'mover',     name:'City Mover',        map:'singapore', diff:'hard',   goal:'Carry 2 million passengers.',                                            medals:[1978,1986,1995], check:()=>(S.stats?.pax||0)>=2e6 },
+  { id:'sprint',    name:'Tycoon Sprint',     map:'random',    diff:'tycoon', goal:'Reach a company value of $25 million.',                                  medals:[1985,1995,2005], check:()=>companyValue()>=25e6 },
+];
+const ACH = [
+  ['first_line','First line','Open your first line', ()=>(S.stats?.linesOpened||0)>=1],
+  ['ten_lines','Network','Run 10 lines at once', ()=>S.lines.length>=10],
+  ['million','Millionaire','Reach a company value of $1M', ()=>companyValue()>=1e6],
+  ['magnate','Magnate','Reach a company value of $100M', ()=>companyValue()>=1e8],
+  ['billion','Billionaire','Reach a company value of $1B', ()=>companyValue()>=1e9],
+  ['crowds','Crowd pleaser','Carry 1 million passengers', ()=>(S.stats?.pax||0)>=1e6],
+  ['heavy','Heavy lifting','Haul 100,000 t of cargo', ()=>(S.stats?.cargo||0)>=1e5],
+  ['bullet','Bullet time','Own a Bullet Train', ()=>S.vehicles.some(v=>v.model==='bullet')],
+  ['maglev','Floating','Own a Maglev', ()=>S.vehicles.some(v=>v.model==='maglev')],
+  ['airline','Airline','Run an air line', ()=>S.lines.some(l=>l.mode==='air')],
+  ['ferry','All aboard','Run a ferry or cargo ship line', ()=>S.lines.some(l=>l.mode==='sea')],
+  ['metro','Underground','Run a metro line', ()=>S.lines.some(l=>l.mode==='metro')],
+  ['regions','Expansion','Own two regions', ()=>(S.others||[]).length>=1],
+  ['intl','Borderless','Run an international route', ()=>(S.intl||[]).length>=1],
+  ['takeover','Hostile takeover','Take over Meridian Transit', ()=>allRegions().some(o=>o.rival&&o.rival.owned)],
+  ['ipo','Public company','Float on the stock market', ()=>!!(S.ipo&&S.ipo.floated)],
+  ['founder','Founder','Found a new town', ()=>S.towns.some(t=>t.founded)],
+  ['terminal','Grand central','Build a Grand terminal', ()=>S.towns.some(t=>(t.station||0)>=3)],
+  ['landmark','Landmark','Finish a grand bridge or undersea tunnel', ()=>S.towns.some(t=>t.landmark)],
+  ['scholar','Scholar','Complete every research project', ()=>Object.keys(RESEARCH).every(res)],
+  ['iron','Iron nerves','Reach the goal on Tycoon', ()=>S.won&&S.diff==='tycoon'],
+];
+function checkAchievements(){
+  const L=S.legacy||loadLegacy(); L.ach=L.ach||{}; let got=0;
+  for(const [id,name,,fn] of ACH){ if(L.ach[id]) continue; let ok=false; try{ ok=fn(); }catch(e){} if(ok){ L.ach[id]=Date.now(); got++; toast(`🏆 Achievement: ${name}`,'good'); news(`Achievement unlocked: ${name}.`); } }
+  if(got){ saveLegacy(L); sfx('ach'); }
+}
+function checkScenario(){
+  const sc=S.scenario; if(!sc||sc.done) return; const def=SCENARIOS.find(x=>x.id===sc.id); if(!def) return;
+  let ok=false; try{ ok=def.check(); }catch(e){}
+  if(ok){ const y=year(), medal=y<=def.medals[0]?'gold':y<=def.medals[1]?'silver':y<=def.medals[2]?'bronze':'finished';
+    sc.done=true; sc.medal=medal; sc.year=y; const L=S.legacy||loadLegacy(); L.medals=L.medals||{}; if(!L.medals[def.id]||MEDAL_RANK[medal]>MEDAL_RANK[L.medals[def.id]]) L.medals[def.id]=medal; saveLegacy(L);
+    toast(`${medal==='finished'?'Scenario complete':'🏅 '+medal[0].toUpperCase()+medal.slice(1)+' medal'}: ${def.name}!`,'good'); news(`Completed scenario ${def.name} (${medal}).`); sfx('ach');
+    ui.sel={kind:'scenario'}; scenarioSheet(); }
 }
 function rivalExpand(r){
   if(S.rival.owned) return;
@@ -1092,7 +1155,13 @@ function regionMonth(isActive){
   if(DF().expand && r()<DF().expand) rivalExpand(r);
   monthlyTenders(r); autopilot(); computeDemand();
 }
+function researchMonth(){
+  const R=S.research; if(!R||!R.active) return; const d=RESEARCH[R.active]; if(!d){ R.active=null; return; }
+  const c=d.cost*S.infl; S.money-=c; S.m.upkeep+=c; R.progress=(R.progress||0)+1;
+  if(R.progress>=d.months){ R.done.push(R.active); toast(`Research complete: ${d.name}. ${d.desc}`,'good'); news(`Research complete: ${d.name}.`); R.active=null; R.progress=0; computeAll(); sfx('ach'); }
+}
 function globalMonth(){
+  researchMonth();
   S.m.interest=S.loan*loanRate()/12; S.money-=S.m.interest;
   if(S.ipo&&S.ipo.floated){ const net=S.m.fares+S.m.mail+S.m.cargo+S.m.rent+S.m.tenders+S.m.invest-S.m.run-S.m.upkeep-S.m.interest; const div=Math.max(0,net)*(S.ipo.payout||0)*(1-S.ipo.owned); if(div>0){ S.money-=div; S.m.dividends+=div; } }
   S.hist.push({...S.m, cash:S.money, value:companyValue()}); if(S.hist.length>36) S.hist.shift(); S.m=freshMonth();
@@ -1111,8 +1180,9 @@ function globalMonth(){
     if(!S.over) toast(`Cash is negative. ${4-S.debtMonths} month${4-S.debtMonths>1?'s':''} until the bank closes the company.`, 'bad'); }
   else S.debtMonths=0;
   if(!S.won && companyValue()>=goal()){ S.won=true; toast(`Company value passed ${money(goal())}. You beat ${DF().name}!`, 'good'); news(`Reached the ${DF().name} goal of ${money(goal())}.`); }
+  checkAchievements(); checkScenario();
   requestSave(); updateDots(); updateRegionBtn();
-  if(ui.sel && ui.sel.kind!=='veh') refreshSheet();
+  if(ui.sel && ui.sel.kind!=='veh' && ui.sel.kind!=='scenario') refreshSheet();
 }
 
 // ---------- regions and international routes ----------
@@ -1179,7 +1249,7 @@ function intlStats(rt){
     run+=(m.run+(v.cars||0)*CAR.run)*S.infl*(1+0.05*vAge(v))*fuel()*DF().run; }
   const t=tiles/Math.max(sp,1), modeF=clamp(1.4-t/12,0.35,1.35), fareF=Math.pow(rt.fareMult,-1.4);
   const att=q=>(q.kind==='attraction'?1.3:(TOWN_TYPES[q.type]?.attr??0.8));
-  const demand=(softPop(popO(A))*softPop(popD(B))*att(B)+softPop(popO(B))*softPop(popD(A))*att(A))*modeF*fareF*1.3/((tiles+6)*40000);
+  const demand=(softPop(popO(A))*softPop(popD(B))*att(B)+softPop(popO(B))*softPop(popD(A))*att(A))*modeF*fareF*1.3*(rt.mode==='air'&&(A.hub||B.hub)?1.5:1)/((tiles+6)*40000);
   return { A, B, tiles, seats, demand, run, km:haversine(A,B)||0 };
 }
 function intlMonth(){
@@ -1246,7 +1316,7 @@ function regionsSheet(){
 function intlSheet(rt){
   const st=intlStats(rt); if(!st){ showSheet(`<h2>Route unavailable${closeBtn}</h2>`); return; }
   const load=Math.round(Math.min(1,st.demand/Math.max(st.seats,0.01))*100), conf=ui.confirm==='closeIntl'+rt.id;
-  const models=Object.entries(MODELS).filter(([,m])=>m.mode===rt.mode&&m.kind==='pass'&&m.year<=year());
+  const models=Object.entries(MODELS).filter(([,m])=>m.mode===rt.mode&&m.kind==='pass'&&m.year<=availYear());
   showSheet(`<h2>${rt.mode==='air'?'✈':rt.mode==='sea'?'⛴':'🚆'} ${esc(st.A.name)} – ${esc(st.B.name)}${closeBtn}</h2><div class="sub">${esc(rt.a.r)} → ${esc(rt.b.r)} · ${Math.round(st.km)} km${rt.via?' · via '+esc(rt.via):''}</div>
   <div class="rows">
     <div class="row"><span>Earned last month</span><b class="pos">${money(rt.revLast||0)}</b></div>
@@ -1359,6 +1429,8 @@ function ensureNet(layer,focus,far){
   c.strokeStyle='rgba(110,118,126,.55)'; c.lineWidth=3; c.setLineDash([2,6]); c.lineCap='round';
   for(const r of S.rival.routes){ const a=P(r.a), b=P(r.b); c.beginPath(); c.moveTo(a.x*T+T/2,a.y*T+T/2); c.lineTo(b.x*T+T/2,b.y*T+T/2); c.stroke(); }
   c.setLineDash([]); }
+  for(const pj of S.projects||[]){ if(pj.kind!=='bridge') continue;
+    c.strokeStyle='#e09f1f'; c.lineWidth=8; c.setLineDash([8,6]); c.lineCap='butt'; c.beginPath(); pj.rail.forEach((i,k)=>{ const x=(i%W)*T+T/2, y=((i/W)|0)*T+T/2; k?c.lineTo(x,y):c.moveTo(x,y); }); c.stroke(); c.setLineDash([]); c.lineCap='round'; }
   for(const pj of S.projects||[]){ if(pj.kind!=='tunnel') continue; const a=P(pj.a), b=P(pj.b); if(!a||!b) continue;
     c.strokeStyle='#e09f1f'; c.lineWidth=5; c.setLineDash([3,5]); c.beginPath(); c.moveTo(a.x*T+T/2,a.y*T+T/2); c.lineTo(b.x*T+T/2,b.y*T+T/2); c.stroke(); c.setLineDash([]); }
   for(const pj of S.projects||[]){ if(pj.kind!=='track') continue;
@@ -1401,6 +1473,10 @@ function draw(){
   const layer=layerNow(), focus=focusLine(), far=cam.z<0.75;
   ensureNet(layer,focus,far);
   c.drawImage(st,0,0,W*T,H*T);
+  if(prefs().night){ const ph=(performance.now()/1000%240)/240, dk=(1-Math.cos(ph*Math.PI*2))/2, a=clamp((dk-0.35)/0.65,0,1)*0.42;
+    if(a>0.01){ c.fillStyle=`rgba(14,22,48,${a.toFixed(3)})`; c.fillRect(-T*4,-T*4,W*T+T*8,H*T+T*8);
+      for(const p of S.towns){ if(p.kind==='industry') continue; const rad=(p.kind==='town'?T*(1.6+Math.min(2,p.pop/4000)):T*0.9), x=p.x*T+T/2, y=p.y*T+T/2, g=c.createRadialGradient(x,y,0,x,y,rad);
+        g.addColorStop(0,`rgba(255,214,120,${(a*1.3).toFixed(3)})`); g.addColorStop(1,'rgba(255,214,120,0)'); c.fillStyle=g; c.beginPath(); c.arc(x,y,rad,0,7); c.fill(); } } }
   c.lineCap='round'; c.lineJoin='round';
   c.globalAlpha=1;
   if(ui.plan && ui.plan.kind==='build'){ c.strokeStyle='#1b2128'; c.globalAlpha=.25; c.lineWidth=12;
@@ -1409,7 +1485,7 @@ function draw(){
   drawIntl(c);
   for(const pj of S.projects||[]){
     const pct=Math.round(clamp((S.day-pj.start)/(pj.done-pj.start),0,1)*100);
-    let x,y; if(pj.kind==='tunnel'){ const a=P(pj.a), b2=P(pj.b); x=(a.x+b2.x)/2*T+T/2; y=(a.y+b2.y)/2*T+T/2; } else if(pj.kind==='upgrade'){ const i=pj.tiles[Math.floor(pj.tiles.length/2)]; if(i==null) continue; x=(i%W)*T+T/2; y=((i/W)|0)*T+T/2; } else if(pj.kind==='track'){ const i=pj.path[Math.floor(pj.path.length/2)]; x=(i%W)*T+T/2; y=((i/W)|0)*T+T/2; } else if(pj.kind==='airport'){ const t=P(pj.town); x=t.x*T+T/2; y=t.y*T-T*0.6; } else { x=pj.x*T+T/2; y=pj.y*T+T/2;
+    let x,y; if(pj.kind==='bridge'){ const i=pj.rail[Math.floor(pj.rail.length/2)]; x=(i%W)*T+T/2; y=((i/W)|0)*T+T/2; } else if(pj.kind==='hub'){ const t=P(pj.town); x=t.x*T+T/2; y=t.y*T-T*0.6; } else if(pj.kind==='tunnel'){ const a=P(pj.a), b2=P(pj.b); x=(a.x+b2.x)/2*T+T/2; y=(a.y+b2.y)/2*T+T/2; } else if(pj.kind==='upgrade'){ const i=pj.tiles[Math.floor(pj.tiles.length/2)]; if(i==null) continue; x=(i%W)*T+T/2; y=((i/W)|0)*T+T/2; } else if(pj.kind==='track'){ const i=pj.path[Math.floor(pj.path.length/2)]; x=(i%W)*T+T/2; y=((i/W)|0)*T+T/2; } else if(pj.kind==='airport'){ const t=P(pj.town); x=t.x*T+T/2; y=t.y*T-T*0.6; } else { x=pj.x*T+T/2; y=pj.y*T+T/2;
       c.strokeStyle='#e09f1f'; c.lineWidth=3; c.setLineDash([5,4]); c.beginPath(); c.arc(x,y,T*1.1,0,7); c.stroke(); c.setLineDash([]); y-=T*1.6; }
     const txt=(pj.kind==='town'?pj.name+' ':'')+'🚧 '+pct+'%'; c.font='700 11px Barlow, system-ui, sans-serif'; const w2=c.measureText(txt).width+12;
     c.fillStyle='#e09f1f'; roundRect(c,x-w2/2,y-9,w2,18,9); c.fill(); c.fillStyle='#1b2128'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(txt,x,y+0.5); c.textAlign='left';
@@ -1542,6 +1618,15 @@ function hud(){
 function updateDots(){ const n=S.tenders.filter(t=>t.state==='open'&&t.myBid==null).length; $('tdot').textContent=n; $('tdot').hidden=!n;
   const w=S.vehicles.filter(v=>vAge(v)>MODELS[v.model].life).length; $('ldot').textContent=w; $('ldot').hidden=!w; }
 function setSpeed(s){ ui.speed=s; document.querySelectorAll('#speed button').forEach(b=>b.classList.toggle('on',+b.dataset.s===s)); }
+let actx=null, lastSfx=0;
+function sfx(kind){
+  if(!S||!prefs().sound||ui.quiet||ui.bg) return; const now=performance.now(); if(kind==='coin'&&now-lastSfx<350) return; lastSfx=now;
+  try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume();
+    const t0=actx.currentTime, notes=kind==='coin'?[[1318,0,0.08],[1760,0.06,0.1]]:kind==='ach'?[[523,0,0.12],[659,0.1,0.12],[784,0.2,0.18]]:[[196,0,0.18],[147,0.12,0.22]];
+    for(const [f,dl,du] of notes){ const o=actx.createOscillator(), g=actx.createGain(); o.type=kind==='build'?'triangle':'sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t0+dl); g.gain.exponentialRampToValueAtTime(kind==='coin'?0.05:0.08,t0+dl+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t0+dl+du);
+      o.connect(g).connect(actx.destination); o.start(t0+dl); o.stop(t0+dl+du+0.02); } }catch(e){}
+}
 function toast(msg,kind){
   if(ui.quiet||ui.bg) return;
   const el=document.createElement('div'); el.className='toast '+(kind||''); el.textContent=msg;
@@ -1560,6 +1645,7 @@ function setTool(t){
   else if(t==='airport') setHint('Tap a town to build an airport');
   else if(t==='found') setHint('Tap empty land for the new town');
   else if(t==='port') setHint('Tap a coastal place to build a port');
+  else if(t==='bridge') setHint('Tap the first shore');
   else if(t==='line') lineHint();
   else setHint(null);
 }
@@ -1685,6 +1771,9 @@ function refreshSheet(){
   else if(s.kind==='sold') soldSheet(ui.soldInfo);
   else if(s.kind==='mapview') mapViewSheet();
   else if(s.kind==='found') foundSheet();
+  else if(s.kind==='bridge') bridgeSheet();
+  else if(s.kind==='research') researchSheet();
+  else if(s.kind==='scenario') scenarioSheet();
   else if(s.kind==='regions') regionsSheet();
   else if(s.kind==='sellRegion') sellRegionSheet(s.name);
   else if(s.kind==='intl'){ const rt=(S.intl||[]).find(x=>x.id===s.id); if(rt) intlSheet(rt); else regionsSheet(); }
@@ -1828,7 +1917,7 @@ function vehSheet(v){
 function modelRows(l, kinds){
   const lpT=linePaths.get(l.id), tl=l.mode==='rail'?minTrack(lpT&&lpT.path):3;
   return kinds.map(kind=>{
-    const list=Object.entries(MODELS).filter(([,m])=>m.mode===l.mode&&m.kind===kind&&m.year<=year()&&(!m.track||tl>=m.track));
+    const list=Object.entries(MODELS).filter(([,m])=>m.mode===l.mode&&m.kind===kind&&m.year<=availYear()&&(!m.track||tl>=m.track));
     if(!list.length) return '';
     return `<h3>Add ${kind==='freight'?'freight':'passenger'} ${l.mode==='air'?'plane':l.mode==='rail'?'train':'vehicle'}</h3>`+list.map(([k,m])=>`<div class="veh"><div class="nm">${m.name}</div><div class="sp">${m.cap}${kind==='freight'?' t':' seats'} · speed ${m.speed} · ${money(m.run*S.infl)}/mo to run</div>
       <button class="btn pri" data-act="addModel" data-id="${l.id}" data-model="${k}" ${S.money<price(k)?'disabled':''} data-cost="${price(k)}">${money(price(k))}</button></div>`).join('');
@@ -1883,6 +1972,7 @@ function buildSheet(){
   <button class="tool" data-act="tool" data-t="rail"><svg viewBox="0 0 24 24"><path d="M8 3v18M16 3v18M5 6h14M5 10.5h14M5 15h14M5 19.5h14"/></svg><b>Railway</b><span>For passenger and freight trains. From ${money(BUILD.rail[GRASS]*S.infl)} per tile.</span></button>
   <button class="tool" data-act="tool" data-t="airport"><svg viewBox="0 0 24 24"><path d="M2 16l20-6-3-2-6 2-5-6H6l3 7-4 1-2-2H2z"/></svg><b>Airport</b><span>Towns of ${AIRPORT_MINPOP.toLocaleString('en-US')}+ people. ${money(airportCost())} plus ${money(AIRPORT_UPKEEP*S.infl)}/mo. You own ${ap}.</span></button>
   <button class="tool" data-act="tool" data-t="port"><svg viewBox="0 0 24 24"><path d="M12 3v14M8 6h8M5 13c0 4 3 7 7 7s7-3 7-7M3 13h4M17 13h4"/></svg><b>Port</b><span>Coastal towns, attractions or industries. ${money(portCost())} plus ${money(PORT_UPKEEP*S.infl)}/mo, ${buildDays('port')} days. For ferries and cargo ships.</span></button>
+  <button class="tool" data-act="tool" data-t="bridge"><svg viewBox="0 0 24 24"><path d="M2 16h20M4 16V9M20 16V9M4 9c4 0 6 4 8 4s4-4 8-4M8 16v-3M12 16v-3M16 16v-3"/></svg><b>Grand bridge or tunnel</b><span>Mega-project: road and railway together across water between two places. About a year to build. Both ends become landmarks that draw 15% more travellers.</span></button>
   <button class="tool" data-act="tool" data-t="found"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V11l4-3 4 3v10M13 21V7l3-3 3 3v14M8 14h2M8 17h2M15 10h2M15 13h2M15 16h2"/></svg><b>New town</b><span>Found a town on empty land: ${money(townCost())}, ${buildDays('town')} days. It grows fast when served and pays you development income.</span></button>
   ${(S.projects||[]).length?`<h3>Under construction</h3><div class="rows">${S.projects.map(pj=>`<div class="row"><span style="color:var(--ink)">${esc(projName(pj))}<small class="m">${Math.round(clamp((S.day-pj.start)/(pj.done-pj.start),0,1)*100)}% · ready ${dateStr(pj.done)}</small></span><button class="btn sm" data-act="rushProj" data-id="${pj.id}" ${pj.rushed?'disabled':''}>${pj.rushed?'Rushed':'Rush '+money(pj.cost*0.5)}</button></div>`).join('')}</div>`:''}
   <p class="note">Construction takes time: vehicles can use a road or railway once it opens. To remove unused track or road, use Road or Railway on two places already linked and choose Remove.</p>`);
@@ -1911,6 +2001,37 @@ function portSheet(t){
   <div class="row"><span>Your other ports</span><b>${others.length?others.map(o=>esc(o.name)).join(', '):'none'}</b></div></div>
   <div class="btns"><button class="btn pri" data-act="buildPort" data-id="${t.id}" ${!ok||S.money<cost?'disabled':''} ${ok?`data-cost="${cost}"`:''}>${ok?'Build port':'Needs water within 2 tiles'}</button><button class="btn" data-act="buildPort" data-rush="1" data-id="${t.id}" ${!ok||S.money<cost*1.5?'disabled':''} ${ok?`data-cost="${Math.round(cost*1.5)}"`:''}>Rush ${money(cost*1.5)}</button></div>`);
 }
+function researchSheet(){
+  const R=S.research||{active:null,progress:0,done:[]};
+  showSheet(`<h2>Research${closeBtn}</h2><div class="sub">${R.done.length}/${Object.keys(RESEARCH).length} complete · one project at a time</div>
+  ${R.active?`<div class="rows"><div class="row"><span>Researching ${RESEARCH[R.active].name}</span><b>${R.progress}/${RESEARCH[R.active].months} months</b></div></div><div class="goal"><i style="width:${Math.round(R.progress/RESEARCH[R.active].months*100)}%"></i></div><p class="note">Costs ${money(RESEARCH[R.active].cost*S.infl)} a month while it runs.</p><div class="btns"><button class="btn warn" data-act="stopResearch">Pause research</button></div>`:'<p class="note">Pick a project. It is paid monthly until it finishes, and the upgrade is permanent for this company.</p>'}
+  ${Object.entries(RESEARCH).map(([k,d])=>{ const done=R.done.includes(k), act=R.active===k; return `<div class="veh"><div class="nm">${d.name}${done?' <span class="chip ok">done</span>':act?' <span class="chip info">in progress</span>':''}</div><div class="sp">${d.desc} · ${d.months} months · ${money(d.cost*S.infl)}/mo</div>${done||act?'<span></span>':`<button class="btn pri" data-act="startResearch" data-k="${k}">${R.active?'Switch':'Start'}</button>`}</div>`; }).join('')}
+  <p class="note">Switching to another project keeps the progress made on this one.</p>`);
+}
+function scenarioSheet(){
+  const sc=S.scenario, def=sc&&SCENARIOS.find(x=>x.id===sc.id); if(!def){ hideSheet(); return; }
+  const L=S.legacy||loadLegacy(), best=L.medals?.[def.id];
+  showSheet(`<h2>${esc(def.name)}${closeBtn}</h2><div class="sub">Scenario · ${DIFF[def.diff].name}${best?` · best ${best}`:''}</div>
+  <p style="font-weight:600">${esc(def.goal)}</p>
+  <div class="rows"><div class="row"><span>🥇 Gold</span><b>by ${def.medals[0]}</b></div><div class="row"><span>🥈 Silver</span><b>by ${def.medals[1]}</b></div><div class="row"><span>🥉 Bronze</span><b>by ${def.medals[2]}</b></div><div class="row"><span>Now</span><b>${dateStr(S.day)}</b></div></div>
+  ${sc.done?`<p class="pos" style="font-weight:600">Completed in ${sc.year}: ${sc.medal==='finished'?'finished after the bronze deadline':sc.medal+' medal'}! Keep playing, or try another scenario from New map.</p>`:year()>def.medals[2]?'<p class="warnc">The bronze deadline has passed, but you can still finish it.</p>':''}
+  <div class="btns"><button class="btn pri" data-act="close">${sc.done?'Keep playing':'Play'}</button><button class="btn" data-act="newgame">Other scenarios</button></div>`);
+}
+function bridgePlan(a,b){
+  const rp=planBuild('rail',a,b), dp=planBuild('road',a,b); if(!rp||!dp) return null;
+  const water=rp.path.filter(i=>terrain[i]===WATER).length;
+  const cost=Math.round((rp.cost+dp.cost)*1.5+2e6*S.infl*DF().cost);
+  return { a:a.id, b:b.id, rail:rp.path, road:dp.path, water, cost, days:buildDays('bridge') };
+}
+function bridgeSheet(){
+  const pl=ui.bridgePlan; if(!pl){ hideSheet(); return; } const a=P(pl.a), b=P(pl.b);
+  const name=pl.water>=6?'Undersea tunnel':'Grand bridge';
+  if(pl.water<3){ showSheet(`<h2>Not across water${closeBtn}</h2><p>${esc(a.name)} and ${esc(b.name)} aren't separated by enough water for a mega-project. Pick two places on opposite shores.</p>`); return; }
+  showSheet(`<h2>${name}${closeBtn}</h2><div class="sub">${esc(a.name)} ↔ ${esc(b.name)} · ${pl.water} water tiles</div>
+  <div class="rows"><div class="row"><span>Cost</span><b>${money(pl.cost)}</b></div><div class="row"><span>Build time</span><b>${pl.days} days · ready ${dateStr(S.day+pl.days)}</b></div>
+  <div class="row"><span>Builds</span><b>road and railway</b></div><div class="row"><span>Landmark bonus</span><b>+15% travellers at both ends</b></div></div>
+  <div class="btns"><button class="btn pri" data-act="buildBridge" ${S.money<pl.cost?'disabled':''} data-cost="${pl.cost}">Start ${name.toLowerCase()}</button><button class="btn" data-act="cancel">Cancel</button></div>`);
+}
 function foundSheet(){
   const f=ui.foundAt; if(!f){ hideSheet(); return; }
   const prob=siteProblem(f.x,f.y), cost=townCost(), used=new Set(S.towns.map(t=>t.name).concat((S.projects||[]).filter(x=>x.kind==='town').map(x=>x.name)));
@@ -1927,7 +2048,8 @@ function airportSheet(t){
   const ok=t.kind==='town'&&t.pop>=AIRPORT_MINPOP, cost=airportCost(), others=S.towns.filter(x=>x.airport&&x.id!==t.id);
   if(t.airport){ showSheet(`<h2>${esc(t.name)} Airport${closeBtn}</h2><div class="sub">Open · ${money(AIRPORT_UPKEEP*S.infl)}/mo upkeep</div>
     <p>${others.length?`Make an air line to ${others.map(o=>esc(o.name)).join(', ')}.`:'Build a second airport to start flying.'}</p>
-    <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${t.id}">New air line from here</button></div>`); return; }
+    <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${t.id}">New air line from here</button></div>
+    ${t.hub?'<p class="pos">Hub airport: 20% more travellers, and 50% more on international flights.</p>':(S.projects||[]).some(x=>x.kind==='hub'&&x.town===t.id)?'<p class="note">Hub upgrade under construction.</p>':`<div class="lc"><div class="main"><span class="rt">Upgrade to hub airport</span><small class="m">Mega-project · ${buildDays('hub')} days · needs 6,000+ people · 20% more travellers here, 50% more on international flights</small></div><div class="side"><button class="btn pri sm" data-act="buildHub" data-id="${t.id}" ${t.pop<6000||S.money<hubCost()?'disabled':''} ${t.pop<6000?'':`data-cost="${hubCost()}"`}>${money(hubCost())}</button></div></div>`}`); return; }
   const apj=(S.projects||[]).find(x=>x.kind==='airport'&&x.town===t.id);
   if(apj){ showSheet(`<h2>${esc(t.name)} Airport${closeBtn}</h2><div class="sub">Under construction · ready ${dateStr(apj.done)}</div>
     <div class="goal"><i style="width:${Math.round(clamp((S.day-apj.start)/(apj.done-apj.start),0,1)*100)}%"></i></div>
@@ -2053,7 +2175,9 @@ function companySheet(){
   <button class="btn" data-act="repay" ${S.loan<=0||S.money<25000?'disabled':''}>Repay $25,000</button></div>
   <h3>Career</h3>${statsGrid(false)}
   ${S.news.length?`<h3>News</h3><div class="rows">${S.news.map(n=>`<div class="row"><span>${esc(n)}</span><b></b></div>`).join('')}</div>`:''}
+  ${S.scenario?`<div class="btns"><button class="btn" data-act="showScenario">Scenario: ${esc(SCENARIOS.find(x=>x.id===S.scenario.id)?.name||'')}${S.scenario.done?' ✓':''}</button></div>`:''}
   <div class="btns"><button class="btn" data-act="fleet">Fleet manager and autopilot</button><button class="btn" data-act="invest">Investments</button></div>
+  <div class="btns"><button class="btn" data-act="research">Research${S.research&&S.research.active?' · in progress':''}</button></div>
   <div class="btns"><button class="btn" data-act="sellCo">Sell the company</button><button class="btn" data-act="hall">Hall of fame · level ${repLevel()}</button></div>
   <div class="btns"><button class="btn pri" data-act="backup">Backup and restore</button><button class="btn" data-act="newgame">New map or real place</button></div>
   <p class="note">Last backup: ${S.lastBackup?new Date(S.lastBackup).toLocaleDateString():'<span class="neg">never</span>'}. Back up now and then so you never lose your company.</p>`);
@@ -2102,9 +2226,9 @@ function linePlanSheet(){
     const od=mode==='metro'?opensOnMetro(stops):opensOn(mode,lp.path), trackLv=mode==='rail'?minTrack(lp.path):3, openNote=od>S.day?`<p class="note warnc">Track still under construction: opens ${dateStr(od)}. Vehicles you buy now wait at the first stop until then.</p>`:'';
     const len=lp.cum[lp.cum.length-1];
     return head+openNote+Object.entries(MODELS).filter(([,m])=>m.mode===mode&&kinds.includes(m.kind)).map(([k,m])=>{
-      const locked=year()<m.year||(m.track&&trackLv<m.track), days=Math.round((len/m.speed+stops.length*DWELL[mode])*2), pr=price(k);
+      const locked=availYear()<m.year||(m.track&&trackLv<m.track), days=Math.round((len/m.speed+stops.length*DWELL[mode])*2), pr=price(k);
       return `<div class="veh"><div class="nm">${m.name}${m.kind==='freight'?' <span class="chip info">freight</span>':''}</div>
-        <div class="sp">${year()<m.year?`Available from ${m.year}`:m.track&&trackLv<m.track?`Needs ${TRACK_NAMES[m.track].toLowerCase()}: create the line, then upgrade its track`:`${m.cap}${m.kind==='freight'?' t':' seats'} · round trip ${days} days · ${money(m.run*S.infl)}/mo`}</div>
+        <div class="sp">${availYear()<m.year?`Available from ${m.year-(res('early')?5:0)}`:m.track&&trackLv<m.track?`Needs ${TRACK_NAMES[m.track].toLowerCase()}: create the line, then upgrade its track`:`${m.cap}${m.kind==='freight'?' t':' seats'} · round trip ${days} days · ${money(m.run*S.infl)}/mo`}</div>
         <button class="btn pri" data-act="buy" data-mode="${mode}" data-model="${k}" ${locked||S.money<pr?'disabled':''} ${locked?'':`data-cost="${pr}"`}>${money(pr)}</button></div>`; }).join('');
   };
   let order=['road','rail','metro','air','sea']; if(ui.prefMode) order=[ui.prefMode,...order.filter(m=>m!==ui.prefMode)];
@@ -2162,6 +2286,8 @@ function mapSheet(err){
   ${can?`<label class="sub" for="place">Where?</label>
   <input id="place" class="field" type="text" maxlength="80" placeholder="e.g. Malaysia, Scotland, Tokyo" autocomplete="off" value="${esc(ui.lastPlace||'')}">
   <div class="btns"><button class="btn pri" data-act="realMap">Build real map</button></div>`:''}
+  <h3>Scenarios</h3>
+  <div class="rows">${SCENARIOS.map(sc=>{ const m=(S.legacy||loadLegacy()).medals?.[sc.id]; return `<button class="row" data-act="startScenario" data-k="${sc.id}"><span>${esc(sc.name)}<small class="m">${DIFF[sc.diff].name} · ${sc.map==='random'?'random map':PRESETS[sc.map].label} · ${esc(sc.goal)}</small></span><b>${m==='gold'?'🥇':m==='silver'?'🥈':m==='bronze'?'🥉':m?'✓':'›'}</b></button>`; }).join('')}</div>
   <h3>Difficulty</h3>
   <div class="btns">${Object.entries(DIFF).map(([k,d])=>`<button class="btn sm ${(ui.newDiff||'normal')===k?'pri':''}" data-act="pickDiff" data-k="${k}">${d.name}</button>`).join('')}</div>
   <p class="note">${diffNote(ui.newDiff||'normal')}</p>
@@ -2364,6 +2490,26 @@ $('card').addEventListener('click', e=>{
     tenderLine(){ const t=S.tenders.find(x=>x.id===id); if(!t) return; setTool('line'); ui.stops=[t.a,t.b]; ui.prefMode=t.mode==='rail'?'rail':null; ui.planOpen=true; lineHint(); linePlanSheet(); },
     setLayer(){ setLayer(b.dataset.k); mapViewSheet(); },
     pickDiff(){ ui.newDiff=b.dataset.k; mapSheet(); },
+    research(){ setTool('inspect'); markTool('company'); ui.sel={kind:'research'}; researchSheet(); },
+    startResearch(){ const k=b.dataset.k; S.research=S.research||{active:null,progress:0,done:[],saved:{}}; const R=S.research; R.saved=R.saved||{}; if(R.active) R.saved[R.active]=R.progress; R.active=k; R.progress=R.saved[k]||0; save(); toast(`Research started: ${RESEARCH[k].name}.`,'good'); researchSheet(); },
+    stopResearch(){ const R=S.research; if(!R||!R.active) return; R.saved=R.saved||{}; R.saved[R.active]=R.progress; R.active=null; R.progress=0; save(); researchSheet(); },
+    buildBridge(){ const pl=ui.bridgePlan; if(!pl||pl.water<3||S.money<pl.cost) return; S.money-=pl.cost; S.m.build+=pl.cost;
+      const name=pl.water>=6?'Undersea tunnel':'Grand bridge'; startProject({kind:'bridge',name,a:pl.a,b:pl.b,rail:pl.rail,road:pl.road,done:S.day+pl.days,cost:pl.cost}); ui.bridgePlan=null; save();
+      toast(`${name} construction started, ready ${dateStr(S.day+pl.days)}.`,'good'); setTool('inspect'); },
+    buildHub(){ const t=P(id), c=hubCost(); if(!t.airport||t.hub||t.pop<6000||S.money<c||(S.projects||[]).some(x=>x.kind==='hub'&&x.town===id)) return; S.money-=c; S.m.build+=c; startProject({kind:'hub',town:id,done:S.day+buildDays('hub'),cost:c}); save(); toast(`Hub airport upgrade started in ${t.name}.`,'good'); refreshSheet(); },
+    startScenario(){ const sc=SCENARIOS.find(x=>x.id===b.dataset.k); if(!sc) return; ui.newDiff=sc.diff; let h=0; for(const ch of sc.id) h=(h*31+ch.charCodeAt(0))|0;
+      if(sc.map==='random') newGame(h); else newGame(h, geoWorld(PRESETS[sc.map].geo,h));
+      S.scenario={id:sc.id, done:false}; S.seenIntro=true; save(); setTool('inspect'); centerMap(); setSpeed(1); updateDots(); updateRegionBtn(); ui.sel={kind:'scenario'}; scenarioSheet(); },
+    showScenario(){ ui.sel={kind:'scenario'}; scenarioSheet(); },
+    copyScore(){ const L=loadLegacy(); L.name=(($('myname')?.value||'').trim().slice(0,20))||'Tycoon'; saveLegacy(L);
+      const best=Math.max(0,...(L.hall||[]).map(h=>h.sale||0)); const data={n:L.name, best, peak:Math.round(Math.max(S.stats?.peakValue||0,companyValue())), ach:Object.keys(L.ach||{}).length, gold:Object.values(L.medals||{}).filter(m=>m==='gold').length, rep:L.rep||0};
+      const code='LWS1:'+b64(new TextEncoder().encode(JSON.stringify(data)));
+      const done=()=>toast('Score code copied. Send it to a friend.','good');
+      try{ navigator.clipboard.writeText(code).then(done,()=>{ const f=$('fcode'); if(f){ f.value=code; f.select(); } toast('Copy the code from the box below.'); }); }catch(e){ const f=$('fcode'); if(f){ f.value=code; f.select(); } } },
+    addFriend(){ const code=($('fcode')?.value||'').trim(); if(!code.startsWith('LWS1:')){ toast('That is not a score code. It starts with LWS1:','bad'); return; }
+      try{ const d=JSON.parse(new TextDecoder().decode(unb64(code.slice(5)))); const f={name:String(d.n||'Friend').slice(0,20), best:+d.best||0, peak:+d.peak||0, ach:+d.ach||0, gold:+d.gold||0};
+        const L=loadLegacy(); L.friends=(L.friends||[]).filter(x=>x.name!==f.name).concat([f]); saveLegacy(L); toast(`Added ${f.name}.`,'good'); hallSheet(); }catch(e){ toast('That score code could not be read.','bad'); } },
+    removeFriend(){ const L=loadLegacy(); L.friends=(L.friends||[]).filter((_,i)=>i!==id); saveLegacy(L); hallSheet(); },
     planExpress(){ ui.planExpress=b.dataset.v==='1'; linePlanSheet(); },
     buildTunnels(){ const rush=b.dataset.rush==='1', stops=ui.stops, have=new Set(S.tunnels||[]), pend=new Set((S.projects||[]).filter(x=>x.kind==='tunnel').map(x=>x.key)), miss=[];
       for(let k=0;k<stops.length-1;k++){ const key=tkey(stops[k],stops[k+1]); if(!have.has(key)&&!pend.has(key)) miss.push([stops[k],stops[k+1],key]); }
@@ -2503,6 +2649,9 @@ function tap(px,py){
     return;
   }
   if(ui.tool==='found'){ const tx2=Math.floor(w.x/T), ty2=Math.floor(w.y/T); if(tx2<0||ty2<0||tx2>=W||ty2>=H) return; ui.foundAt={x:tx2,y:ty2}; ui.foundName=null; ui.sel={kind:'found'}; setHint(null); foundSheet(); return; }
+  if(ui.tool==='bridge'){ if(!t) return; if(ui.pickA==null){ ui.pickA=t.id; hideSheet(); setHint('Now tap the place across the water'); return; }
+    if(t.id===ui.pickA){ ui.pickA=null; setHint('Tap the first shore'); return; }
+    ui.bridgePlan=bridgePlan(P(ui.pickA),t); ui.pickA=null; setHint(null); if(!ui.bridgePlan){ toast('No route possible there.','bad'); return; } ui.sel={kind:'bridge'}; bridgeSheet(); return; }
   if(ui.tool==='port'){ if(!t) return; ui.sel={kind:'port',id:t.id}; setHint(null); refreshSheet(); return; }
   if(ui.tool==='airport'){ if(!t) return; if(t.kind!=='town'){ toast('Airports go in towns.'); return; } ui.sel={kind:'airport',id:t.id}; setHint(null); refreshSheet(); return; }
   if(ui.tool==='line'){
@@ -2523,6 +2672,7 @@ function tap(px,py){
 }
 const ptrs=new Map(); let gesture=null;
 cv.addEventListener('pointerdown', e=>{
+  try{ if(prefs().sound&&!actx){ actx=new (window.AudioContext||window.webkitAudioContext)(); } else if(actx&&actx.state==='suspended') actx.resume(); }catch(err){}
   cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===1) gesture={ moved:0, multi:false, t:performance.now() }; else if(gesture) gesture.multi=true;
 });
@@ -2584,7 +2734,7 @@ function mapViewSheet(){
     ${opt('terrain','Terrain','Hills and forests, for planning')}
   </div>
   <h3>Show on the map</h3>
-  <div class="rows">${tog('vehicles','Vehicles')}${tog('waits','Waiting counts')}${tog('pops','Money pop-ups')}${tog('rival',RIVAL+' routes')}</div>`);
+  <div class="rows">${tog('vehicles','Vehicles')}${tog('waits','Waiting counts')}${tog('pops','Money pop-ups')}${tog('rival',RIVAL+' routes')}${tog('night','Day and night')}${tog('sound','Sound')}</div>`);
 }
 function fleetPlan(){
   const worn=[], ageing=[], outdated=[];
@@ -2675,13 +2825,24 @@ function sellSheet(){
 function hallSheet(){
   const L=S.legacy||loadLegacy(), mine=(L.hall||[]).slice().sort((a,b)=>b.sale-a.sale);
   const best=mine[0]?.sale||0, cur=companyValue();
-  const board=TYCOONS.map(([n,v])=>({n,v,you:false})).concat(best?[{n:'You (best sale)',v:best,you:true}]:[]).concat([{n:'You (this company)',v:cur,you:true,cur:true}]).sort((a,b)=>b.v-a.v);
+  const friends=(L.friends||[]).map(f=>({n:f.name+' (friend)',v:Math.max(f.best||0,f.peak||0),friend:true}));
+  const board=TYCOONS.map(([n,v])=>({n,v,you:false})).concat(friends).concat(best?[{n:'You (best sale)',v:best,you:true}]:[]).concat([{n:'You (this company)',v:cur,you:true,cur:true}]).sort((a,b)=>b.v-a.v);
   showSheet(`<h2>Hall of fame${closeBtn}</h2><div class="sub">Founder reputation level ${repLevel()} · ${mine.length} compan${mine.length===1?'y':'ies'} sold</div>
   <h3>Tycoon rankings</h3>
   <div class="rows">${board.map((x,i)=>`<div class="row"><span style="color:var(--ink)${x.you?';font-weight:700':''}">${i+1}. ${esc(x.n)}</span><b>${money(x.v)}</b></div>`).join('')}</div>
   <h3>Your companies</h3>
   ${mine.length?`<div class="rows">${mine.map(h=>`<div class="row"><span style="color:var(--ink)">${esc(h.regions)}<small class="m">${(DIFF[h.diff]||DIFF.normal).name} · ${h.from}–${h.to} · peak ${money(h.peak)} · bought by ${esc(h.buyer)}</small></span><b>${money(h.sale)}</b></div>`).join('')}</div>`:'<p class="note">None sold yet. Sell a company from the Company tab to enter the hall.</p>'}
   <p class="note">Each sale raises your founder reputation (up to level 10): new companies start with more cash, cheaper loans and a bigger loan limit.</p>
+  <h3>Achievements · ${Object.keys(L.ach||{}).length}/${ACH.length}</h3>
+  <div class="rows">${ACH.map(([id,name,desc])=>`<div class="row"><span style="color:var(--ink)${L.ach?.[id]?'':';opacity:.45'}">${L.ach?.[id]?'🏆':'🔒'} ${esc(name)}<small class="m">${esc(desc)}</small></span><b></b></div>`).join('')}</div>
+  <h3>Medals</h3>
+  <div class="rows">${SCENARIOS.map(sc=>`<div class="row"><span style="color:var(--ink)">${esc(sc.name)}</span><b>${({gold:'🥇 gold',silver:'🥈 silver',bronze:'🥉 bronze',finished:'✓ finished'})[L.medals?.[sc.id]]||'–'}</b></div>`).join('')}</div>
+  <h3>Compare with friends</h3>
+  <label class="sub" for="myname">Your name</label><input id="myname" class="field" type="text" maxlength="20" value="${esc(L.name||'')}" placeholder="Shown to friends">
+  <div class="btns"><button class="btn pri" data-act="copyScore">Copy my score code</button></div>
+  <label class="sub" for="fcode">Friend's score code</label><input id="fcode" class="field" type="text" placeholder="Paste a code starting LWS1:">
+  <div class="btns"><button class="btn" data-act="addFriend">Add friend</button></div>
+  ${(L.friends||[]).length?`<div class="rows">${L.friends.map((f,i)=>`<div class="row"><span style="color:var(--ink)">${esc(f.name)}<small class="m">best ${money(Math.max(f.best||0,f.peak||0))} · ${f.ach||0} achievements · ${f.gold||0} gold medals</small></span><button class="btn warn sm" data-act="removeFriend" data-id="${i}">Remove</button></div>`).join('')}</div>`:''}
   ${S.over?'':'<div class="btns"><button class="btn" data-act="sellCo">Sell the company</button></div>'}
   ${S.sold?'<div class="btns"><button class="btn pri" data-act="newgame">Start a new company</button></div>':''}`);
 }
