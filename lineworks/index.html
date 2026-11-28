@@ -262,7 +262,7 @@ let roads, rails, planned, terrain, placeTile;
 let linePaths = new Map(), overlay = [], laneOff = new Map();
 let routes = new Map(), fRoutes = new Map(), rates = new Map(), lineCount = new Map();
 let railSegsW = [], roadSegsW = [];
-let problemLines = new Set();
+let problemLines = new Map();
 const prefs = () => (S.prefs ||= { vehicles:true, waits:true, pops:true, rival:false });
 const autos = () => (S.auto ||= { replace:false, fares:false, cars:false });
 const ui = { tool:'inspect', pickA:null, stops:[], plan:null, sel:null, speed:1, lastPlace:'', mapCtl:null, layer:'lines', editLine:null, prefMode:null, confirm:null };
@@ -1194,7 +1194,7 @@ function renderBase(){
 
 function ensureNet(layer,focus,far){
   const showRival = prefs().rival || (ui.sel && (ui.sel.kind==='tenders'||ui.sel.kind==='tender'));
-  const key=[netVer,layer,focus,far,showRival,ui.tool==='road'||ui.tool==='rail',layer==='problems'?[...problemLines].join('.'):''].join('|');
+  const key=[netVer,layer,focus,far,showRival,ui.tool==='road'||ui.tool==='rail',layer==='problems'?[...problemLines].map(e=>e.join(':')).join('.'):''].join('|');
   if(key===netKey) return; netKey=key;
   renderBase();
   const c=sx; c.setTransform(NS,0,0,NS,0,0);
@@ -1213,19 +1213,27 @@ function ensureNet(layer,focus,far){
   c.lineCap='round'; c.lineJoin='round';
   if(showLines) for(const o of overlay){
     if((layer==='rail'||layer==='road') && o.mode!==layer) continue;
-    c.globalAlpha = focus!=null ? (focus===o.id?1:0.15) : layer==='problems' ? (problemLines.has(o.id)?1:0.15) : 1;
+    c.globalAlpha = focus!=null ? (focus===o.id?1:0.15) : layer==='problems' ? (problemLines.has(o.id)?1:0.18) : 1;
     if(o.mode==='air'){
       c.strokeStyle=o.color; c.lineWidth=3; c.setLineDash([7,6]);
       for(const [a,b] of o.arcs){ const k=airCtrl(a,b); c.beginPath(); c.moveTo(a[0]*T+T/2,a[1]*T+T/2); c.quadraticCurveTo(k[0]*T+T/2,k[1]*T+T/2,b[0]*T+T/2,b[1]*T+T/2); c.stroke(); }
       c.setLineDash([]); continue;
     }
     c.strokeStyle='#fff'; c.lineWidth=far?7:9; c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
-    c.strokeStyle=layer==='problems'&&problemLines.has(o.id)?'#d2402f':o.color; c.lineWidth=(o.mode==='rail'?6:5)-(far?1.5:0); c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
+    c.strokeStyle=layer==='problems'&&problemLines.has(o.id)?(problemLines.get(o.id)==='red'?'#d2402f':'#e09f1f'):o.color; c.lineWidth=(o.mode==='rail'?6:5)-(far?1.5:0); c.beginPath(); for(const s of o.segs){ c.moveTo(s[0],s[1]); c.lineTo(s[2],s[3]); } c.stroke();
   }
   c.globalAlpha=1; c.setLineDash([]);
 }
 function layerNow(){ return ui.tool==='rail' ? 'rail' : ui.tool==='road' ? 'road' : ui.layer; }
-function refreshProblems(){ problemLines=new Set(); for(const l of S.lines){ const d=diagnose(l); if(d.losing||d.reasons.some(x=>x.key.startsWith('under')||x.key==='old')) problemLines.add(l.id); } }
+function lineProblem(l){
+  if((l.months||0)<2) return null;
+  const d=diagnose(l); if(d.losing) return 'red';
+  if(d.st.old.length) return 'amber';
+  const st=d.st, struggling=l.stops.some(id=>{ const t=P(id); return isPax(t)&&t.rating<0.45; });
+  for(const k of ['pass','freight']){ const q=st[k]; if(q.n && q.demand>q.seats*2 && struggling) return 'amber'; }
+  return null;
+}
+function refreshProblems(){ problemLines=new Map(); for(const l of S.lines){ const pr=lineProblem(l); if(pr) problemLines.set(l.id,pr); } }
 function draw(){
   const c=cx;
   c.setTransform(dpr,0,0,dpr,0,0);
@@ -2210,7 +2218,7 @@ function mapViewSheet(){
   showSheet(`<h2>Map view${closeBtn}</h2><div class="sub">Zoom out and small details hide on their own</div>
   <div class="rows">
     ${opt('lines','Clean','All your lines in colour')}
-    ${opt('problems','Problems only','Losing or overloaded lines in red, the rest faded')}
+    ${opt('problems','Problems only','Red: losing money. Amber: worn-out vehicles, or far more riders than seats at a struggling stop. Healthy lines fade.')}
     ${opt('rail','Railways','Just your track')}
     ${opt('road','Roads','Just your roads')}
     ${opt('terrain','Terrain','Hills and forests, for planning')}
@@ -2231,7 +2239,7 @@ function replaceMany(list){ let n=0, spent=0; const reserve=autoReserve(); for(c
 function fleetSheet(){
   const f=fleetPlan(), a=autos(), run=S.vehicles.reduce((s2,v)=>s2+runCost(v),0), broken=S.vehicles.filter(v=>v.broken).length;
   const conf=k=>ui.confirm===k;
-  const att=S.lines.map(l=>({l,d:diagnose(l)})).filter(x=>x.d.losing||x.d.reasons.some(r2=>r2.key.startsWith('under'))).sort((x,y)=>(x.d.rev-x.d.cost)-(y.d.rev-y.d.cost)).slice(0,8);
+  const att=S.lines.map(l=>({l,d:diagnose(l),pr:lineProblem(l)})).filter(x=>x.pr).sort((x,y)=>(x.d.rev-x.d.cost)-(y.d.rev-y.d.cost)).slice(0,8);
   const fixBtn=fx=>fx?`<button class="btn sm" data-act="${fx.act}" ${fx.id!=null?`data-id="${fx.id}"`:''} ${fx.d!=null?`data-d="${fx.d}"`:''} ${fx.t?`data-t="${fx.t}"`:''}>${fx.label}</button>`:'';
   const tog=(k,label,desc)=>`<button class="row" data-act="toggleAuto" data-k="${k}"><span>${label}<small class="m">${desc}</small></span><b class="${a[k]?'pos':''}">${a[k]?'On':'Off'}</b></button>`;
   showSheet(`<h2>Fleet manager${closeBtn}</h2><div class="sub">${S.vehicles.length} vehicles · ${money(run)}/mo to run · ${broken} broken down</div>
@@ -2258,7 +2266,7 @@ function fleetSheet(){
   <p class="note">Autopilot keeps at least ${money(autoReserve())} in cash and never borrows.</p>
   <h3>Lines needing attention</h3>
   ${att.length?att.map(x=>{ const top=x.d.reasons.find(r2=>!['new','air','fuel'].includes(r2.key)); return `<div class="lc"><button class="main" data-act="selLine" data-id="${x.l.id}"><span class="rt">${badge(x.l)}${route(x.l)}</span><small class="m">${x.d.losing?`<span class="neg">${signed(x.d.rev-x.d.cost)}/mo</span>`:'<span class="pos">profitable</span>'}${top?' · '+esc(top.short):''}</small></button><div class="side">${top?fixBtn(top.fix):''}</div></div>`; }).join('')
-    :'<p class="note">Every line is earning and has enough seats.</p>'}`);
+    :'<p class="note">Every line is earning and coping with its passengers.</p>'}`);
 }
 const autoReserve = () => Math.max(50000*S.infl, S.vehicles.reduce((s2,v)=>s2+runCost(v),0)*2);
 function autopilot(){
