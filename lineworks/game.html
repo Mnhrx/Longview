@@ -350,7 +350,11 @@ const canPort = p => { for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++){ cons
 function buildHarbour(){ harbour=new Uint8Array(W*H); for(const p of S.towns) if(p.port) for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++){ const x=p.x+dx, y=p.y+dy; if(x>=0&&y>=0&&x<W&&y<H) harbour[idx(x,y)]=1; } }
 const airportCost = () => Math.round(AIRPORT_COST*S.infl*DF().cost);
 const airportValue = () => S.towns.filter(t=>t.airport).length * AIRPORT_COST * 0.5 * S.infl;
-function assetsOf(o){ return o.vehicles.reduce((s2,v)=>s2+vehValue(v),0) + o.props.reduce((s2,b)=>s2+Math.round(propPrice(b.type,o.towns[b.town])*0.9),0) + o.towns.filter(t=>t.airport).length*AIRPORT_COST*0.5*S.infl + o.towns.filter(t=>t.port).length*PORT_COST*0.5*S.infl + o.towns.reduce((s2,t)=>s2+stationValue(t),0); }
+const MAX_PLOTS = 3;
+const landPrice = t => Math.round(15000*S.infl*Math.pow(Math.max(sizeOf(t),200)/1000,0.9)*(1+0.6*(t.linesHere||0)+0.3*(t.station||0)+(t.airport?0.5:0)+(t.port?0.3:0)));
+const landValueOf = o => (o.land||[]).reduce((s2,pl)=>s2+(o.towns[pl.town]?landPrice(o.towns[pl.town]):0),0);
+const stakeValueOf = o => o.rival ? (o.rival.owned ? o.rival.value : (o.rival.stake||0)*o.rival.value) : 0;
+function assetsOf(o){ return landValueOf(o) + stakeValueOf(o) + o.vehicles.reduce((s2,v)=>s2+vehValue(v),0) + o.props.reduce((s2,b)=>s2+Math.round(propPrice(b.type,o.towns[b.town])*0.9),0) + o.towns.filter(t=>t.airport).length*AIRPORT_COST*0.5*S.infl + o.towns.filter(t=>t.port).length*PORT_COST*0.5*S.infl + o.towns.reduce((s2,t)=>s2+stationValue(t),0); }
 let bgActive=null, bgIndex=-1;
 const intlValue = () => (S.intl||[]).reduce((s2,rt)=>s2+rt.veh.reduce((a,v)=>a+vehValue(v),0),0);
 const saleRep = (sale,diff) => 1+(sale>=1e8?1:0)+(sale>=1e9?1:0)+((DIFF[diff]||DIFF.normal).rep);
@@ -570,7 +574,7 @@ function newGame(seed, world){
   S = { v:3, seed, day:0, money:80000, loan:0, terrain:ter, roads:new Array(W*H).fill(0), rails:new Array(W*H).fill(0), planned:new Array(W*H).fill(0),
         towns:places, lines:[], vehicles:[], props:[], nextLine:1, nextVeh:1, nextTender:1, hist:[], m:freshMonth(), yearFares:0,
         infl:1, fareInfl:1, fuelUntil:0, tourismUntil:0, events:[], news:[], tenders:[], rival:{ value:400000, routes:[] },
-        debtMonths:0, over:false, won:false, seenIntro:false, region, stats:freshStats(), others:[], intl:[], perf:{rev:0,last:0}, nextIntl:1, projects:[], nextProj:1 };
+        debtMonths:0, over:false, won:false, seenIntro:false, region, stats:freshStats(), others:[], intl:[], perf:{rev:0,last:0}, nextIntl:1, projects:[], nextProj:1, land:[] };
   S.diff=ui.newDiff||S.diff||'normal'; S.legacy=loadLegacy(); S.money=Math.round(DF().start*(1+0.5*repLevel())); S.companyId=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   hydrate();
   for(const l of plannedLines) rasterPlanned(l);
@@ -585,7 +589,7 @@ function ensureStats(){
   const v=companyValue(); if(v>S.stats.peakValue){ S.stats.peakValue=v; S.stats.peakDay=S.day; }
   if(S.money>S.stats.peakCash) S.stats.peakCash=S.money;
 }
-function freshMonth(){ return { fares:0, cargo:0, rent:0, run:0, upkeep:0, interest:0, build:0, vehicles:0, sales:0, tenders:0 }; }
+function freshMonth(){ return { fares:0, cargo:0, rent:0, run:0, upkeep:0, interest:0, build:0, vehicles:0, sales:0, tenders:0, invest:0, dividends:0 }; }
 
 function hydrate(){
   terrain=S.terrain; roads=Uint8Array.from(S.roads); rails=Uint8Array.from(S.rails); planned=Uint8Array.from(S.planned);
@@ -602,7 +606,7 @@ let saveDirty=false, lastSave=0;
 function requestSave(){ saveDirty=true; }
 function save(){ saveDirty=false; lastSave=performance.now(); if(S) S.savedAt=Date.now(); try{ localStorage.setItem(SAVE_KEY, serialize()); }catch(e){} }
 function loadGame(raw){
-  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; S.legacy=loadLegacy(); saveLegacy(S.legacy); if(!S.companyId) S.companyId=(S.sold?'sold-':'')+Date.now().toString(36)+Math.random().toString(36).slice(2,8); S.others=S.others||[]; S.intl=S.intl||[]; S.perf=S.perf||{rev:0,last:0}; S.nextIntl=S.nextIntl||1; S.projects=S.projects||[]; S.nextProj=S.nextProj||1; hydrate(); renderStatic(); return true; }
+  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; S.legacy=loadLegacy(); saveLegacy(S.legacy); if(!S.companyId) S.companyId=(S.sold?'sold-':'')+Date.now().toString(36)+Math.random().toString(36).slice(2,8); S.others=S.others||[]; S.intl=S.intl||[]; S.perf=S.perf||{rev:0,last:0}; S.nextIntl=S.nextIntl||1; S.projects=S.projects||[]; S.nextProj=S.nextProj||1; S.land=S.land||[]; hydrate(); renderStatic(); return true; }
   catch(e){ return false; }
 }
 
@@ -866,8 +870,8 @@ function monthlyTenders(r){
   for(const t of S.tenders){
     const a=P(t.a), b=P(t.b);
     if(t.state==='open' && S.day>=t.bidUntil){
-      if(t.myBid!=null && t.myBid<t.rivalBid){ t.state='won'; S.stats.tendersWon++; toast(`You won the ${a.name}–${b.name} tender at ${money(t.reward*t.myBid)}. Finish by ${dateStr(t.deadline)}.`,'good'); news(`Won tender ${a.name}–${b.name}.`); }
-      else if(t.myBid==null && r()<0.5){ t.state='lapsed'; news(`Tender ${a.name}–${b.name} lapsed with no winner.`); }
+      if(t.myBid!=null && (S.rival.owned || t.myBid<t.rivalBid)){ t.state='won'; S.stats.tendersWon++; toast(`You won the ${a.name}–${b.name} tender at ${money(t.reward*t.myBid)}. Finish by ${dateStr(t.deadline)}.`,'good'); news(`Won tender ${a.name}–${b.name}.`); }
+      else if(S.rival.owned || (t.myBid==null && r()<0.5)){ t.state='lapsed'; news(`Tender ${a.name}–${b.name} lapsed with no winner.`); }
       else { t.state='lost'; if(t.myBid!=null) S.stats.tendersLost++; S.rival.routes.push({a:t.a,b:t.b,mode:t.mode==='rail'?'rail':'road'}); S.rival.value+=t.reward*t.rivalBid;
         toast(`${RIVAL} won the ${a.name}–${b.name} tender${t.myBid!=null?` with ${Math.round(t.rivalBid*100)}%`:''}. Your demand on that route falls 40%.`,'bad'); news(`${RIVAL} now serves ${a.name}–${b.name}.`); }
     } else if(t.state==='won'){
@@ -878,6 +882,7 @@ function monthlyTenders(r){
   S.tenders=S.tenders.filter(t=>t.state==='open'||t.state==='won'||S.day-t.bidUntil<720);
   if(S.tenders.filter(t=>t.state==='open').length<2 && r()<0.16) newTender(r,false);
   S.rival.value*=1.004+r()*0.004;
+  { const rv=S.rival, prof=rv.value*0.005, inc=rv.owned?rv.value*0.006:(rv.stake||0)*prof; if(inc>0){ S.money+=inc; S.m.invest+=inc; rv.divLast=inc; } else rv.divLast=0; }
 }
 const TOWN_COST = 250000, NEW_TOWN_NAMES=['Harbour View','Northgate','Riverside','Hillcrest','Lakeside','Fairmont','Greenhaven','Eastbrook','Westfield','Sunpoint','Cedar Park','Maple Rise','Bayshore','Kingsmead','Palm Grove','Stonebridge'];
 const townCost = () => Math.round(TOWN_COST*S.infl*DF().cost);
@@ -923,6 +928,7 @@ function promoteTowns(){
   }
 }
 function rivalExpand(r){
+  if(S.rival.owned) return;
   const cand=[];
   for(const l of S.lines){ if(!lineVehicles(l).some(v=>MODELS[v.model].kind==='pass')) continue;
     const ts=l.stops.filter(id=>P(id).kind==='town');
@@ -977,12 +983,12 @@ function stepRegion(dt){
     if((v.dir>0&&v.pos>=target)||(v.dir<0&&v.pos<=target)){ v.pos=target; arrive(v, v.next); }
   }
 }
-const RKEYS=['terrain','towns','lines','vehicles','props','tenders','rival','events','region','seed','perf','projects'];
+const RKEYS=['terrain','towns','lines','vehicles','props','tenders','rival','events','region','seed','perf','projects','land'];
 function stashActive(){ const o={}; for(const k of RKEYS) o[k]=S[k]; o.roads=roads; o.rails=rails; o.planned=planned;
   o._rt={placeTile,linePaths,overlay,laneOff,routes,fRoutes,rates,lineCount,harbour}; return o; }
 function activate(o){
   for(const k of RKEYS) S[k]=o[k];
-  S.perf=S.perf||{rev:0,last:0}; S.events=S.events||[]; S.projects=S.projects||[]; S.tenders=S.tenders||[]; S.rival=S.rival||{value:400000,routes:[]};
+  S.perf=S.perf||{rev:0,last:0}; S.events=S.events||[]; S.projects=S.projects||[]; S.land=S.land||[]; S.tenders=S.tenders||[]; S.rival=S.rival||{value:400000,routes:[]};
   if(o._rt){ terrain=S.terrain; roads=o.roads; rails=o.rails; planned=o.planned; ({placeTile,linePaths,overlay,laneOff,routes,fRoutes,rates,lineCount,harbour}=o._rt); if(!harbour) buildHarbour(); netVer++; }
   else { S.roads=o.roads; S.rails=o.rails; S.planned=o.planned||new Array(W*H).fill(0); hydrate(); }
 }
@@ -1018,6 +1024,7 @@ function regionMonth(isActive){
   if(isActive){ const byTown={}; for(const b of S.props) byTown[b.town]=(byTown[b.town]||0)+b.lastNet;
     for(const id in byTown){ const t=P(+id); floats.push({ x:t.x*T+T/2, y:t.y*T+T*1.6, txt:'rent '+signed(byTown[id]), life:2.6, rent:true }); } }
   for(const p of S.towns){
+    p.linesHere=lineCount.get(p.id)||0;
     if(p.kind==='industry'){
       p.shipShare = p.produced>1 ? clamp(p.shipped/p.produced,0,1) : 0;
       p.prod = clamp(p.prod*(p.shipShare>0.5?1.015:0.99), 0.7, 2.5);
@@ -1026,7 +1033,7 @@ function regionMonth(isActive){
     const served=(routes.get(p.id)?.size||0)>0, tot=p.boarded+p.lost;
     if(served && tot>1) p.rating = p.rating*0.5 + (p.boarded/tot)*0.5;
     else if(!served) p.rating += (0.3-p.rating)*0.3;
-    p.arrLast=p.arrivals; p.arrivals=0;
+    p.arrLast=p.arrivals; p.arrivals=0; p.linesHere=lineCount.get(p.id)||0;
     if(stLv(p)){ const inc=(p.boarded+p.arrLast)*0.15*stLv(p)*S.infl; p.shopLast=inc; rentTotal+=inc; S.m.rent+=inc; }
     if(p.kind==='attraction'){ p.boarded=0; p.lost=0; p.transfers=0; continue; }
     let g = !served ? 0.001 : p.rating>=0.45 ? Math.min(0.025,(p.rating-0.45)*0.05) : p.rating<0.3 ? -0.004 : 0;
@@ -1052,7 +1059,9 @@ function regionMonth(isActive){
 }
 function globalMonth(){
   S.m.interest=S.loan*loanRate()/12; S.money-=S.m.interest;
+  if(S.ipo&&S.ipo.floated){ const net=S.m.fares+S.m.cargo+S.m.rent+S.m.tenders+S.m.invest-S.m.run-S.m.upkeep-S.m.interest; const div=Math.max(0,net)*(S.ipo.payout||0)*(1-S.ipo.owned); if(div>0){ S.money-=div; S.m.dividends+=div; } }
   S.hist.push({...S.m, cash:S.money, value:companyValue()}); if(S.hist.length>36) S.hist.shift(); S.m=freshMonth();
+  if(S.ipo&&S.ipo.floated){ S.ipo.hist=(S.ipo.hist||[]).concat([{d:S.day,p:sharePrice()}]).slice(-36); }
   ensureStats(); if(monthIdx()===0) S.stats.years.push({y:year(), v:Math.round(companyValue()), c:Math.round(S.money)});
   if(monthIdx()===0){
     S.infl*=1.03; S.fareInfl*=1.02;
@@ -1084,7 +1093,7 @@ function openRegion(world, seed){
   if(S.money<REGION_COST) return false;
   S.money-=REGION_COST; S.m.build+=REGION_COST;
   S.others.push(stashActive());
-  S.terrain=world.ter; S.towns=world.places; S.lines=[]; S.vehicles=[]; S.props=[]; S.tenders=[]; S.events=[]; S.perf={rev:0,last:0}; S.projects=[];
+  S.terrain=world.ter; S.towns=world.places; S.lines=[]; S.vehicles=[]; S.props=[]; S.tenders=[]; S.events=[]; S.perf={rev:0,last:0}; S.projects=[]; S.land=[];
   S.rival={ value:Math.round(400000*S.infl*20), routes:[] }; S.region=uniqueRegionName(world.region||'Random region'); S.seed=seed;
   S.roads=new Array(W*H).fill(0); S.rails=new Array(W*H).fill(0); S.planned=new Array(W*H).fill(0);
   hydrate(); for(const l of world.plannedLines||[]) rasterPlanned(l); S.planned=Array.from(planned);
@@ -1599,6 +1608,7 @@ function refreshSheet(){
   else if(s.kind==='port') portSheet(P(s.id));
   else if(s.kind==='away') awaySheet();
   else if(s.kind==='backup') backupSheet();
+  else if(s.kind==='invest') investSheet();
   else if(s.kind==='sell') sellSheet();
   else if(s.kind==='hall') hallSheet();
   else if(s.kind==='sold') soldSheet(ui.soldInfo);
@@ -1646,7 +1656,8 @@ function placeSheet(p){
   ${intlSection(p)}
   <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New line from here</button>
   ${p.kind==='town'&&!p.airport?`<button class="btn" data-act="airportAt" data-id="${p.id}">Airport…</button>`:''}${!p.port&&canPort(p)?`<button class="btn" data-act="portAt" data-id="${p.id}">Port…</button>`:''}</div>
-  ${propSection(p)}`);
+  ${propSection(p)}
+  ${landSection(p)}`);
 }
 function waitBreakdown(p){
   const rt=routes.get(p.id), rows=[];
@@ -1680,7 +1691,8 @@ function industrySheet(p){
     <div class="side">${best?`<div class="mini"><button class="add" data-act="addModel" data-id="${l.id}" data-model="${best}" aria-label="Add ${MODELS[best].name}" ${S.money<price(best)?'disabled':''} data-cost="${price(best)}">+</button></div>`:''}</div></div>`; }).join('')
     :'<p class="note">No freight line yet. Make a line from here to a buyer and add a truck or freight train.</p>'}
   <div class="btns"><button class="btn pri" data-act="lineFrom" data-id="${p.id}">New freight line from here</button>${!p.port&&canPort(p)?`<button class="btn" data-act="portAt" data-id="${p.id}">Port…</button>`:''}</div>
-  ${propSection(p)}`);
+  ${propSection(p)}
+  ${landSection(p)}`);
 }
 function industrySteps(p,dests,acc){
   const good=IND[p.type].cargo, made=Math.round(prodRate(p)), lines=S.lines.filter(l=>l.stops.includes(p.id)&&lineVehicles(l).some(v=>MODELS[v.model].kind==='freight'));
@@ -1846,13 +1858,43 @@ function airportSheet(t){
   <div class="btns"><button class="btn pri" data-act="buildAirport" data-id="${t.id}" ${!ok||S.money<cost?'disabled':''} ${!ok?'':`data-cost="${cost}"`}>${!ok?'Town too small':'Build airport'}</button><button class="btn" data-act="buildAirport" data-rush="1" data-id="${t.id}" ${!ok||S.money<cost*1.5?'disabled':''} ${!ok?'':`data-cost="${Math.round(cost*1.5)}"`}>Rush ${money(cost*1.5)}</button></div>
   <div class="btns"><button class="btn" data-act="cancel">Cancel</button></div>`);
 }
+function landSection(p){
+  const mine=(S.land||[]).map((pl,i)=>({pl,i})).filter(x=>x.pl.town===p.id), pr=landPrice(p);
+  return `<h3>Land · ${mine.length}/${MAX_PLOTS} plots</h3>
+  ${mine.map(({pl,i})=>{ const g=pr-pl.paid; return `<div class="row"><span style="color:var(--ink)">Plot bought ${dateStr(pl.bought)}<small class="m">paid ${money(pl.paid)} · worth ${money(pr)} · <span class="${g>=0?'pos':'neg'}">${signed(g)}</span></small></span><button class="btn warn sm" data-act="sellLand" data-id="${i}">Sell ${money(pr)}</button></div>`; }).join('')}
+  ${mine.length<MAX_PLOTS?`<div class="lc"><div class="main"><span class="rt">Buy a plot</span><small class="m">Value rises with population, lines, station upgrades, airports and ports. Buy before you connect a place, sell after.</small></div><div class="side"><button class="btn pri sm" data-act="buyLand" data-id="${p.id}" ${S.money<pr?'disabled':''} data-cost="${pr}">${money(pr)}</button></div></div>`:''}`;
+}
+function investSheet(){
+  const rv=S.rival, stake=rv.stake||0, block=Math.round(rv.value*0.05*(1+stake)), sellB=Math.round(rv.value*0.05*0.95), rest=Math.round((1-stake)*rv.value*1.1);
+  const ipo=S.ipo||{}, val=companyValue(), sp=sharePrice(), sent=sentiment();
+  const land=(S.land||[]).map((pl,i)=>{ const t=P(pl.town); if(!t) return ''; const v=landPrice(t), g=v-pl.paid; return `<button class="row" data-act="selTown" data-id="${t.id}"><span>${esc(t.name)}<small class="m">paid ${money(pl.paid)} · worth ${money(v)}</small></span><b class="${g>=0?'pos':'neg'}">${signed(g)}</b></button>`; }).join('');
+  const chartP=()=>{ const h=(ipo.hist||[]); if(h.length<2) return ''; const vals=h.map(x=>x.p), mn=Math.min(...vals), mx=Math.max(...vals), Wc=300, Hc=80, px=i=>8+i*(Wc-16)/(h.length-1), py=v=>Hc-10-(v-mn)/((mx-mn)||1)*(Hc-20);
+    return `<svg class="chart" viewBox="0 0 ${Wc} ${Hc}" role="img" aria-label="Share price"><path d="${vals.map((v,i)=>(i?'L':'M')+px(i).toFixed(1)+' '+py(v).toFixed(1)).join(' ')}" fill="none" stroke="#1b2128" stroke-width="2"/><text x="8" y="10" font-size="10" fill="#6b7580" font-family="Barlow, sans-serif">$${mx.toFixed(2)}</text></svg>`; };
+  showSheet(`<h2>Investments${closeBtn}</h2><div class="sub">${esc(S.region||'This region')} · shares, stock market and land</div>
+  <h3>${RIVAL} in ${esc(S.region||'this region')}</h3>
+  ${rv.owned?`<p class="pos" style="font-weight:600">You own ${RIVAL} here. It no longer competes, and pays you ${money(rv.divLast||rv.value*0.006)} a month.</p><div class="rows"><div class="row"><span>Subsidiary value</span><b>${money(rv.value)}</b></div></div>`:`
+  <div class="rows"><div class="row"><span>Company value</span><b>${money(rv.value)}</b></div><div class="row"><span>Your stake</span><b>${Math.round(stake*100)}% · worth ${money(stake*rv.value)}</b></div>
+  <div class="row"><span>Dividend last month</span><b class="pos">${money(rv.divLast||0)}</b></div><div class="row"><span>Rival services in this region</span><b>${rv.routes.length}</b></div></div>
+  <div class="btns"><button class="btn pri" data-act="buyStake" ${stake>=1||S.money<block?'disabled':''} data-cost="${block}">Buy 5% · ${money(block)}</button><button class="btn" data-act="sellStake" ${stake<=0?'disabled':''}>Sell 5% · ${money(sellB)}</button></div>
+  ${stake>=0.51?`<div class="btns"><button class="btn pri" data-act="takeover" ${S.money<rest?'disabled':''} data-cost="${rest}">${ui.confirm==='takeover'?'Tap again to confirm':'Take over '+RIVAL+' · '+money(rest)}</button></div>`:`<p class="note">Each 5% costs more as your stake grows. At 51% you can buy the rest: they stop bidding on tenders, their rival services close, and they pay you every month.</p>`}`}
+  <h3>Your company on the stock market</h3>
+  ${ipo.floated?`<div class="rows"><div class="row"><span>Share price</span><b>$${sp.toFixed(2)} · ${sent>=0?'+':''}${Math.round(sent*100)}% sentiment</b></div><div class="row"><span>You own</span><b>${Math.round(ipo.owned*100)}%</b></div>
+    <div class="row"><span>Dividend payout</span><span class="mini">${[0,0.25,0.5].map(x=>`<button class="txt ${(ipo.payout||0)===x?'add':''}" data-act="payout" data-v="${x}">${x*100}%</button>`).join('')}</span></div></div>
+    ${chartP()}
+    <div class="btns"><button class="btn" data-act="issue" ${ipo.owned<=0.56?'disabled':''}>Sell 5% to investors · +${money(val*0.05*(1+sent)*0.95)}</button><button class="btn" data-act="buyback" ${ipo.owned>=1||S.money<val*0.05*(1+sent)*1.05?'disabled':''} data-cost="${Math.round(val*0.05*(1+sent)*1.05)}">Buy back 5% · ${money(val*0.05*(1+sent)*1.05)}</button></div>
+    <p class="note">Profits and dividends lift the share price. You keep control above 51%, and receive only your stake when you sell the company.</p>`
+  :`<p class="note">Float your company to raise cash fast: investors buy 25% of it. ${val<IPO_MIN?`Needs a company value of ${money(IPO_MIN)}.`:''}</p>
+    <div class="btns"><button class="btn pri" data-act="float" ${val<IPO_MIN?'disabled':''}>${ui.confirm==='float'?'Tap again to float':`Float 25% · raise ${money(val*0.25*0.95)}`}</button></div>`}
+  <h3>Land holdings in ${esc(S.region||'this region')}</h3>
+  <div class="rows">${land||'<div class="row"><span>No land yet. Buy plots from any town page.</span><b></b></div>'}</div>`);
+}
 function businessSheet(){
   const portfolio=S.props.map((b,i)=>{ const n=b.lastNet??(propRent(b)-propUpkeep(b)), tot=propPL(b);
     return `<div class="lc"><button class="main" data-act="selTown" data-id="${b.town}"><span class="rt">${PT[b.type].name}</span><small class="m">${esc(P(b.town).name)} · <span class="${n>=0?'pos':'neg'}">${signed(n)}</span>/mo · overall <span class="${tot>=0?'pos':'neg'}">${signed(tot)}</span></small></button>
       <div class="side"><button class="btn warn sm" data-act="sellProp" data-id="${i}">Sell ${money(propValue(b))}</button></div></div>`; }).join('');
   const monthly=S.props.reduce((s,b)=>s+(b.lastNet??(propRent(b)-propUpkeep(b))),0), worth=S.props.reduce((s,b)=>s+propValue(b),0);
   const places=S.towns.filter(p=>p.kind!=='village').sort((a,b)=>sizeOf(b)-sizeOf(a));
-  showSheet(`<h2>Businesses${closeBtn}</h2><div class="sub">${S.props.length} owned · worth ${money(worth)} · ${signed(monthly)}/mo</div>
+  showSheet(`<h2>Businesses<button class="btn sm" data-act="invest" style="margin-left:auto">Investments</button>${closeBtn}</h2><div class="sub">${S.props.length} owned · worth ${money(worth)} · ${signed(monthly)}/mo</div>
   ${portfolio||'<p class="note">You own no businesses yet. Open them where your lines bring lots of visitors: hotels and resorts earn more with every arrival, malls and theme parks attract more travellers.</p>'}
   <h3>Places to invest in</h3>
   <div class="rows">${places.map(p=>{ const own=S.props.filter(b=>b.town===p.id).length;
@@ -1864,6 +1906,7 @@ function tendersSheet(){
   const row=t=>{ const a=P(t.a), b=P(t.b); const st={open:t.myBid!=null?`Your bid ${Math.round(t.myBid*100)}% · decided ${dateStr(t.bidUntil)}`:`Bids close ${dateStr(t.bidUntil)}`, won:`Finish by ${dateStr(t.deadline)}`, done:'Completed', lost:`Won by ${RIVAL}`, failed:'Missed deadline', lapsed:'Lapsed, no winner'}[t.state];
     return `<button class="row" data-act="selTender" data-id="${t.id}"><span>${esc(a.name)} – ${esc(b.name)}${t.mode==='rail'?' <span class="chip info">rail</span>':''}<small class="m">${st}</small></span><b>${money(t.reward)}</b></button>`; };
   showSheet(`<h2>Tenders${closeBtn}</h2><div class="sub">Councils pay for new links · ${RIVAL} bids too</div>
+  ${S.rival.owned?`<p class="pos">You own ${RIVAL} in this region, so nobody bids against you.</p>`:`<div class="btns"><button class="btn sm" data-act="invest">Buy ${RIVAL} shares</button></div>`}
   <div class="rows"><div class="row"><span>${RIVAL} company value</span><b>${money(S.rival.value)}</b></div><div class="row"><span>Your company value</span><b>${money(companyValue())}</b></div></div>
   <h3>Open for bids</h3><div class="rows">${open.map(row).join('')||'<div class="row"><span>None right now. New tenders appear every few months.</span><b></b></div>'}</div>
   ${won.length?`<h3>Won, in progress</h3><div class="rows">${won.map(row).join('')}</div>`:''}
@@ -1902,7 +1945,7 @@ function chart(){
 }
 function companySheet(){
   const val=companyValue(), last=S.hist[S.hist.length-1]||freshMonth(), pct=clamp(val/goal()*100,0,100);
-  const net=last.fares+last.cargo+last.rent+last.sales+last.tenders-last.run-last.upkeep-last.interest-last.build-last.vehicles;
+  const net=last.fares+last.cargo+last.rent+last.sales+last.tenders+(last.invest||0)-(last.dividends||0)-last.run-last.upkeep-last.interest-last.build-last.vehicles;
   showSheet(`<h2>Company${closeBtn}</h2><div class="sub">${S.region?esc(S.region)+' · ':''}${S.vehicles.length} vehicles · ${S.lines.length} lines · ${S.props.length} businesses</div>
   <div class="rows"><div class="row"><span>Company value</span><b>${money(val)}</b></div></div>
   <div class="goal"><i style="width:${pct}%"></i></div>
@@ -1913,6 +1956,8 @@ function companySheet(){
     <div class="row"><span>Passenger fares</span><b class="pos">${money(last.fares)}</b></div>
     <div class="row"><span>Freight</span><b class="pos">${money(last.cargo)}</b></div>
     <div class="row"><span>Business rent</span><b class="pos">${money(last.rent)}</b></div>
+    <div class="row"><span>Dividends and subsidiaries</span><b class="pos">${money(last.invest||0)}</b></div>
+    ${last.dividends?`<div class="row"><span>Dividends paid to shareholders</span><b class="neg">${money(-last.dividends)}</b></div>`:''}
     <div class="row"><span>Tenders and sales</span><b class="${last.tenders+last.sales>=0?'pos':'neg'}">${money(last.tenders+last.sales)}</b></div>
     <div class="row"><span>Running costs${S.fuelUntil>S.day?' (fuel spike)':''}</span><b class="neg">${money(-last.run)}</b></div>
     <div class="row"><span>Upkeep: track, airports, tax</span><b class="neg">${money(-last.upkeep)}</b></div>
@@ -1926,7 +1971,7 @@ function companySheet(){
   <button class="btn" data-act="repay" ${S.loan<=0||S.money<25000?'disabled':''}>Repay $25,000</button></div>
   <h3>Career</h3>${statsGrid(false)}
   ${S.news.length?`<h3>News</h3><div class="rows">${S.news.map(n=>`<div class="row"><span>${esc(n)}</span><b></b></div>`).join('')}</div>`:''}
-  <div class="btns"><button class="btn" data-act="fleet">Fleet manager and autopilot</button></div>
+  <div class="btns"><button class="btn" data-act="fleet">Fleet manager and autopilot</button><button class="btn" data-act="invest">Investments</button></div>
   <div class="btns"><button class="btn" data-act="sellCo">Sell the company</button><button class="btn" data-act="hall">Hall of fame · level ${repLevel()}</button></div>
   <div class="btns"><button class="btn pri" data-act="backup">Backup and restore</button><button class="btn" data-act="newgame">New map or real place</button></div>
   <p class="note">Last backup: ${S.lastBackup?new Date(S.lastBackup).toLocaleDateString():'<span class="neg">never</span>'}. Back up now and then so you never lose your company.</p>`);
@@ -2264,9 +2309,24 @@ $('card').addEventListener('click', e=>{
     newBids(){ getBids(true); sellSheet(); },
     acceptBid(){ if(S.over||S.sold) return; const i=+b.dataset.i; if(ui.confirm!=='bid'+i){ ui.confirm='bid'+i; sellSheet(); return; } ui.confirm=null;
       const x=S.bids.list[i]; if(!x) return; ensureStats();
-      const h={ cid:S.companyId, diff:S.diff||'normal', regions:allRegions().map(o=>o.region||'Random map').join(' + '), from:START_YEAR, to:year(), peak:Math.max(S.stats.peakValue||0,companyValue()), sale:x.offer, buyer:x.name, at:Date.now() };
+      const h={ cid:S.companyId, diff:S.diff||'normal', regions:allRegions().map(o=>o.region||'Random map').join(' + '), from:START_YEAR, to:year(), peak:Math.max(S.stats.peakValue||0,companyValue()), sale:Math.round(x.offer*((S.ipo&&S.ipo.floated)?S.ipo.owned:1)), buyer:x.name, at:Date.now() };
       const L=loadLegacy(); if(!L.hall.some(e=>e.cid&&e.cid===h.cid)) L.hall.push(h); saveLegacy(normLegacy(L));
       S.over=true; S.sold=h; setSpeed(0); ui.soldInfo=h; save(); ui.sel={kind:'sold'}; soldSheet(h); },
+    invest(){ setTool('inspect'); ui.confirm=null; ui.sel={kind:'invest'}; investSheet(); },
+    buyLand(){ const t=P(id), pr=landPrice(t); if(S.money<pr||(S.land||[]).filter(x=>x.town===id).length>=MAX_PLOTS) return; S.money-=pr; S.m.build+=pr; S.land.push({town:id,paid:pr,bought:S.day}); save(); toast(`Bought land near ${t.name} for ${money(pr)}.`,'good'); refreshSheet(); },
+    sellLand(){ const pl=S.land[id]; if(!pl) return; const t=P(pl.town), v=landPrice(t), g=v-pl.paid; S.money+=v; S.m.sales+=v; S.land.splice(id,1); save(); toast(`Sold land near ${t.name}: ${g>=0?'profit':'loss'} of ${money(Math.abs(g))}.`, g>=0?'good':'bad'); refreshSheet(); },
+    buyStake(){ const rv=S.rival, stake=rv.stake||0; if(rv.owned||stake>=1) return; const c=Math.round(rv.value*0.05*(1+stake)); if(S.money<c){ toast('Not enough cash.','bad'); return; }
+      S.money-=c; S.m.build+=c; rv.stake=Math.min(1,Math.round((stake+0.05)*100)/100); save(); toast(`You now own ${Math.round(rv.stake*100)}% of ${RIVAL} in ${S.region}.`,'good'); investSheet(); },
+    sellStake(){ const rv=S.rival, stake=rv.stake||0; if(rv.owned||stake<=0) return; const c=Math.round(rv.value*0.05*0.95); S.money+=c; S.m.sales+=c; rv.stake=Math.max(0,Math.round((stake-0.05)*100)/100); save(); investSheet(); },
+    takeover(){ const rv=S.rival; if(rv.owned||(rv.stake||0)<0.51) return; if(ui.confirm!=='takeover'){ ui.confirm='takeover'; investSheet(); return; } ui.confirm=null;
+      const c=Math.round((1-rv.stake)*rv.value*1.1); if(S.money<c){ toast('Not enough cash.','bad'); return; }
+      S.money-=c; S.m.build+=c; rv.owned=true; rv.stake=1; const n=rv.routes.length; rv.routes=[]; computeAll(); save();
+      toast(`You took over ${RIVAL} in ${S.region}! ${n} rival services closed.`,'good'); news(`Took over ${RIVAL} in ${S.region}.`); investSheet(); },
+    float(){ const v=companyValue(); if((S.ipo&&S.ipo.floated)||v<IPO_MIN) return; if(ui.confirm!=='float'){ ui.confirm='float'; investSheet(); return; } ui.confirm=null;
+      const cash=Math.round(v*0.25*0.95); S.money+=cash; S.m.sales+=cash; S.ipo={floated:true, owned:0.75, payout:0, hist:[{d:S.day,p:sharePrice()}]}; save(); toast(`Listed on the stock market! Raised ${money(cash)}.`,'good'); news(`Floated on the stock market, raising ${money(cash)}.`); investSheet(); },
+    payout(){ if(!S.ipo) return; S.ipo.payout=+b.dataset.v; save(); investSheet(); },
+    issue(){ const ip=S.ipo; if(!ip||ip.owned<=0.56) return; const c=Math.round(companyValue()*0.05*(1+sentiment())*0.95); ip.owned=Math.round((ip.owned-0.05)*100)/100; S.money+=c; S.m.sales+=c; save(); toast(`Sold 5% to investors for ${money(c)}.`,'good'); investSheet(); },
+    buyback(){ const ip=S.ipo; if(!ip||ip.owned>=1) return; const c=Math.round(companyValue()*0.05*(1+sentiment())*1.05); if(S.money<c){ toast('Not enough cash.','bad'); return; } ip.owned=Math.min(1,Math.round((ip.owned+0.05)*100)/100); S.money-=c; S.m.build+=c; save(); toast(`Bought back 5%. You own ${Math.round(ip.owned*100)}%.`,'good'); investSheet(); },
     copySummary(){ const st=S.stats||freshStats();
       const txt=`Lineworks: ${S.region||'random map'}, ${START_YEAR}–${dateStr(S.day)} (${playedFor()}). Peak value ${money(st.peakValue)}. ${Math.round(st.pax).toLocaleString('en-US')} passengers, ${Math.round(st.cargo).toLocaleString('en-US')} t cargo, ${st.linesOpened} lines, ${st.vehiclesBought} vehicles.${st.best?' Best line: '+st.best.route+' ('+signed(st.best.profit)+').':''}`;
       try{ navigator.clipboard.writeText(txt).then(()=>toast('Summary copied.','good'),()=>toast(txt)); }catch(e){ toast(txt); } },
@@ -2480,7 +2540,10 @@ function autopilot(){
     if(n) log.push(`added ${n} carriage${n>1?'s':''}`); }
   if(log.length){ toast('Autopilot: '+log.join('; ')+'.','good'); news('Autopilot '+log.join('; ')+'.'); }
 }
-function annualProfit(){ return S.hist.slice(-12).reduce((s2,x)=>s2+(x.fares+x.cargo+x.rent+(x.tenders||0)-x.run-x.upkeep-x.interest),0); }
+function annualProfit(){ return S.hist.slice(-12).reduce((s2,x)=>s2+(x.fares+x.cargo+x.rent+(x.tenders||0)+(x.invest||0)-x.run-x.upkeep-x.interest),0); }
+const IPO_MIN = 10e6;
+function sentiment(){ const v=Math.max(companyValue(),1); return clamp(annualProfit()/v*2 + ((S.ipo&&S.ipo.payout)||0)*0.3, -0.3, 0.6); }
+function sharePrice(){ return Math.max(0.01, companyValue()/1e6*(1+sentiment())); }
 function getBids(fresh){
   if(!fresh && S.bids && S.day-S.bids.day<180) return S.bids;
   const v=Math.max(companyValue(),1), prof=annualProfit(), ys=S.stats?.years||[];
@@ -2493,6 +2556,7 @@ function getBids(fresh){
 function sellSheet(){
   const B=getBids(false), wait=Math.max(0,Math.ceil((180-(S.day-B.day))/30)), prof=annualProfit(), conf=k=>ui.confirm===k;
   showSheet(`<h2>Sell the company${closeBtn}</h2><div class="sub">Value ${money(companyValue())} · profit last 12 months ${signed(prof)}</div>
+  ${S.ipo&&S.ipo.floated?`<p class="warnc">Your company is listed and you own ${Math.round(S.ipo.owned*100)}%, so you receive ${Math.round(S.ipo.owned*100)}% of any sale.</p>`:''}
   <p>Buyers bid on your whole company: every region, line, vehicle and business. Strong profits and growth raise the offers; losses lower them.</p>
   <div class="rows">${B.list.map((x,i)=>`<div class="row"><span style="color:var(--ink)">${esc(x.name)}<small class="m">${Math.round(x.offer/Math.max(B.value,1)*100)}% of value when offered</small></span><button class="btn ${i?'':'pri'} sm" data-act="acceptBid" data-i="${i}">${conf('bid'+i)?'Tap again to sell':money(x.offer)}</button></div>`).join('')}</div>
   <div class="btns"><button class="btn" data-act="newBids" ${wait?'disabled':''}>${wait?`New bids in ${wait} month${wait>1?'s':''}`:'Invite new bids'}</button><button class="btn" data-act="hall">Hall of fame</button></div>
