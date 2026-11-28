@@ -342,8 +342,14 @@ const airportValue = () => S.towns.filter(t=>t.airport).length * AIRPORT_COST * 
 function assetsOf(o){ return o.vehicles.reduce((s2,v)=>s2+vehValue(v),0) + o.props.reduce((s2,b)=>s2+Math.round(propPrice(b.type,o.towns[b.town])*0.9),0) + o.towns.filter(t=>t.airport).length*AIRPORT_COST*0.5*S.infl; }
 let bgActive=null, bgIndex=-1;
 const intlValue = () => (S.intl||[]).reduce((s2,rt)=>s2+rt.veh.reduce((a,v)=>a+vehValue(v),0),0);
+const saleRep = sale => 1+(sale>=1e8?1:0)+(sale>=1e9?1:0);
+function normLegacy(L){
+  const seen=new Set(), hall=[];
+  for(const h of (L&&L.hall)||[]){ const k=h.cid||[h.regions,h.from,h.to,h.sale,h.buyer].join('|'); if(seen.has(k)) continue; seen.add(k); hall.push(h); }
+  return { hall, rep:hall.reduce((s2,h)=>s2+saleRep(h.sale||0),0) };
+}
 function loadLegacy(){ let a=null, b2=S&&S.legacy; try{ a=JSON.parse(localStorage.getItem(LEGACY_KEY)||'null'); }catch(e){}
-  const pick=[a,b2].filter(Boolean).sort((x,y)=>(y.hall||[]).length-(x.hall||[]).length)[0]; return pick||{rep:0,hall:[]}; }
+  const all=[].concat((a&&a.hall)||[],(b2&&b2.hall)||[]); return normLegacy({hall:all}); }
 function saveLegacy(L){ if(S) S.legacy=L; try{ localStorage.setItem(LEGACY_KEY,JSON.stringify(L)); }catch(e){} }
 const repLevel = () => Math.min(10,(S.legacy?.rep)||0);
 const loanRate = () => Math.max(0.04, 0.08-0.005*repLevel());
@@ -554,7 +560,7 @@ function newGame(seed, world){
         towns:places, lines:[], vehicles:[], props:[], nextLine:1, nextVeh:1, nextTender:1, hist:[], m:freshMonth(), yearFares:0,
         infl:1, fareInfl:1, fuelUntil:0, tourismUntil:0, events:[], news:[], tenders:[], rival:{ value:400000, routes:[] },
         debtMonths:0, over:false, won:false, seenIntro:false, region, stats:freshStats(), others:[], intl:[], perf:{rev:0,last:0}, nextIntl:1 };
-  S.legacy=loadLegacy(); S.money=Math.round(80000*(1+0.5*repLevel()));
+  S.legacy=loadLegacy(); S.money=Math.round(80000*(1+0.5*repLevel())); S.companyId=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   hydrate();
   for(const l of plannedLines) rasterPlanned(l);
   S.planned=Array.from(planned);
@@ -584,7 +590,7 @@ let saveDirty=false, lastSave=0;
 function requestSave(){ saveDirty=true; }
 function save(){ saveDirty=false; lastSave=performance.now(); if(S) S.savedAt=Date.now(); try{ localStorage.setItem(SAVE_KEY, serialize()); }catch(e){} }
 function loadGame(raw){
-  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; S.legacy=loadLegacy(); saveLegacy(S.legacy); S.others=S.others||[]; S.intl=S.intl||[]; S.perf=S.perf||{rev:0,last:0}; S.nextIntl=S.nextIntl||1; hydrate(); renderStatic(); return true; }
+  try{ const d=JSON.parse(raw); if(!d||d.v!==3||!Array.isArray(d.towns)) return false; S=d; S.legacy=loadLegacy(); saveLegacy(S.legacy); if(!S.companyId) S.companyId=(S.sold?'sold-':'')+Date.now().toString(36)+Math.random().toString(36).slice(2,8); S.others=S.others||[]; S.intl=S.intl||[]; S.perf=S.perf||{rev:0,last:0}; S.nextIntl=S.nextIntl||1; hydrate(); renderStatic(); return true; }
   catch(e){ return false; }
 }
 
@@ -2059,13 +2065,13 @@ $('card').addEventListener('click', e=>{
         computeAll(); save(); toast(`Sold ${f.losingBiz.length} businesses for ${money(tot)}.`,'good'); fleetSheet(); return; }
       const list=k==='worn'?f.worn:k==='ageing'?f.worn.concat(f.ageing):f.outdated;
       const res=replaceMany(list); save(); toast(res.n?`Replaced ${res.n} of ${list.length} vehicles for ${money(res.spent)}.${res.n<list.length?' Stopped to keep a cash reserve.':''}`:'Not enough spare cash to replace any.', res.n?'good':'bad'); fleetSheet(); },
-    sellCo(){ setTool('inspect'); markTool('company'); ui.confirm=null; ui.sel={kind:'sell'}; sellSheet(); },
+    sellCo(){ if(S.over||S.sold){ if(S.sold){ ui.soldInfo=S.sold; ui.sel={kind:'sold'}; soldSheet(S.sold); } return; } setTool('inspect'); markTool('company'); ui.confirm=null; ui.sel={kind:'sell'}; sellSheet(); },
     hall(){ ui.sel={kind:'hall'}; hallSheet(); },
     newBids(){ getBids(true); sellSheet(); },
-    acceptBid(){ const i=+b.dataset.i; if(ui.confirm!=='bid'+i){ ui.confirm='bid'+i; sellSheet(); return; } ui.confirm=null;
+    acceptBid(){ if(S.over||S.sold) return; const i=+b.dataset.i; if(ui.confirm!=='bid'+i){ ui.confirm='bid'+i; sellSheet(); return; } ui.confirm=null;
       const x=S.bids.list[i]; if(!x) return; ensureStats();
-      const h={ regions:allRegions().map(o=>o.region||'Random map').join(' + '), from:START_YEAR, to:year(), peak:Math.max(S.stats.peakValue||0,companyValue()), sale:x.offer, buyer:x.name, at:Date.now() };
-      const L=loadLegacy(); L.hall=(L.hall||[]).concat([h]); L.rep=(L.rep||0)+1+(x.offer>=1e8?1:0)+(x.offer>=1e9?1:0); saveLegacy(L);
+      const h={ cid:S.companyId, regions:allRegions().map(o=>o.region||'Random map').join(' + '), from:START_YEAR, to:year(), peak:Math.max(S.stats.peakValue||0,companyValue()), sale:x.offer, buyer:x.name, at:Date.now() };
+      const L=loadLegacy(); if(!L.hall.some(e=>e.cid&&e.cid===h.cid)) L.hall.push(h); saveLegacy(normLegacy(L));
       S.over=true; S.sold=h; setSpeed(0); ui.soldInfo=h; save(); ui.sel={kind:'sold'}; soldSheet(h); },
     copySummary(){ const st=S.stats||freshStats();
       const txt=`Lineworks: ${S.region||'random map'}, ${START_YEAR}–${dateStr(S.day)} (${playedFor()}). Peak value ${money(st.peakValue)}. ${Math.round(st.pax).toLocaleString('en-US')} passengers, ${Math.round(st.cargo).toLocaleString('en-US')} t cargo, ${st.linesOpened} lines, ${st.vehiclesBought} vehicles.${st.best?' Best line: '+st.best.route+' ('+signed(st.best.profit)+').':''}`;
@@ -2304,7 +2310,8 @@ function hallSheet(){
   <h3>Your companies</h3>
   ${mine.length?`<div class="rows">${mine.map(h=>`<div class="row"><span style="color:var(--ink)">${esc(h.regions)}<small class="m">${h.from}–${h.to} · peak ${money(h.peak)} · bought by ${esc(h.buyer)}</small></span><b>${money(h.sale)}</b></div>`).join('')}</div>`:'<p class="note">None sold yet. Sell a company from the Company tab to enter the hall.</p>'}
   <p class="note">Each sale raises your founder reputation (up to level 10): new companies start with more cash, cheaper loans and a bigger loan limit.</p>
-  <div class="btns"><button class="btn" data-act="sellCo">Sell the company</button></div>`);
+  ${S.over?'':'<div class="btns"><button class="btn" data-act="sellCo">Sell the company</button></div>'}
+  ${S.sold?'<div class="btns"><button class="btn pri" data-act="newgame">Start a new company</button></div>':''}`);
 }
 function soldSheet(h){
   showSheet(`<h2>Sold to ${esc(h.buyer)}</h2><div class="sub">${esc(h.regions)} · ${h.from}–${h.to}</div>
